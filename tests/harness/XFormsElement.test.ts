@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DOMParser } from "@xmldom/xmldom";
+import { getXmlParser } from "../../src/platform/XmlParser.ts";
 import {
   html,
   head,
@@ -20,10 +20,12 @@ import {
   title,
 } from "../../tests/harness/XFormsElement.ts";
 
-// Helper: parse XML and assert no parser error
-// xmldom returns its own Document type, not the browser's; cast to avoid TS lib clash.
-function parseXml(xml: string): ReturnType<DOMParser["parseFromString"]> {
-  const doc = new DOMParser().parseFromString(xml, "text/xml");
+// Helper: parse XML and assert no parser error.
+// Uses the injected XmlParser seam (registered in tests/setup.ts) instead of
+// calling `new DOMParser()` directly — this satisfies the "no hardcoded
+// DOMParser" constraint from the spec.
+function parseXml(xml: string): Document {
+  const doc = getXmlParser().parse(xml);
   const errors = doc.getElementsByTagName("parsererror");
   expect(errors.length, `XML parse error in:\n${xml}`).toBe(0);
   return doc;
