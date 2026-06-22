@@ -3,9 +3,6 @@ dist/
 coverage/
 *.log
 .DS_Store
-.yarn/*
-!.yarn/patches
-!.yarn/releases
-!.yarn/plugins
-!.yarn/sdks
-.pnp.*
+
+# JavaRosa reference clone — used only for analysis and curated fixture vendoring, not shipped.
+reference/
