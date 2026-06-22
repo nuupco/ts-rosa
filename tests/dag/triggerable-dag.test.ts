@@ -2,6 +2,9 @@
  * Ported from:
  *   reference/javarosa/src/test/java/org/javarosa/core/model/TriggerableDagTest.java
  *
+ * Pending behaviors documented here: 12 it.fails tests
+ *   (DAG ordering: 1, cycle detection: 5, relevance: 3, required+constraint: 3)
+ *
  * CONVENTION — it.fails() pattern
  * ================================
  * Every test in this file is wrapped with `it.fails(...)` (Vitest's built-in
