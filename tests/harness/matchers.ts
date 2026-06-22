@@ -178,6 +178,36 @@ export const tsRosaMatchers = {
   },
 
   /**
+   * Passes when the received TreeElement-like object's `.isRelevant` is false.
+   * Mirrors JavaRosa `QuestionDefMatchers.nonRelevant()`.
+   */
+  nonRelevant(received: { isRelevant: boolean }) {
+    const pass = received.isRelevant === false;
+    return {
+      pass,
+      message: () =>
+        pass
+          ? "Expected node NOT to be non-relevant, but it was"
+          : `Expected node to be non-relevant, but isRelevant=${received.isRelevant}`,
+    };
+  },
+
+  /**
+   * Passes when the received TreeElement-like object's `.isRelevant` is true.
+   * Mirrors JavaRosa `QuestionDefMatchers.relevant()`.
+   */
+  relevant(received: { isRelevant: boolean }) {
+    const pass = received.isRelevant === true;
+    return {
+      pass,
+      message: () =>
+        pass
+          ? "Expected node NOT to be relevant, but it was"
+          : `Expected node to be relevant, but isRelevant=${received.isRelevant}`,
+    };
+  },
+
+  /**
    * Passes when the received question-like object's `.labelText` equals `expected`.
    * Mirrors JavaRosa `QuestionDefMatchers` label checks.
    */
@@ -207,6 +237,8 @@ interface CustomMatchers<R = unknown> {
   validForm(): R;
   invalidForm(): R;
   questionWithText(expected: string): R;
+  nonRelevant(): R;
+  relevant(): R;
 }
 
 declare module "vitest" {

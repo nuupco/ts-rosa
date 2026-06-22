@@ -55,11 +55,17 @@ export interface SelectChoiceStub {
 /** Stub for org.javarosa.core.model.ValidateOutcome */
 export interface ValidateOutcomeStub {
   readonly __type: "ValidateOutcome";
+  /** The FormIndex of the prompt that failed validation */
+  readonly failedPrompt: FormIndexStub;
+  /** The outcome code — maps to AnswerResult values */
+  readonly outcome: number;
 }
 
 /** Stub for org.javarosa.core.model.instance.TreeElement */
 export interface TreeElementStub {
   readonly __type: "TreeElement";
+  /** Whether the node is relevant according to its relevance expression */
+  readonly isRelevant: boolean;
 }
 
 /** Stub for org.javarosa.debug.Event */
@@ -171,6 +177,8 @@ export class Scenario {
    *
    * Overloads match JavaRosa:
    *   answer(value: string): AnswerResultValue
+   *   answer(value: number): AnswerResultValue
+   *   answer(value: boolean): AnswerResultValue
    *   answer(xPath: string, value: string): AnswerResultValue
    *   answer(xPath: string, value: number): AnswerResultValue
    *   answer(xPath: string, value: boolean): AnswerResultValue
@@ -178,7 +186,7 @@ export class Scenario {
    *   answer(choice: SelectChoiceStub): AnswerResultValue
    *   answer(xPath: string, choice: SelectChoiceStub): AnswerResultValue
    */
-  answer(_xPathOrValue: string | SelectChoiceStub, _valueOrExtra?: string | number | boolean | SelectChoiceStub | string[]): AnswerResultValue {
+  answer(_xPathOrValue: string | number | boolean | SelectChoiceStub, _valueOrExtra?: string | number | boolean | SelectChoiceStub | string[]): AnswerResultValue {
     return notImplemented("answer");
   }
 
