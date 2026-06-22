@@ -17,7 +17,8 @@
     "resolveJsonModule": true,
     "declaration": true,
     "sourceMap": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "allowImportingTsExtensions": true
   },
   "include": ["src", "tests"],
   "exclude": ["node_modules", "dist", "reference"]
