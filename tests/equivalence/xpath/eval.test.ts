@@ -396,7 +396,8 @@ describe("XPath eval — type conversions", () => {
   });
 
   it("number(' -12345.6789  ') trims and parses → -12345.6789", () => {
-    expect(evaluateXPath("number(' -12345.6789  ')")).toBeCloseTo(-12345.6789, 4);
+    // String-to-number parse must be exact (IEEE 754 representable); .toBe not toBeCloseTo.
+    expect(evaluateXPath("number(' -12345.6789  ')")).toBe(-12345.6789);
   });
 
   it("number('NaN') → NaN", () => {
