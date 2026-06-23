@@ -18,6 +18,10 @@ export type DataType =
   | "selectMulti"
   | "geopoint"
   | "binary"
+  | "long"
+  | "geoshape"
+  | "geotrace"
+  | "uncast"
   | "unsupported";
 
 /**
@@ -62,6 +66,15 @@ export function dataTypeFromXsdName(xsd: string | null): DataType {
       return "geopoint";
     case "binary":
       return "binary";
+    case "xsd:long":
+      return "long";
+    case "geoshape":
+      return "geoshape";
+    case "geotrace":
+      return "geotrace";
+    // NOTE: "uncast" is NOT mapped from any xsd:type attribute.
+    // It is an internal intermediary for string-without-type values (mirrors
+    // JavaRosa UncastData). It is never produced by dataTypeFromXsdName.
     default:
       return "unsupported";
   }

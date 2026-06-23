@@ -98,6 +98,10 @@ describe("AnswerValue discriminated union", () => {
         case "selectMulti": return v.value.join(" ");
         case "geopoint":    return v.displayText;
         case "binary":      return v.value;
+        case "long":        return String(v.value);
+        case "geoshape":    return v.displayText;
+        case "geotrace":    return v.displayText;
+        case "uncast":      return v.value;
         case "unsupported": return v.value;
       }
     }

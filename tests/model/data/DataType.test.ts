@@ -20,6 +20,10 @@ describe("DataType", () => {
         case "selectMulti": return "selectMulti";
         case "geopoint":  return "geopoint";
         case "binary":    return "binary";
+        case "long":      return "long";
+        case "geoshape":  return "geoshape";
+        case "geotrace":  return "geotrace";
+        case "uncast":    return "uncast";
         case "unsupported": return "unsupported";
       }
     }
@@ -33,10 +37,12 @@ describe("DataType", () => {
       "string", "int", "decimal", "boolean",
       "date", "time", "dateTime",
       "selectOne", "selectMulti",
-      "geopoint", "binary", "unsupported",
+      "geopoint", "binary",
+      "long", "geoshape", "geotrace",
+      "uncast", "unsupported",
     ];
-    // All 12 members present
-    expect(members.length).toBe(12);
+    // All 16 members present
+    expect(members.length).toBe(16);
   });
 
   describe("dataTypeFromXsdName", () => {

@@ -28,6 +28,40 @@ function formatUtcTime(d: Date): string {
 }
 
 // ---------------------------------------------------------------------------
+// Geo helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a JavaRosa geo multi-point string (points separated by ';', each point
+ * formatted as "lat lon alt acc") into a readonly GeoPoint array.
+ * Returns null if any point cannot be parsed.
+ */
+function parseGeoPoints(raw: string): readonly GeoPoint[] | null {
+  const pointStrs = raw.split(";").map(s => s.trim()).filter(Boolean);
+  if (pointStrs.length === 0) return null;
+  const points: GeoPoint[] = [];
+  for (const ps of pointStrs) {
+    const parts = ps.split(/\s+/);
+    if (parts.length < 4) return null;
+    const lat = Number(parts[0]);
+    const lon = Number(parts[1]);
+    const alt = Number(parts[2]);
+    const acc = Number(parts[3]);
+    if (isNaN(lat) || isNaN(lon) || isNaN(alt) || isNaN(acc)) return null;
+    points.push({ lat, lon, alt, acc });
+  }
+  return points;
+}
+
+/**
+ * Serialize a readonly GeoPoint array to JavaRosa wire format:
+ * "lat lon alt acc;lat lon alt acc;..."
+ */
+function formatGeoPoints(pts: readonly GeoPoint[]): string {
+  return pts.map(p => `${p.lat} ${p.lon} ${p.alt} ${p.acc}`).join(";");
+}
+
+// ---------------------------------------------------------------------------
 // cast: raw string → typed AnswerValue (or null for empty / no-answer)
 // ---------------------------------------------------------------------------
 
@@ -106,6 +140,25 @@ export function cast(type: DataType, raw: string): AnswerValue | null {
     case "binary":
       return { kind: "binary", value: raw, displayText: raw };
 
+    case "long": {
+      if (raw === "") return null;
+      const n = parseInt(raw, 10);
+      if (isNaN(n)) return null;
+      return { kind: "long", value: n, displayText: String(n) };
+    }
+
+    case "geoshape":
+    case "geotrace": {
+      if (raw === "") return null;
+      const points = parseGeoPoints(raw);
+      if (points === null) return null;
+      return { kind: type, value: points, displayText: raw };
+    }
+
+    case "uncast":
+      // Raw passthrough — empty string is a valid uncast value (no null coercion).
+      return { kind: "uncast", value: raw, displayText: raw };
+
     case "unsupported":
       return { kind: "unsupported", value: raw, displayText: raw };
   }
@@ -128,6 +181,10 @@ export function uncast(v: AnswerValue): string {
     case "selectMulti": return [...v.value].join(" ");
     case "geopoint":    return `${v.value.lat} ${v.value.lon} ${v.value.alt} ${v.value.acc}`;
     case "binary":      return v.value;
+    case "long":        return String(Math.trunc(v.value));
+    case "geoshape":    return formatGeoPoints(v.value);
+    case "geotrace":    return formatGeoPoints(v.value);
+    case "uncast":      return v.value;
     case "unsupported": return v.value;
   }
 }
