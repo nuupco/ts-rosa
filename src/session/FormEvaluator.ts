@@ -21,17 +21,13 @@ import {
   makeInstanceDocumentNode,
   wrapInstanceNode,
   setActiveRelevanceCheck,
-} from '../xpath/adapter/instance/InstanceNodeXPathAdapter.ts';
-import type {
-  InstanceDocumentNode,
-  InstanceXPathNode,
-} from '../xpath/adapter/instance/InstanceXPathNode.ts';
-import {
-  instanceEvaluator,
+  XPATH_EVALUATION_RESULT,
+  evaluateInstanceExpr,
+  type InstanceDocumentNode,
+  type InstanceXPathNode,
   type InstanceEvaluationContext,
-} from '../xpath/evaluator/InstanceEvaluator.ts';
-import { XPATH_EVALUATION_RESULT } from '../xpath/vendor/xpath/evaluator/result/XPathEvaluationResult.ts';
-import type { CompiledInstanceExpression } from '../xpath/seam/XPathSeam.ts';
+  type CompiledInstanceExpression,
+} from '../xpath/seam/XPathSeam.ts';
 import type { TriggerableDag } from '../eval/TriggerableDag.ts';
 import type { Triggerable } from '../eval/Triggerable.ts';
 import type { TreeReference } from '../model/instance/TreeReference.ts';
@@ -175,12 +171,7 @@ export class FormEvaluator {
    */
   private evaluateAsNodeSet(expr: string): Set<InstanceNode> {
     const ctx = this.makeContext(null);
-    const result = instanceEvaluator.evaluate(
-      expr,
-      ctx.contextNode,
-      null,
-      XPATH_EVALUATION_RESULT.ANY_TYPE,
-    );
+    const result = evaluateInstanceExpr(expr, ctx.contextNode, XPATH_EVALUATION_RESULT.ANY_TYPE);
     const nodes = new Set<InstanceNode>();
     let node = result.iterateNext();
     while (node !== null) {
@@ -197,12 +188,7 @@ export class FormEvaluator {
     contextNode?: InstanceNode | null,
   ): string | number | boolean {
     const ctx = this.makeContext(contextNode);
-    const result = instanceEvaluator.evaluate(
-      expr,
-      ctx.contextNode,
-      null,
-      XPATH_EVALUATION_RESULT.ANY_TYPE,
-    );
+    const result = evaluateInstanceExpr(expr, ctx.contextNode, XPATH_EVALUATION_RESULT.ANY_TYPE);
 
     switch (result.resultType) {
       case XPATH_EVALUATION_RESULT.BOOLEAN_TYPE:
@@ -215,12 +201,7 @@ export class FormEvaluator {
         // Nodeset: return first node's string-value or empty string
         const first = result.iterateNext();
         if (first === null) return '';
-        return instanceEvaluator.evaluate(
-          'string(.)',
-          first,
-          null,
-          XPATH_EVALUATION_RESULT.STRING_TYPE,
-        ).stringValue;
+        return evaluateInstanceExpr('string(.)', first, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
       }
     }
   }
@@ -259,12 +240,7 @@ export class FormEvaluator {
     if (nodes.length === 0) return '';
     const first = nodes[0];
     if (first === undefined) return '';
-    return instanceEvaluator.evaluate(
-      'string(.)',
-      first,
-      null,
-      XPATH_EVALUATION_RESULT.STRING_TYPE,
-    ).stringValue;
+    return evaluateInstanceExpr('string(.)', first, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
   }
 
   /**

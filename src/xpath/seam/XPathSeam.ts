@@ -25,9 +25,29 @@ import {
 import type { InstanceXPathNode } from '../adapter/instance/InstanceXPathNode.ts';
 import {
 	XPATH_EVALUATION_RESULT,
+	type XPathEvaluationResultType,
 } from '../vendor/xpath/evaluator/result/XPathEvaluationResult.ts';
+import {
+	makeInstanceDocumentNode,
+	wrapInstanceNode,
+	setActiveRelevanceCheck,
+} from '../adapter/instance/InstanceNodeXPathAdapter.ts';
 
 export type { InstanceEvaluationContext } from '../evaluator/InstanceEvaluator.ts';
+
+// Re-export adapter symbols so FormEvaluator only touches this seam.
+export {
+	makeInstanceDocumentNode,
+	wrapInstanceNode,
+	setActiveRelevanceCheck,
+} from '../adapter/instance/InstanceNodeXPathAdapter.ts';
+export type {
+	InstanceDocumentNode,
+	InstanceXPathNode,
+} from '../adapter/instance/InstanceXPathNode.ts';
+
+// Re-export result constants behind the seam boundary.
+export { XPATH_EVALUATION_RESULT } from '../vendor/xpath/evaluator/result/XPathEvaluationResult.ts';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -271,6 +291,47 @@ export function compileInstanceXPath(expr: string): CompiledInstanceExpression {
 			}
 		},
 	};
+}
+
+/**
+ * Evaluate a pre-compiled instance expression against an InstanceEvaluationContext.
+ *
+ * This is the seam-level wrapper for the direct `instanceEvaluator.evaluate(...)` call
+ * so that FormEvaluator does not need to import InstanceEvaluator directly.
+ *
+ * @param compiled - A CompiledInstanceExpression obtained from compileInstanceXPath.
+ * @param ctx      - The evaluation context providing instanceRoot and contextNode.
+ * @returns The raw evaluator result (callers decode via InstanceXPathValue helpers).
+ */
+export function evaluateInstanceXPath(
+	compiled: CompiledInstanceExpression,
+	ctx: InstanceEvaluationContext,
+): ReturnType<typeof instanceEvaluator.evaluate> {
+	return instanceEvaluator.evaluate(
+		compiled.source,
+		ctx.contextNode,
+		null,
+		XPATH_EVALUATION_RESULT.ANY_TYPE,
+	);
+}
+
+/**
+ * Evaluate a plain XPath expression string directly over the InstanceTree.
+ *
+ * Used by FormEvaluator for internal evaluations (e.g. evaluateAsNodeSet,
+ * evaluateOnInstance, nodeset string coercion) without going through a compiled
+ * expression. Keeps InstanceEvaluator import inside the seam.
+ *
+ * @param expr      - XPath expression string.
+ * @param ctxNode   - Context node for evaluation.
+ * @param resultType - Requested result type constant from XPATH_EVALUATION_RESULT.
+ */
+export function evaluateInstanceExpr(
+	expr: string,
+	ctxNode: InstanceXPathNode,
+	resultType: XPathEvaluationResultType,
+): ReturnType<typeof instanceEvaluator.evaluate> {
+	return instanceEvaluator.evaluate(expr, ctxNode, null, resultType);
 }
 
 function decodeInstanceResult(result: ReturnType<typeof instanceEvaluator.evaluate>): InstanceXPathValue {
