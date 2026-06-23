@@ -17,13 +17,12 @@ import { resolveReference } from '../model/instance/InstanceTree.ts';
 import { INDEX_TEMPLATE } from '../model/instance/multiplicity.ts';
 import { cast } from '../model/data/codecs.ts';
 import { getXmlParser } from '../platform/XmlParser.ts';
-import { bindProcessor } from './bindProcessor.ts';
-import { bindProcessor2 } from './bindProcessor2.ts';
+import { bindProcessor, bindProcessor2 } from './bindProcessor.ts';
 import { finalizeDag, addTriggerable } from '../eval/TriggerableDag.ts';
 import { makeRecalculate, makeCondition, type Triggerable } from '../eval/Triggerable.ts';
 import { genericize, refToString } from '../model/instance/TreeReference.ts';
 import type { TriggerableDag } from '../eval/TriggerableDag.ts';
-import type { CompiledBinding } from './bindProcessor2.ts';
+import type { CompiledBinding } from './bindProcessor.ts';
 import { bodyHandlers } from './handlers.ts';
 import { childElementsByLocalName, firstByLocalName, directTextContent, textContent } from './domHelpers.ts';
 

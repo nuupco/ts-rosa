@@ -42,7 +42,7 @@ import {
   type OpaqueReactiveObjectFactory,
   identityReactiveFactory,
 } from '../platform/ReactiveObjectFactory.ts';
-import type { CompiledBinding } from '../parse/bindProcessor2.ts';
+import type { CompiledBinding } from '../parse/bindProcessor.ts';
 import { AnswerResult } from './AnswerResult.ts';
 
 // ---------------------------------------------------------------------------

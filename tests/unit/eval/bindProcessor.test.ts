@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { bindProcessor2, type CompiledBinding } from '../../../src/parse/bindProcessor2.ts';
+import { bindProcessor2, type CompiledBinding } from '../../../src/parse/bindProcessor.ts';
 import { refToString, parseAbsoluteRef } from '../../../src/model/instance/TreeReference.ts';
 
 // ---------------------------------------------------------------------------

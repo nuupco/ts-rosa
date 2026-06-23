@@ -2,7 +2,7 @@ import type { InstanceTree } from '../instance/InstanceTree';
 import type { DataBinding } from './DataBinding';
 import type { FormElement } from './FormElement';
 import type { TriggerableDag } from '../../eval/TriggerableDag';
-import type { CompiledBinding } from '../../parse/bindProcessor2';
+import type { CompiledBinding } from '../../parse/bindProcessor';
 
 /**
  * FormDefinition — pure definition record for a parsed XForms form.
