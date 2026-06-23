@@ -44,6 +44,23 @@ import {
   type OpaqueReactiveObjectFactory,
   identityReactiveFactory,
 } from '../platform/ReactiveObjectFactory.ts';
+import type { CompiledBinding } from '../parse/bindProcessor2.ts';
+import { AnswerResult } from './AnswerResult.ts';
+
+// ---------------------------------------------------------------------------
+// ValidateOutcome — internal engine type (not Scenario harness type)
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of a full-form validation sweep.
+ * Mirrors JavaRosa ValidateOutcome — null means the form is valid.
+ */
+export interface ValidateOutcome {
+  /** The absolute path (nodeset) of the first field that failed validation. */
+  readonly failedNodeset: string;
+  /** The reason for failure. */
+  readonly status: AnswerResult.REQUIRED_BUT_EMPTY | AnswerResult.CONSTRAINT_VIOLATED;
+}
 
 export class FormEvaluator {
   private readonly tree: InstanceTree;
@@ -56,6 +73,12 @@ export class FormEvaluator {
 
   /** Factory for creating reactive node state objects (default: identity). */
   private readonly factory: OpaqueReactiveObjectFactory;
+
+  /**
+   * Compiled constraint expressions, keyed by nodeset string (e.g. "/data/a").
+   * Set by initializeInstance from the FormDefinition.constraintBindings.
+   */
+  private constraintBindings: ReadonlyMap<string, CompiledBinding> = new Map();
 
   constructor(tree: InstanceTree, factory?: OpaqueReactiveObjectFactory) {
     this.tree = tree;
@@ -250,8 +273,11 @@ export class FormEvaluator {
    * Slice 3.5: also initializes NodeState for all bound nodes, and evaluates
    * all Conditions (relevant/required/readonly) to set initial NodeState.
    */
-  initializeInstance(dag: TriggerableDag): void {
+  initializeInstance(dag: TriggerableDag, constraintBindings?: ReadonlyMap<string, CompiledBinding>): void {
     this.dag = dag;
+    if (constraintBindings !== undefined) {
+      this.constraintBindings = constraintBindings;
+    }
 
     // Pre-create NodeState for all targets in the DAG
     for (const triggerable of dag.triggerablesDAG) {
@@ -395,6 +421,89 @@ export class FormEvaluator {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Slice 3.6 — Constraint validation + answerQuestion + validate()
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Answer a question with constraint checking.
+   *
+   * Algorithm (mirrors JavaRosa FormEntryController.answerQuestion):
+   *   1. If value is non-null AND a constraint binding exists for ref:
+   *      evaluate constraint in context of ref; if false → CONSTRAINT_VIOLATED (no commit).
+   *   2. Empty/null value → constraint always satisfied (skip eval).
+   *   3. setValue(ref, value) + triggerTriggerables(ref).
+   *   4. Return OK.
+   */
+  answerQuestion(ref: TreeReference, value: AnswerValue | null): AnswerResult {
+    const nodeset = refToString(ref);
+    const constraintCb = this.constraintBindings.get(nodeset);
+
+    // Non-null value with a constraint → evaluate constraint
+    if (value !== null && constraintCb !== undefined) {
+      const targetNode = resolveReference(this.tree, ref);
+      if (targetNode !== null) {
+        // Temporarily set value so "." evaluates to the candidate value
+        const previousValue = targetNode.value;
+        targetNode.value = value;
+        let constraintResult: string | number | boolean;
+        try {
+          constraintResult = this.evaluateCompiled(constraintCb.expr, targetNode);
+        } finally {
+          // Restore previous value (we do NOT commit if constraint fails)
+          targetNode.value = previousValue;
+        }
+        if (!toBoolean(constraintResult)) {
+          return AnswerResult.CONSTRAINT_VIOLATED;
+        }
+      }
+    }
+
+    // Constraint satisfied (or empty value) → commit
+    this.setValue(ref, value);
+    this.triggerTriggerables(ref);
+    return AnswerResult.OK;
+  }
+
+  /**
+   * Full-form validation sweep.
+   *
+   * Mirrors JavaRosa TriggerableDag.validate() (TriggerableDag.java:409-439).
+   * Iterates all bindings in the NodeState map order, checking:
+   *   1. effectivelyRelevant && required && value empty → REQUIRED_BUT_EMPTY
+   *   2. non-null value && constraint binding exists → eval constraint → CONSTRAINT_VIOLATED
+   *
+   * Returns the first failure, or null if the form is valid.
+   */
+  validate(
+    allNodesets: readonly string[],
+  ): ValidateOutcome | null {
+    for (const nodeset of allNodesets) {
+      const ref = parseAbsoluteRef(nodeset);
+      const node = resolveReference(this.tree, ref);
+      if (node === null) continue;
+
+      const stateKey = refToString(genericize(ref));
+      const state = this.nodeStates.get(stateKey);
+      const isRelevant = this.isEffectivelyRelevant(ref);
+
+      // Check required: effectively relevant + required + empty value
+      if (isRelevant && state?.required === true && isAnswerEmpty(node.value)) {
+        return { failedNodeset: nodeset, status: AnswerResult.REQUIRED_BUT_EMPTY };
+      }
+
+      // Check constraint: non-null, non-empty value with a constraint binding
+      const constraintCb = this.constraintBindings.get(nodeset);
+      if (constraintCb !== undefined && !isAnswerEmpty(node.value)) {
+        const constraintResult = this.evaluateCompiled(constraintCb.expr, node);
+        if (!toBoolean(constraintResult)) {
+          return { failedNodeset: nodeset, status: AnswerResult.CONSTRAINT_VIOLATED };
+        }
+      }
+    }
+    return null;
+  }
+
   /**
    * Walk all descendant InstanceNodes of a node and ensure their effective
    * relevance is consistent with the ancestor walk rule.
@@ -446,6 +555,24 @@ function getAllToTrigger(
   }
 
   return toTrigger;
+}
+
+// ---------------------------------------------------------------------------
+// isAnswerEmpty — null or empty-string AnswerValue is "empty" for required/constraint
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if an AnswerValue is considered empty for validation purposes.
+ * Mirrors JavaRosa: null or empty string value = empty.
+ */
+function isAnswerEmpty(value: AnswerValue | null | undefined): boolean {
+  if (value === null || value === undefined) return true;
+  // String-like types: empty if value === ''
+  if (typeof value.value === 'string') return value.value === '';
+  // Arrays (selectMulti, geoshape, geotrace): empty if length === 0
+  if (Array.isArray(value.value)) return value.value.length === 0;
+  // Numbers, booleans, Dates: never empty (0 and false are valid answers)
+  return false;
 }
 
 // ---------------------------------------------------------------------------

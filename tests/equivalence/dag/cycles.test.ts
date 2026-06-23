@@ -130,8 +130,7 @@ describe("Equivalence — DAG cycle detection: valid DAGs compute correct values
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 constraint + answer is implemented
+  it(
     // Source: TriggerableDagTest.java#supports_self_references_in_constraints
     //   (constraint self-ref is NOT a cycle; answer must enforce constraint)
     "a constraint with a self-reference enforces the constraint on answer",

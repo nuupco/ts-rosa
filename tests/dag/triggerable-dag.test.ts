@@ -186,8 +186,7 @@ describe("TriggerableDag — Cycle detection", () => {
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: supports_self_references_in_constraints
     "self-references in constraint expressions are supported (not a cycle)",
     () => {
@@ -383,8 +382,7 @@ describe("TriggerableDag — Relevance", () => {
 // ---------------------------------------------------------------------------
 
 describe("TriggerableDag — Required and constraint", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: constraints_of_fields_that_are_empty_are_always_satisfied
     "constraints on empty fields are always satisfied",
     () => {
@@ -412,8 +410,7 @@ describe("TriggerableDag — Required and constraint", () => {
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: empty_required_fields_make_form_validation_fail
     "empty required fields make form validation fail with REQUIRED_BUT_EMPTY",
     () => {
@@ -439,8 +436,7 @@ describe("TriggerableDag — Required and constraint", () => {
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: constraint_violations_and_form_finalization
     "constraint violations are detected during form finalization",
     () => {

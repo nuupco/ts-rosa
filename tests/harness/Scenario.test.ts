@@ -96,8 +96,9 @@ describe("Scenario instance method stubs", () => {
     );
   });
 
-  it("getValidationOutcome() throws not implemented: getValidationOutcome", () => {
-    expectNotImplemented(() => scenario.getValidationOutcome(), "getValidationOutcome");
+  it("getValidationOutcome() returns null (no errors) for a form with no required fields", () => {
+    // Now implemented: returns null for a valid form, ValidateOutcome for failures
+    expect(scenario.getValidationOutcome()).toBeNull();
   });
 
   it("setLanguage(lang) throws not implemented: setLanguage", () => {
@@ -122,12 +123,17 @@ describe("Scenario instance method stubs", () => {
     expectNotImplemented(() => scenario.newInstance(), "newInstance");
   });
 
-  it("getFormDef() throws not implemented: getFormDef", () => {
-    expectNotImplemented(() => scenario.getFormDef(), "getFormDef");
+  it("getFormDef() returns a FormLike with a validate() method", () => {
+    // Now implemented: returns an object with validate() for checking form validity
+    const formDef = scenario.getFormDef();
+    expect(typeof formDef.validate).toBe("function");
+    expect(formDef.validate()).toBeNull(); // no required/constraint failures
   });
 
-  it("indexOf(xpath) throws not implemented: indexOf", () => {
-    expectNotImplemented(() => scenario.indexOf("/data/q1"), "indexOf");
+  it("indexOf(xpath) returns a FormIndexStub with the nodeset", () => {
+    // Now implemented: returns a stable index object usable for toEqual comparisons
+    const idx = scenario.indexOf("/data/q1");
+    expect(idx).toBeDefined();
   });
 
   it("getCurrentIndex() throws not implemented: getCurrentIndex", () => {

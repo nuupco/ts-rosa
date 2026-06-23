@@ -41,8 +41,7 @@ import { AnswerResult } from "../../../src/session/AnswerResult.ts";
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — constraint: empty fields", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 constraint evaluation is implemented
+  it(
     // Source: TriggerableDagTest.java#constraints_of_fields_that_are_empty_are_always_satisfied
     // web-forms: validity-state.test.ts "constraints of fields that are empty are always satisfied"
     "constraints on empty fields are always satisfied (empty → no violation)",
@@ -77,8 +76,7 @@ describe("Equivalence — constraint: empty fields", () => {
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — constraint: self-reference", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 constraint + answer with constraint check implemented
+  it(
     // Source: TriggerableDagTest.java#supports_self_references_in_constraints
     "self-reference in constraint is supported and enforced on answer",
     () => {
@@ -121,8 +119,7 @@ describe("Equivalence — constraint: self-reference", () => {
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — constraint: violations detected during form finalization", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 constraint finalization is implemented
+  it(
     // Source: TriggerableDagTest.java#constraint_violations_and_form_finalization
     // web-forms: validity-state.test.ts "constraint violations and form finalization"
     "constraint violation in a field is detected by getValidationOutcome after dependency changes",

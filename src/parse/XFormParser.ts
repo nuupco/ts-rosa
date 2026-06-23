@@ -23,6 +23,7 @@ import { finalizeDag, addTriggerable } from '../eval/TriggerableDag.ts';
 import { makeRecalculate, makeCondition, type Triggerable } from '../eval/Triggerable.ts';
 import { genericize, refToString } from '../model/instance/TreeReference.ts';
 import type { TriggerableDag } from '../eval/TriggerableDag.ts';
+import type { CompiledBinding } from './bindProcessor2.ts';
 import { bodyHandlers } from './handlers.ts';
 import { childElementsByLocalName, firstByLocalName, directTextContent, textContent } from './domHelpers.ts';
 
@@ -205,16 +206,22 @@ function findByLocalNameDeep(el: Element, localName: string): Element | null {
 function buildReactiveDag(
   bindEls: Element[],
   tree: InstanceTree,
-): TriggerableDag {
+): { dag: TriggerableDag; constraintBindings: Map<string, CompiledBinding> } {
   const allTriggerables = new Set<Triggerable>();
   const triggerablesPerTrigger = new Map<string, Set<Triggerable>>();
+  const constraintBindings = new Map<string, CompiledBinding>();
 
   const processedBindings = bindProcessor2(bindEls);
 
   for (const processed of processedBindings.values()) {
     for (const cb of processed.compiledBindings) {
-      // Constraints are NOT cascade sources — exclude from DAG
+      // Constraints are NOT cascade sources — store separately, exclude from DAG
       if (cb.kind === 'condition' && cb.action === 'constraint') {
+        // Key by nodeset (first target ref string)
+        if (cb.targets.length > 0) {
+          const key = processed.nodeset;
+          constraintBindings.set(key, cb);
+        }
         continue;
       }
 
@@ -244,7 +251,8 @@ function buildReactiveDag(
   }
 
   // finalizeDag throws on cycle detection (Slice 3.3 requirement)
-  return finalizeDag(allTriggerables, triggerablesPerTrigger, tree);
+  const dag = finalizeDag(allTriggerables, triggerablesPerTrigger, tree);
+  return { dag, constraintBindings };
 }
 
 // ---------------------------------------------------------------------------
@@ -258,7 +266,7 @@ function buildReactiveDag(
 export function parseDocument(doc: Document): FormDefinition {
   const root = doc.documentElement;
   if (!root) {
-    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [], dag: null };
+    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [], dag: null, constraintBindings: new Map() };
   }
 
   // Find model (under h:head/head)
@@ -279,7 +287,7 @@ export function parseDocument(doc: Document): FormDefinition {
 
   // Step 2b: bindProcessor2 — compile expressions + extract triggers (Phase 3)
   // Then finalizeDag — throws on cycle detection (Slice 3.3)
-  const dag = buildReactiveDag(bindEls, mainInstance);
+  const { dag, constraintBindings } = buildReactiveDag(bindEls, mainInstance);
 
   // Step 3: Find body (h:body or body)
   const bodyEl = findByLocalNameDeep(root, 'body');
@@ -291,7 +299,7 @@ export function parseDocument(doc: Document): FormDefinition {
   // Title
   const title = extractTitle(doc);
 
-  return { title, mainInstance, bindings, body, dag };
+  return { title, mainInstance, bindings, body, dag, constraintBindings };
 }
 
 /**

@@ -30,8 +30,9 @@ export function createFormSession(definition: FormDefinition): FormSession {
   const evaluator = new FormEvaluator(definition.mainInstance);
 
   // Slice 3.4: evaluate all Recalculates in DAG order (initial steady state)
+  // Slice 3.6: also pass constraint bindings for validation
   if (definition.dag !== null) {
-    evaluator.initializeInstance(definition.dag);
+    evaluator.initializeInstance(definition.dag, definition.constraintBindings);
   }
 
   return {

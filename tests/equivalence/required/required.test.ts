@@ -38,8 +38,7 @@ import { AnswerResult } from "../../../src/session/AnswerResult.ts";
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — required: empty required field makes form validation fail", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 required validation is implemented
+  it(
     // Source: TriggerableDagTest.java#empty_required_fields_make_form_validation_fail
     // web-forms: validity-state.test.ts "empty required fields make form validation fail"
     "form validation reports REQUIRED_BUT_EMPTY for an empty required field",
@@ -67,8 +66,7 @@ describe("Equivalence — required: empty required field makes form validation f
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 required validation + answer implemented
+  it(
     // Source: TriggerableDagTest.java#empty_required_fields_make_form_validation_fail (extension)
     "form is valid once the required field is answered",
     () => {
@@ -105,8 +103,7 @@ describe("Equivalence — required: empty required field makes form validation f
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — required: dynamic required expression", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 dynamic required is implemented
+  it(
     // Source: TriggerableDagTest.java — dynamic required based on another field
     "required expression that depends on another field is re-evaluated on change",
     () => {

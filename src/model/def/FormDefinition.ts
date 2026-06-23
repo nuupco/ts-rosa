@@ -2,6 +2,7 @@ import type { InstanceTree } from '../instance/InstanceTree';
 import type { DataBinding } from './DataBinding';
 import type { FormElement } from './FormElement';
 import type { TriggerableDag } from '../../eval/TriggerableDag';
+import type { CompiledBinding } from '../../parse/bindProcessor2';
 
 /**
  * FormDefinition — pure definition record for a parsed XForms form.
@@ -16,6 +17,12 @@ export type FormDefinition = {
   readonly body: readonly FormElement[];               // control tree (input/select/group/repeat)
   /** Topologically sorted reactive DAG (built from compiled bindings in Slice 3.3). */
   readonly dag: TriggerableDag | null;
+  /**
+   * Compiled constraint expressions per nodeset (key = nodeset string).
+   * Constraints are NOT in the cascade DAG — they are evaluated on-demand
+   * during answerQuestion and validate().
+   */
+  readonly constraintBindings: ReadonlyMap<string, CompiledBinding>;
 };
 
 /**

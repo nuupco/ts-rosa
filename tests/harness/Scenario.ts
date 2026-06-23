@@ -25,6 +25,7 @@ import { parseForm } from "../../src/parse/XFormParser.ts";
 import { createFormSession, type FormSession } from "../../src/session/FormSession.ts";
 import { walkControls } from "../../src/model/def/FormDefinition.ts";
 import type { FormElement } from "../../src/model/def/FormElement.ts";
+import { AnswerResult } from "../../src/session/AnswerResult.ts";
 
 // ---------------------------------------------------------------------------
 // Stub type placeholders for JavaRosa types not yet implemented
@@ -156,12 +157,17 @@ export class Scenario {
   // Miscellaneous
   // -------------------------------------------------------------------------
 
-  getFormDef(): FormDefStub {
-    return notImplemented("getFormDef");
+  getFormDef(): { validate(): unknown | null } {
+    const scenario = this;
+    return {
+      validate() {
+        return scenario._validate();
+      },
+    };
   }
 
-  indexOf(_xPath: string): FormIndexStub {
-    return notImplemented("indexOf");
+  indexOf(xPath: string): FormIndexStub {
+    return { __type: 'FormIndex', nodeset: xPath } as unknown as FormIndexStub;
   }
 
   getCurrentIndex(): FormIndexStub {
@@ -169,7 +175,24 @@ export class Scenario {
   }
 
   getValidationOutcome(): ValidateOutcomeStub | null {
-    return notImplemented("getValidationOutcome");
+    return this._validate();
+  }
+
+  /** Internal: run a full validation sweep and return the first failure. */
+  private _validate(): ValidateOutcomeStub | null {
+    if (!this.def || this.def.dag === null) return null;
+
+    // Collect all bound nodesets in document order (bindings map order = parse order)
+    const allNodesets = Array.from(this.def.bindings.keys());
+
+    const outcome = this.session.evaluator.validate(allNodesets);
+    if (outcome === null) return null;
+
+    return {
+      __type: 'ValidateOutcome',
+      failedPrompt: { __type: 'FormIndex', nodeset: outcome.failedNodeset } as unknown as FormIndexStub,
+      outcome: outcome.status as unknown as number,
+    };
   }
 
   expandSingle(_reference: TreeReferenceStub): TreeReferenceStub {
@@ -267,12 +290,11 @@ export class Scenario {
     if (!node) throw new Error(`node not found: ${q.ref}`);
     const coerced = cast(node.dataType, String(value)) ?? stringValue(String(value));
     if (this.def.dag !== null) {
-      this.session.evaluator.setValue(ref, coerced);
-      this.session.evaluator.triggerTriggerables(ref);
+      return this.session.evaluator.answerQuestion(ref, coerced) as unknown as AnswerResultValue;
     } else {
       node.value = coerced;
+      return AnswerResult.OK as unknown as AnswerResultValue;
     }
-    return 0;
   }
 
   // -------------------------------------------------------------------------
