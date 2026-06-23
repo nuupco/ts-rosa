@@ -46,10 +46,11 @@ function buildInstanceNode(el: Element): InstanceNode {
     }
   }
 
-  // Check if this is a repeat template (jr:template attribute)
-  const isTemplate =
-    el.getAttribute('jr:template') !== null ||
-    el.localName === 'repeat';
+  // Check if this is a repeat template.
+  // Only elements with jr:template="" attribute are templates. Elements named
+  // "repeat" in instance data are NOT automatically templates — they are live
+  // data instances. (A form may use any element name for a repeat group.)
+  const isTemplate = el.getAttribute('jr:template') !== null;
   if (isTemplate) {
     node.multiplicity = INDEX_TEMPLATE;
   }

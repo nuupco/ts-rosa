@@ -44,10 +44,8 @@ function range(start: number, end: number): number[] {
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — repeat: adding instances updates calculate cascade", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 createNewRepeat + calculate DAG is implemented
-    // Source: TriggerableDagTest.java#addingRepeatInstance_updatesCalculationCascade (L785)
-    // web-forms: repeat.test.ts "updates calculation cascade"
+  it(
+    // ACTIVATED: Slice 3.7 — createNewRepeat + calculate DAG cascade implemented
     "adding a repeat instance triggers the inner calculate cascade",
     () => {
       const scenario = Scenario.init(
@@ -95,10 +93,8 @@ describe("Equivalence — repeat: adding instances updates calculate cascade", (
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — repeat: count outside repeat propagates inside", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 repeat count calculate is implemented
-    // Source: TriggerableDagTest.java#addingOrRemovingRepeatInstance_updatesReferenceToCountInside
-    // web-forms: repeat.test.ts "updates reference to count inside"
+  it(
+    // ACTIVATED: Slice 3.7 — createNewRepeat + removeRepeat + calculate cascade implemented
     "count(/data/repeat) outside is propagated to inner-count after add and remove",
     () => {
       const scenario = Scenario.init(
@@ -142,10 +138,8 @@ describe("Equivalence — repeat: count outside repeat propagates inside", () =>
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 repeat count is implemented
-    // Source: TriggerableDagTest.java#addingOrRemovingRepeatInstance_updatesRepeatCount_insideAndOutsideRepeat
-    // web-forms: repeat.test.ts "updates repeat count, inside and outside repeat"
+  it(
+    // ACTIVATED: Slice 3.7 — createNewRepeat + removeRepeat + calculate cascade implemented
     "count(/data/repeat) is updated inside and outside repeat on add and remove",
     () => {
       const scenario = Scenario.init(
@@ -197,9 +191,8 @@ describe("Equivalence — repeat: count outside repeat propagates inside", () =>
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — repeat: countRepeatInstancesOf", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 countRepeatInstancesOf is implemented
-    // Source: TriggerableDagTest.java (repeat count assertions)
+  it(
+    // ACTIVATED: Slice 3.7 — countRepeatInstancesOf implemented via countRepeatInstances
     "countRepeatInstancesOf returns the correct count after adding instances",
     () => {
       const scenario = Scenario.init(

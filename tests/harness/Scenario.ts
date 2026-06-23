@@ -19,8 +19,13 @@ import type { XFormsElement } from "./XFormsElement.ts";
 import type { AnswerValue } from "../../src/model/data/AnswerValue.ts";
 import type { FormDefinition } from "../../src/model/def/FormDefinition.ts";
 import { cast, stringValue } from "../../src/model/data/codecs.ts";
-import { parseAbsoluteRef, refToString } from "../../src/model/instance/TreeReference.ts";
-import { resolveReference } from "../../src/model/instance/InstanceTree.ts";
+import { parseAbsoluteRef, refToString, genericize } from "../../src/model/instance/TreeReference.ts";
+import {
+  resolveReference,
+  addRepeatInstance,
+  removeRepeatInstance,
+  countRepeatInstances,
+} from "../../src/model/instance/InstanceTree.ts";
 import { parseForm } from "../../src/parse/XFormParser.ts";
 import { createFormSession, type FormSession } from "../../src/session/FormSession.ts";
 import { walkControls } from "../../src/model/def/FormDefinition.ts";
@@ -107,6 +112,8 @@ export class Scenario {
   private questions: Array<FormElement & { kind: 'question' }> = [];
   // Current question index (-1 = before first question)
   private currentQuestionIndex = -1;
+  // Current question override by xpath (from next(xPath)) — takes priority over index
+  private currentRef: string | null = null;
 
   // -------------------------------------------------------------------------
   // Static factory methods (mirrors JavaRosa static init / createFormDef)
@@ -281,6 +288,19 @@ export class Scenario {
   }
 
   private answerCurrentQuestion(value: string | number | boolean): AnswerResultValue {
+    // If currentRef is set (by next(xPath)), use that ref directly
+    if (this.currentRef !== null) {
+      const ref = parseAbsoluteRef(this.currentRef);
+      const node = resolveReference(this.def.mainInstance, ref);
+      if (!node) throw new Error(`node not found: ${this.currentRef}`);
+      const coerced = cast(node.dataType, String(value)) ?? stringValue(String(value));
+      if (this.def.dag !== null) {
+        return this.session.evaluator.answerQuestion(ref, coerced) as unknown as AnswerResultValue;
+      } else {
+        node.value = coerced;
+        return AnswerResult.OK as unknown as AnswerResultValue;
+      }
+    }
     const q = this.questions[this.currentQuestionIndex];
     if (q === undefined) {
       throw new Error(`No current question to answer (currentQuestionIndex=${this.currentQuestionIndex})`);
@@ -311,8 +331,9 @@ export class Scenario {
     return node.value;
   }
 
-  countRepeatInstancesOf(_xPath: string): number {
-    return notImplemented("countRepeatInstancesOf");
+  countRepeatInstancesOf(xPath: string): number {
+    const ref = parseAbsoluteRef(xPath);
+    return countRepeatInstances(this.def.mainInstance, ref);
   }
 
   choicesOf(_xPath: string): SelectChoiceStub[] {
@@ -347,13 +368,16 @@ export class Scenario {
     // (Phase 4 will implement full FormIndex navigation)
     if (_amountOrRef === undefined || typeof _amountOrRef === 'number') {
       const amount = typeof _amountOrRef === 'number' ? _amountOrRef : 1;
+      this.currentRef = null;
       this.currentQuestionIndex = Math.min(
         this.currentQuestionIndex + amount,
         this.questions.length - 1,
       );
       return this.currentQuestionIndex;
     }
-    return notImplemented("next(ref)");
+    // next(xPath): set currentRef to the given xpath so the next answer() uses it
+    this.currentRef = _amountOrRef;
+    return -1;
   }
 
   prev(): number {
@@ -390,13 +414,43 @@ export class Scenario {
 
   /**
    * Mirrors JavaRosa createNewRepeat() and createNewRepeat(String xPath).
+   *
+   * Adds a new repeat instance by cloning the template (or first instance) at the
+   * given path, then re-runs the DAG cascade to initialize calculated/condition values.
    */
-  createNewRepeat(_xPath?: string): Scenario {
-    return notImplemented("createNewRepeat");
+  createNewRepeat(xPath?: string): Scenario {
+    if (xPath === undefined) return notImplemented("createNewRepeat()");
+    const ref = parseAbsoluteRef(xPath);
+    const newNode = addRepeatInstance(this.def.mainInstance, ref);
+    if (newNode === null) throw new Error(`createNewRepeat: could not add instance at ${xPath}`);
+
+    if (this.def.dag !== null) {
+      // Derive the concrete ref of the new instance so cascade targets it
+      const instances = (() => {
+        const parent = newNode.parent;
+        if (!parent) return 0;
+        return parent.children.filter(
+          (c) => c.name === newNode.name && c.multiplicity !== -2 /* INDEX_TEMPLATE */,
+        ).length - 1;
+      })();
+      // Build a concrete ref for the new instance to use as context in cascade
+      const concreteRef = parseAbsoluteRef(`${xPath}[${instances + 1}]`);
+      this.session.evaluator.initializeRepeatInstance(concreteRef);
+    }
+    return this;
   }
 
-  removeRepeat(_xPath: string): Scenario {
-    return notImplemented("removeRepeat");
+  removeRepeat(xPath: string): Scenario {
+    const ref = parseAbsoluteRef(xPath);
+    const removed = removeRepeatInstance(this.def.mainInstance, ref);
+    if (removed === null) throw new Error(`removeRepeat: could not remove instance at ${xPath}`);
+
+    if (this.def.dag !== null) {
+      // Trigger cascade on the generic ref so count() etc. update
+      const genericRef = genericize(ref);
+      this.session.evaluator.triggerRepeatRemoval(genericRef);
+    }
+    return this;
   }
 
   // -------------------------------------------------------------------------

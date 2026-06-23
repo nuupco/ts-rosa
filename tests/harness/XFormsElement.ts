@@ -22,9 +22,17 @@ export interface XFormsElement {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+function escapeXmlAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function buildAttributesString(attributes: Record<string, string>): string {
   return Object.entries(attributes)
-    .map(([k, v]) => `${k}="${v}"`)
+    .map(([k, v]) => `${k}="${escapeXmlAttr(v)}"`)
     .join(" ");
 }
 

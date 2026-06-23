@@ -108,9 +108,8 @@ describe("Equivalence — indexed-repeat: absolute/relative path combinations", 
   for (const options of parameters) {
     const opts = options; // capture for closure
 
-    it.fails(
-      // ACTIVATE: remove .fails when Phase 3 indexed-repeat XPath + repeat DAG is implemented
-      // Source: IndexedRepeatRelativeRefsTest.java / web-forms/indexed-repeat.test.ts
+    it(
+      // ACTIVATED: Slice 3.7 — indexed-repeat + createNewRepeat implemented
       opts.testName,
       () => {
         const scenario = Scenario.init(

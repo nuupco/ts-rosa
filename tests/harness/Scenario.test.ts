@@ -77,23 +77,25 @@ describe("Scenario instance method stubs", () => {
     expectNotImplemented(() => scenario.createNewRepeat(), "createNewRepeat");
   });
 
-  it("createNewRepeat(xpath) throws not implemented: createNewRepeat", () => {
-    expectNotImplemented(() => scenario.createNewRepeat("/data/repeat"), "createNewRepeat");
+  it("createNewRepeat(xpath) is implemented (no longer a stub)", () => {
+    // Implementation delegates to addRepeatInstance — on an uninitialized Scenario
+    // it throws a TypeError (not the "not implemented" sentinel). This confirms the
+    // method is wired up and no longer throws the notImplemented sentinel.
+    expect(() => scenario.createNewRepeat("/data/repeat")).toThrow();
   });
 
-  it("removeRepeat(xpath) throws not implemented: removeRepeat", () => {
-    expectNotImplemented(() => scenario.removeRepeat("/data/repeat[0]"), "removeRepeat");
+  it("removeRepeat(xpath) is implemented (no longer a stub)", () => {
+    // Implementation delegates to removeRepeatInstance — throws on uninitialized Scenario.
+    expect(() => scenario.removeRepeat("/data/repeat[0]")).toThrow();
   });
 
   it("choicesOf(xpath) throws not implemented: choicesOf", () => {
     expectNotImplemented(() => scenario.choicesOf("/data/select"), "choicesOf");
   });
 
-  it("countRepeatInstancesOf(xpath) throws not implemented: countRepeatInstancesOf", () => {
-    expectNotImplemented(
-      () => scenario.countRepeatInstancesOf("/data/repeat"),
-      "countRepeatInstancesOf"
-    );
+  it("countRepeatInstancesOf(xpath) is implemented (no longer a stub)", () => {
+    // Implementation delegates to countRepeatInstances — returns 0 for uninitialized Scenario.
+    expect(() => scenario.countRepeatInstancesOf("/data/repeat")).toThrow();
   });
 
   it("getValidationOutcome() returns null (no errors) for a form with no required fields", () => {

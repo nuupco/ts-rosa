@@ -39,6 +39,7 @@ import * as xfGeo from '../vendor/xpath/functions/xforms/geo.ts';
 import * as xfNumber from '../vendor/xpath/functions/xforms/number.ts';
 import * as xfSelect from '../vendor/xpath/functions/xforms/select.ts';
 import * as xfString from '../vendor/xpath/functions/xforms/string.ts';
+import { indexedRepeat } from './xforms-indexed-repeat.ts';
 
 /**
  * JavaRosa function library — select functions only (choice-name, selected,
@@ -62,6 +63,7 @@ const xf = new FunctionLibrary(XFORMS_NAMESPACE_URI, [
 	...Object.values(xfNumber),
 	...Object.values(xfSelect),
 	...Object.values(xfString),
+	indexedRepeat,
 ]);
 
 // Unprefixed function calls (e.g. date(), if(), selected(), boolean-from-string())

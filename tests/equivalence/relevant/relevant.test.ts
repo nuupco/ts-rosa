@@ -251,10 +251,8 @@ describe("Equivalence — relevant: calculates inside non-relevant group", () =>
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — relevant: non-relevant nodes excluded from concat", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 repeat relevance + concat implemented
-    // Source: web-forms/relevant.test.ts
-    //   "is excluded from producing default values in an evaluation (supplemental)"
+  it(
+    // ACTIVATED: Slice 3.7 — per-instance condition evaluation with position semantics
     "non-relevant repeat nodes do not contribute values to downstream concat calculate",
     () => {
       // position() > 2: first two nodes are non-relevant; concat should only include 3,4,5

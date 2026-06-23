@@ -89,7 +89,7 @@ describe("XFormsElement — Scenario: bind attribute coverage", () => {
 
   it("bind with constraint emits constraint attribute", () => {
     const el = bind("/data/q").constraint(". > 0");
-    expect(el.asXml()).toContain('constraint=". > 0"');
+    expect(el.asXml()).toContain('constraint=". &gt; 0"');
   });
 
   it("bind with relevant emits relevant attribute", () => {

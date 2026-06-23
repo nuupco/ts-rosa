@@ -44,3 +44,30 @@ export function appendChild(parent: InstanceNode, child: InstanceNode): void {
 export function childrenNamed(node: InstanceNode, name: string): InstanceNode[] {
   return node.children.filter((c) => c.name === name);
 }
+
+/**
+ * Deep-clone an InstanceNode subtree.
+ * The clone has no parent set (caller must appendChild).
+ * Multiplicity is reset to DEFAULT_MULTIPLICITY (appendChild will update it).
+ */
+export function cloneNode(source: InstanceNode): InstanceNode {
+  const clone: InstanceNode = {
+    name: source.name,
+    multiplicity: DEFAULT_MULTIPLICITY,
+    value: source.value,
+    children: [],
+    attributes: new Map(source.attributes),
+    dataType: source.dataType,
+    parent: null,
+  };
+  for (const child of source.children) {
+    if (child.multiplicity === INDEX_TEMPLATE) continue; // skip nested templates
+    const childClone = cloneNode(child);
+    childClone.parent = clone;
+    // Assign multiplicity = count of same-name siblings already in clone
+    const sameNameCount = clone.children.filter((c) => c.name === childClone.name).length;
+    childClone.multiplicity = sameNameCount;
+    clone.children.push(childClone);
+  }
+  return clone;
+}

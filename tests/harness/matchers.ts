@@ -70,7 +70,14 @@ export const tsRosaMatchers = {
    * Mirrors JavaRosa `AnswerDataMatchers.intAnswer(int)`.
    */
   intAnswer(received: AnswerData<number>, expected: number) {
-    const pass = received.value === expected;
+    // Accept both numeric values and string representations of numbers
+    // (nodes without explicit int type bind store calculate results as strings)
+    const numericValue = typeof received.value === 'number'
+      ? received.value
+      : typeof received.value === 'string'
+        ? parseFloat(received.value as unknown as string)
+        : NaN;
+    const pass = numericValue === expected;
     return {
       pass,
       message: () =>

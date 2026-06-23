@@ -35,8 +35,10 @@ import type { CompiledInstanceExpression } from '../xpath/seam/XPathSeam.ts';
 import type { TriggerableDag } from '../eval/TriggerableDag.ts';
 import type { Triggerable } from '../eval/Triggerable.ts';
 import type { TreeReference } from '../model/instance/TreeReference.ts';
-import { genericize, refToString, parentOf, parseAbsoluteRef } from '../model/instance/TreeReference.ts';
-import { resolveReference } from '../model/instance/InstanceTree.ts';
+import { genericize, refToString, parentOf, parseAbsoluteRef, REF_ABSOLUTE } from '../model/instance/TreeReference.ts';
+import { level } from '../model/instance/TreeReferenceLevel.ts';
+import { INDEX_TEMPLATE, INDEX_UNBOUND } from '../model/instance/multiplicity.ts';
+import { resolveReference, resolveAll } from '../model/instance/InstanceTree.ts';
 import { cast } from '../model/data/codecs.ts';
 import type { AnswerValue } from '../model/data/AnswerValue.ts';
 import { type NodeState, defaultNodeState } from '../model/state/NodeState.ts';
@@ -109,14 +111,23 @@ export class FormEvaluator {
    * parent chain consulting own NodeState.relevant for each ancestor.
    */
   isEffectivelyRelevant(ref: TreeReference): boolean {
-    // Walk from the ref upward, checking NodeState.relevant at each level
+    // Walk from the ref upward, checking NodeState.relevant at each level.
+    // Check CONCRETE key first (per-instance state), then generic key (single-instance state).
     let current: TreeReference = ref;
     while (current.levels.length > 0) {
-      const key = refToString(genericize(current));
-      const state = this.nodeStates.get(key);
-      // If no state exists, assume relevant (no binding = no relevance expression)
-      if (state !== undefined && !state.relevant) {
+      // Try concrete key (with positional multiplicity) first
+      const concreteKey = refToString(current);
+      const concreteState = this.nodeStates.get(concreteKey);
+      if (concreteState !== undefined && !concreteState.relevant) {
         return false;
+      }
+      // Also check generic key (for conditions stored under genericized ref)
+      const genericKey = refToString(genericize(current));
+      if (genericKey !== concreteKey) {
+        const genericState = this.nodeStates.get(genericKey);
+        if (genericState !== undefined && !genericState.relevant) {
+          return false;
+        }
       }
       current = parentOf(current);
     }
@@ -158,6 +169,29 @@ export class FormEvaluator {
    * Returns a primitive (string | number | boolean) or the first node's
    * string-value when the result is a nodeset.
    */
+  /**
+   * Evaluate an XPath expression and return the set of InstanceNodes in the result nodeset.
+   * Used for position-aware condition evaluation (multi-instance targets).
+   */
+  private evaluateAsNodeSet(expr: string): Set<InstanceNode> {
+    const ctx = this.makeContext(null);
+    const result = instanceEvaluator.evaluate(
+      expr,
+      ctx.contextNode,
+      null,
+      XPATH_EVALUATION_RESULT.ANY_TYPE,
+    );
+    const nodes = new Set<InstanceNode>();
+    let node = result.iterateNext();
+    while (node !== null) {
+      if (node.kind === 'element') {
+        nodes.add(node.node);
+      }
+      node = result.iterateNext();
+    }
+    return nodes;
+  }
+
   evaluateOnInstance(
     expr: string,
     contextNode?: InstanceNode | null,
@@ -234,20 +268,52 @@ export class FormEvaluator {
   }
 
   /**
-   * Derive a TreeReference from an InstanceXPathNode by walking its parent chain.
+   * Derive a concrete TreeReference from an InstanceXPathNode by walking its parent chain.
+   *
+   * Per design §8: accumulates (name, positional multiplicity among same-name non-template siblings).
+   * The resulting ref has concrete multiplicities (0-indexed position) at each level,
+   * allowing per-instance NodeState keys and indexed-repeat unwrapping.
+   *
    * Returns null if the node cannot be mapped (e.g. document node).
    */
   private nodeToRef(node: InstanceXPathNode): TreeReference | null {
     if (node.kind !== 'element') return null;
-    // Build path segments from root down to this node
-    const segments: string[] = [];
+
+    // Walk from the target node up to the root, collecting (name, multiplicity) pairs
+    const levels: Array<{ name: string; multiplicity: number }> = [];
     let current: InstanceNode | null = node.node;
+
     while (current !== null) {
-      segments.unshift(current.name);
-      current = current.parent;
+      const curNode: InstanceNode = current;
+      const parentNode: InstanceNode | null = curNode.parent;
+      let multiplicity = curNode.multiplicity;
+
+      if (parentNode !== null) {
+        // Compute 0-indexed position among same-name non-template siblings
+        const sameNameSiblings = parentNode.children.filter(
+          (c: InstanceNode) => c.name === curNode.name && c.multiplicity !== INDEX_TEMPLATE,
+        );
+        const idx = sameNameSiblings.indexOf(curNode);
+        multiplicity = idx >= 0 ? idx : curNode.multiplicity;
+      }
+
+      levels.unshift({ name: curNode.name, multiplicity });
+      current = parentNode;
     }
-    // segments[0] is the root name; build absolute TreeReference
-    return parseAbsoluteRef('/' + segments.join('/'));
+
+    // Build TreeReference with concrete multiplicities
+    // levels[0] is the root element (e.g. 'data'), use INDEX_UNBOUND for root
+    const refLevels = levels.map(({ name, multiplicity }, i) => {
+      // For the root level, use INDEX_UNBOUND (there's only one root)
+      return level(name, i === 0 ? INDEX_UNBOUND : multiplicity);
+    });
+
+    return Object.freeze({
+      refLevel: REF_ABSOLUTE,
+      contextType: 'absolute' as const,
+      instanceName: null,
+      levels: Object.freeze(refLevels),
+    });
   }
 
   /** Expose the document node for callers that need to build their own contexts. */
@@ -351,6 +417,9 @@ export class FormEvaluator {
   /**
    * Evaluate a Recalculate triggerable and write the result to its target nodes.
    *
+   * Uses resolveAll to handle repeated nodes — each instance of the target path
+   * gets its own recalculate evaluation with that instance as the context node.
+   *
    * Context selection mirrors JavaRosa Recalculate.apply:
    *   - contextNode = the target node (resolved from triggerable.originalContextRef
    *     contextualized against changedRef when provided).
@@ -363,26 +432,38 @@ export class FormEvaluator {
    */
   private applyRecalculate(t: Triggerable & { kind: 'recalculate' }, changedRef: TreeReference | null): void {
     for (const target of t.targets) {
-      const targetNode = resolveReference(this.tree, target);
-      if (targetNode === null) continue;
+      // Use resolveAll to handle repeated paths (multiple instances at same generic path)
+      const targetNodes = resolveAll(this.tree, target);
+      if (targetNodes.length === 0) {
+        // Fallback: resolve single (for non-repeated paths)
+        const single = resolveReference(this.tree, target);
+        if (single !== null) targetNodes.push(single);
+      }
 
-      const rawResult = this.evaluateCompiled(t.expr, targetNode);
+      for (const targetNode of targetNodes) {
+        const rawResult = this.evaluateCompiled(t.expr, targetNode);
 
-      const rawString = typeof rawResult === 'string'
-        ? rawResult
-        : typeof rawResult === 'number'
-          ? String(rawResult)
-          : rawResult
-            ? '1'
-            : '0';
+        const rawString = typeof rawResult === 'string'
+          ? rawResult
+          : typeof rawResult === 'number'
+            ? String(rawResult)
+            : rawResult
+              ? '1'
+              : '0';
 
-      const coerced = cast(targetNode.dataType, rawString);
-      targetNode.value = coerced;
+        const coerced = cast(targetNode.dataType, rawString);
+        targetNode.value = coerced;
+      }
     }
   }
 
   /**
    * Evaluate a Condition triggerable and update NodeState for its target nodes.
+   *
+   * Uses resolveAll to handle repeated nodes — each instance of the target path
+   * gets its own condition evaluation with that instance as the context node.
+   * NodeState is stored per concrete instance (with position-specific key) when
+   * multiple instances exist; single instances use the genericized key.
    *
    * Mirrors JavaRosa Condition.apply (Condition.java).
    * Action semantics:
@@ -395,28 +476,86 @@ export class FormEvaluator {
    */
   private applyCondition(t: Triggerable & { kind: 'condition' }, changedRef: TreeReference | null): void {
     for (const target of t.targets) {
-      const targetNode = resolveReference(this.tree, target);
-      if (targetNode === null) continue;
+      // Use resolveAll to handle repeated paths
+      const targetNodes = resolveAll(this.tree, target);
+      if (targetNodes.length === 0) {
+        const single = resolveReference(this.tree, target);
+        if (single !== null) targetNodes.push(single);
+      }
 
-      const rawResult = this.evaluateCompiled(t.expr, targetNode);
-      const boolResult = toBoolean(rawResult);
+      // Determine generic key for this target (used for backward-compat lookup)
+      const genericKey = refToString(genericize(target));
+      const hasMultipleInstances = targetNodes.length > 1;
 
-      const key = refToString(genericize(target));
-      const state = this.getOrCreateState(key);
+      // For multi-instance targets: evaluate with nodeset predicate to get correct
+      // position() context. Evaluate (targetPath)[expr] from root and compare nodes.
+      // This handles position()-dependent conditions (e.g. relevant="position() > 2").
+      let relevantSet: Set<InstanceNode> | null = null;
+      if (hasMultipleInstances && t.action === 'relevant') {
+        // Build predicate expression: genericPath[expr] to get position-aware nodeset
+        // E.g. /data/node[position() > 2]  — XPath 1.0 path predicate, correct position context
+        const genericPath = refToString(genericize(target));
+        const predicateExpr = `${genericPath}[${t.expr.source}]`;
+        relevantSet = this.evaluateAsNodeSet(predicateExpr);
+      }
 
-      switch (t.action) {
-        case 'relevant':
-          state.relevant = boolResult;
-          // Propagate inherited relevance through descendants
-          this.propagateRelevanceToDescendants(targetNode);
-          break;
-        case 'required':
-          state.required = boolResult;
-          break;
-        case 'readonly':
-          state.readonly = boolResult;
-          state.enabled = !boolResult;
-          break;
+      for (const targetNode of targetNodes) {
+        let boolResult: boolean;
+        if (relevantSet !== null) {
+          // Multi-instance with position: use the nodeset result
+          boolResult = relevantSet.has(targetNode);
+        } else {
+          const rawResult = this.evaluateCompiled(t.expr, targetNode);
+          boolResult = toBoolean(rawResult);
+        }
+
+        // Store state under BOTH the concrete key (for per-instance lookup) AND
+        // the generic key (for backward-compat single-instance lookup in isEffectivelyRelevant).
+        const concreteRef = this.nodeToRef(wrapInstanceNode(targetNode, this.docNode));
+        const concreteKey = concreteRef !== null ? refToString(concreteRef) : genericKey;
+
+        // Primary state: always update the concrete key
+        const concreteState = this.getOrCreateState(concreteKey);
+
+        // For single-instance (non-repeat) paths, concrete key = generic key effectively
+        // (both are the same since there's only one instance). For multi-instance paths,
+        // also update the generic state to track the last-evaluated value (for backward compat).
+        const state = concreteState;
+
+        switch (t.action) {
+          case 'relevant':
+            state.relevant = boolResult;
+            if (hasMultipleInstances) {
+              // For multi-instance: also update generic key with this result
+              // (last write wins — only meaningful if all instances have same relevance)
+              const genericState = this.getOrCreateState(genericKey);
+              genericState.relevant = boolResult;
+            } else {
+              // Single instance: ensure generic key = concrete state (same object or same value)
+              if (concreteKey !== genericKey) {
+                const genericState = this.getOrCreateState(genericKey);
+                genericState.relevant = boolResult;
+              }
+            }
+            // Propagate inherited relevance through descendants
+            this.propagateRelevanceToDescendants(targetNode);
+            break;
+          case 'required':
+            state.required = boolResult;
+            if (concreteKey !== genericKey) {
+              this.getOrCreateState(genericKey).required = boolResult;
+            }
+            break;
+          case 'readonly':
+            state.readonly = boolResult;
+            state.enabled = !boolResult;
+            if (concreteKey !== genericKey) {
+              const g = this.getOrCreateState(genericKey);
+              g.readonly = boolResult;
+              g.enabled = !boolResult;
+            }
+            break;
+        }
       }
     }
   }
@@ -502,6 +641,59 @@ export class FormEvaluator {
       }
     }
     return null;
+  }
+
+  /**
+   * Initialize a newly added repeat instance by running all triggerables
+   * whose targets are under the given repeat root ref.
+   *
+   * Mirrors JavaRosa TriggerableDag.initializeTriggerables called on a new
+   * repeat instance: re-evaluates all DAG triggerables in topological order,
+   * allowing those that target the new instance to fire.
+   *
+   * Called from Scenario.createNewRepeat after adding the node to the tree.
+   *
+   * @param repeatRootRef  The concrete positional ref of the new repeat instance
+   *                       (e.g. /data/repeat[1], multiplicity=1)
+   */
+  initializeRepeatInstance(repeatRootRef: TreeReference): void {
+    if (this.dag === null) return;
+
+    // Re-run initializeInstance logic for all triggerables — their target
+    // resolution via resolveAll will now include the new instance.
+    for (const triggerable of this.dag.triggerablesDAG) {
+      if (triggerable.kind === 'recalculate') {
+        this.applyRecalculate(triggerable, repeatRootRef);
+      } else if (triggerable.kind === 'condition') {
+        this.applyCondition(triggerable, repeatRootRef);
+      }
+    }
+  }
+
+  /**
+   * Re-trigger all triggerables that depend on nodes within the given repeat
+   * path. Called after a repeat instance is removed to update counts, cascades, etc.
+   *
+   * @param genericRepeatRef  The genericized ref of the repeat (e.g. /data/repeat)
+   */
+  triggerRepeatRemoval(genericRepeatRef: TreeReference): void {
+    if (this.dag === null) return;
+
+    // Find all triggerables whose triggers include the repeat ref or its children
+    const genericKey = refToString(genericRepeatRef);
+    const cascadeRoots = this.dag.triggerablesPerTrigger.get(genericKey);
+    if (cascadeRoots && cascadeRoots.size > 0) {
+      this.triggerTriggerables(genericRepeatRef);
+    }
+
+    // Also re-run all triggerables in DAG order to handle count() etc.
+    for (const triggerable of this.dag.triggerablesDAG) {
+      if (triggerable.kind === 'recalculate') {
+        this.applyRecalculate(triggerable, genericRepeatRef);
+      } else if (triggerable.kind === 'condition') {
+        this.applyCondition(triggerable, genericRepeatRef);
+      }
+    }
   }
 
   /**

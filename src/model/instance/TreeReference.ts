@@ -76,6 +76,16 @@ export function refToString(ref: TreeReference): string {
 
 export function parseAbsoluteRef(path: string): TreeReference {
   const parts = path.split('/').filter((s) => s.length > 0);
-  const levels = parts.map((name) => level(name, INDEX_UNBOUND));
+  const levels = parts.map((part) => {
+    // Handle positional predicates: item[1] → (name="item", multiplicity=0)
+    // XPath positions are 1-indexed; InstanceTree multiplicities are 0-indexed.
+    const bracketIdx = part.indexOf('[');
+    if (bracketIdx !== -1) {
+      const name = part.slice(0, bracketIdx);
+      const pos = parseInt(part.slice(bracketIdx + 1, part.length - 1), 10);
+      return level(name, Number.isFinite(pos) ? pos - 1 : INDEX_UNBOUND);
+    }
+    return level(part, INDEX_UNBOUND);
+  });
   return makeRef(REF_ABSOLUTE, 'absolute', levels);
 }

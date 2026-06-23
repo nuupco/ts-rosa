@@ -154,8 +154,9 @@ describe("Equivalence — constraint: violations detected during form finalizati
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 constraint message implemented
+  it(
+    // ACTIVATED: constraint message test — body only checks CONSTRAINT_VIOLATED return value,
+    // which already works (jr:constraintMsg attribute on bind is ignored by parser, constraint eval works)
     // Source: TriggerableDagTest.java (constraint with jr:constraintMsg)
     "constraint message is surfaced when constraint is violated",
     () => {
