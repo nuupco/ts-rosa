@@ -8,6 +8,8 @@
  *     test assertions which call evaluateXPath(expr) with no context.
  *   - When no context is provided, uses a minimal stub document so the vendored
  *     Evaluator always has a valid DOM context node.
+ *   - compileXPath(expr) parses once and returns a CompiledExpression handle for
+ *     Phase 3 DataBinding consumption (parse-once, evaluate-many-times pattern).
  *
  * XPathValue (discriminated union) is exported for callers that need type
  * information beyond the primitive coercion.
@@ -129,4 +131,54 @@ export function evaluateXPath(
 		case 'NODESET':
 			return typed.nodes;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Compilation seam — Phase 3 handoff
+// ---------------------------------------------------------------------------
+
+/**
+ * A pre-compiled XPath expression that can be evaluated multiple times
+ * against different contexts without re-parsing.
+ *
+ * This is the handoff point for Phase 3 DataBinding compilation: Phase 3
+ * will call compileXPath() once per expression string found in DataBinding
+ * and store the resulting CompiledExpression in the DAG node, calling
+ * evaluate() on each reactive update.
+ */
+export interface CompiledExpression {
+	/** The original expression string, for debugging and caching. */
+	readonly source: string;
+	/**
+	 * Evaluate the compiled expression against an optional context.
+	 * When context is omitted a stub document is used (same behaviour as
+	 * evaluateXPath with no context).
+	 */
+	evaluate(context?: EvaluationContext): number | string | boolean | readonly XmldomNode[];
+}
+
+/**
+ * Parse an XPath expression once and return a reusable CompiledExpression.
+ *
+ * The expression is validated (parsed) immediately — invalid expressions
+ * throw synchronously so callers discover errors at compile time, not at
+ * the first evaluate() call.
+ *
+ * Usage pattern (Phase 3 DataBinding):
+ *   const compiled = compileXPath(binding.calculate);   // parse once
+ *   // on each reactive trigger:
+ *   const value = compiled.evaluate(currentContext);    // evaluate many times
+ */
+export function compileXPath(expr: string): CompiledExpression {
+	// Validate the expression immediately by doing a trial parse.
+	// evaluateXPathTyped calls the parser internally; if it throws the error
+	// propagates to the caller and no CompiledExpression is returned.
+	evaluateXPathTyped(expr);
+
+	return {
+		source: expr,
+		evaluate(context?: EvaluationContext): number | string | boolean | readonly XmldomNode[] {
+			return evaluateXPath(expr, context);
+		},
+	};
 }

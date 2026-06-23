@@ -16,6 +16,8 @@
 export {
 	evaluateXPath,
 	evaluateXPathTyped,
+	compileXPath,
+	type CompiledExpression,
 	type EvaluationContext,
 	type XPathValue,
 } from './seam/XPathSeam.ts';
