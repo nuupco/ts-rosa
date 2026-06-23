@@ -64,8 +64,11 @@ remain.
 
 ## Maintenance
 
-**Do not edit these files manually.**
+**Do not edit these files manually**, except for the intentional deviations
+listed in [PATCHES.md](./PATCHES.md). When re-vendoring from upstream,
+re-apply every patch documented there before committing.
+
 To update from upstream: re-copy the relevant source files from
 `getodk/web-forms` at the desired commit, re-apply the import rewrites and
-browser-global exclusions described above, and update the commit reference in
-this file.
+browser-global exclusions described above, re-apply all patches in PATCHES.md,
+and update the commit reference in this file.
