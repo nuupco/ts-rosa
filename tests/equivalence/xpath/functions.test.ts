@@ -286,11 +286,20 @@ describe("XPath functions — ends-with()", () => {
 // is part of Phase 2 scope.
 // ---------------------------------------------------------------------------
 describe("XPath functions — indexed-repeat() (instance-binding required)", () => {
+  // NOTE: This it.fails tests an unsupported code path — bare evaluateXPath()
+  // has no access to an InstanceTree, so indexed-repeat() cannot resolve node
+  // references. This path is NOT a supported evaluation surface.
+  //
+  // Real coverage lives in:
+  //   tests/equivalence/repeat/indexed-repeat.test.ts
+  //   — 8 parameterized Scenario-based tests, all active and green (Phase 3).
+  //
+  // Do NOT promote this to an active test; the bare-evaluator path cannot
+  // support indexed-repeat by design.
   it.fails("indexed-repeat with numeric index returns correct node value", () => {
     // JavaRosa: indexed-repeat(/data/repeat/name, /data/repeat, 1)
     // → string value of /data/repeat[1]/name node
-    // Once Phase 2 wires instance evaluation, this must return a string.
-    // Today the stub throws, so this assertion fails (it.fails is correct).
+    // Bare evaluateXPath has no InstanceTree — indexed-repeat always throws here.
     const result = evaluateXPath("indexed-repeat(/data/repeat/name, /data/repeat, 1)");
     expect(typeof result).toBe("string");
   });

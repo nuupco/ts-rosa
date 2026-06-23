@@ -8,11 +8,8 @@
  *   - reference/web-forms: validity-state.test.ts
  *     ("empty required fields make form validation fail")
  *
- * ALL tests are `it.fails` — Scenario.getValidationOutcome() stub throws
- * "not implemented".
- *
- * ACTIVATION (Phase 3): remove `.fails` once required validation is
- * implemented in the engine.
+ * All tests are active and green as of Phase 3. Required validation
+ * (Scenario.getValidationOutcome) was implemented and it.fails removed.
  *
  * Backlog — NOT ported (see bottom of file).
  */

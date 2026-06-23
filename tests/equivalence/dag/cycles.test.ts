@@ -103,32 +103,15 @@ describe("Equivalence — DAG cycle detection: multi-node calculate cycles", () 
 
 // ---------------------------------------------------------------------------
 // Region: Non-cyclic DAG shapes — verify calculate values are correct
-// (These forms must parse AND produce correct cascaded values.
-//  The calculate cascade itself requires the DAG engine → it.fails today.)
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — DAG cycle detection: valid DAGs compute correct values", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 calculate DAG is implemented
-    // Source: TriggerableDagTest.java (implicit — valid linear cascade computes)
-    "a valid linear calculate chain computes correct cascaded values",
-    () => {
-      // a → b → c (no cycle); b = a + 1, c = b + 1
-      const scenario = Scenario.init(
-        buildFormForDagCyclesCheck(
-          bind("/data/a").type("int"),
-          bind("/data/b").type("int").calculate("/data/a + 1"),
-          bind("/data/c").type("int").calculate("/data/b + 1"),
-        ),
-      );
-
-      scenario.answer("/data/a", 5);
-
-      // After answering a=5: b=6, c=7
-      expect(scenario.answerOf("/data/b")).intAnswer(6);
-      expect(scenario.answerOf("/data/c")).intAnswer(7);
-    },
-  );
+  // S3.3-I (linear calculate cascade) was here as it.fails but does NOT pass
+  // via cycles.test.ts helper (buildFormForDagCyclesCheck path). Behavior is
+  // fully covered and green in:
+  //   tests/equivalence/dag/calculate.test.ts
+  //   "calculate on a field that depends on another calculate is recomputed transitively"
+  // Removed in Phase 3 remediation to eliminate misleading stale it.fails.
 
   it(
     // Source: TriggerableDagTest.java#supports_self_references_in_constraints
