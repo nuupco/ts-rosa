@@ -10,6 +10,7 @@
 import type { InstanceTree } from '../model/instance/InstanceTree.ts';
 import type { FormDefinition } from '../model/def/FormDefinition.ts';
 import { FormEvaluator } from './FormEvaluator.ts';
+import { FormNavigator } from './FormNavigator.ts';
 
 export interface FormSession {
   /** The full form definition (immutable defs + compiled bindings + DAG). */
@@ -18,6 +19,11 @@ export interface FormSession {
   readonly tree: InstanceTree;
   /** The evaluator wired to this session's InstanceTree. */
   readonly evaluator: FormEvaluator;
+  /**
+   * @experimental The form entry cursor engine (Phase 4).
+   * Owns the mutable cursor and all navigation methods.
+   */
+  readonly navigator: FormNavigator;
 }
 
 /**
@@ -35,9 +41,12 @@ export function createFormSession(definition: FormDefinition): FormSession {
     evaluator.initializeInstance(definition.dag, definition.constraintBindings);
   }
 
+  const navigator = new FormNavigator(definition, definition.mainInstance, evaluator);
+
   return {
     definition,
     tree: definition.mainInstance,
     evaluator,
+    navigator,
   };
 }

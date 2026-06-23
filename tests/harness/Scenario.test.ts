@@ -138,16 +138,20 @@ describe("Scenario instance method stubs", () => {
     expect(idx).toBeDefined();
   });
 
-  it("getCurrentIndex() throws not implemented: getCurrentIndex", () => {
-    expectNotImplemented(() => scenario.getCurrentIndex(), "getCurrentIndex");
+  it("getCurrentIndex() returns a FormIndex with kind 'bof' before navigation (Phase 4)", () => {
+    const initializedScenario = Scenario.init(minimalForm);
+    const idx = initializedScenario.getCurrentIndex();
+    expect((idx as unknown as { kind: string }).kind).toBe('bof');
   });
 
-  it("atTheEndOfForm() throws not implemented: atTheEndOfForm", () => {
-    expectNotImplemented(() => scenario.atTheEndOfForm(), "atTheEndOfForm");
+  it("atTheEndOfForm() returns false before navigation (Phase 4)", () => {
+    const initializedScenario = Scenario.init(minimalForm);
+    expect(initializedScenario.atTheEndOfForm()).toBe(false);
   });
 
-  it("atQuestion() throws not implemented: atQuestion", () => {
-    expectNotImplemented(() => scenario.atQuestion(), "atQuestion");
+  it("atQuestion() returns false at BOF (Phase 4)", () => {
+    const initializedScenario = Scenario.init(minimalForm);
+    expect(initializedScenario.atQuestion()).toBe(false);
   });
 
   it("refAtIndex() throws not implemented: refAtIndex", () => {

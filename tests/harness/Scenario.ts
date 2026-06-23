@@ -31,6 +31,7 @@ import { createFormSession, type FormSession } from "../../src/session/FormSessi
 import { walkControls } from "../../src/model/def/FormDefinition.ts";
 import type { FormElement } from "../../src/model/def/FormElement.ts";
 import { AnswerResult } from "../../src/session/AnswerResult.ts";
+import type { FormIndex } from "../../src/session/FormIndex.ts";
 
 // ---------------------------------------------------------------------------
 // Stub type placeholders for JavaRosa types not yet implemented
@@ -177,8 +178,8 @@ export class Scenario {
     return { __type: 'FormIndex', nodeset: xPath } as unknown as FormIndexStub;
   }
 
-  getCurrentIndex(): FormIndexStub {
-    return notImplemented("getCurrentIndex");
+  getCurrentIndex(): FormIndex {
+    return this.session.navigator.getCurrentIndex();
   }
 
   getValidationOutcome(): ValidateOutcomeStub | null {
@@ -393,7 +394,7 @@ export class Scenario {
   // -------------------------------------------------------------------------
 
   atTheEndOfForm(): boolean {
-    return notImplemented("atTheEndOfForm");
+    return this.session.navigator.atTheEndOfForm();
   }
 
   refAtIndex(): TreeReferenceStub {
@@ -401,7 +402,7 @@ export class Scenario {
   }
 
   atQuestion(): boolean {
-    return notImplemented("atQuestion");
+    return this.session.navigator.atQuestion();
   }
 
   getQuestionAtIndex(): QuestionDefStub {
