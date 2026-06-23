@@ -51,20 +51,20 @@ function expectEvalError(expr: string): void {
 // Source: XPathEvalTest.java boolean_functions()
 // ---------------------------------------------------------------------------
 describe("XPath functions — if()", () => {
-  it.fails("if(true(), 5, 'abc') → 5.0", () => {
+  it("if(true(), 5, 'abc') → 5.0", () => {
     // JavaRosa: testEval("if(true(), 5, 'abc')", 5.0)
     expect(evaluateXPath("if(true(), 5, 'abc')")).toBe(5.0);
   });
 
-  it.fails("if(false(), 5, 'abc') → 'abc'", () => {
+  it("if(false(), 5, 'abc') → 'abc'", () => {
     expect(evaluateXPath("if(false(), 5, 'abc')")).toBe("abc");
   });
 
-  it.fails("if(6 > 7, 5, 'abc') → 'abc' (false branch)", () => {
+  it("if(6 > 7, 5, 'abc') → 'abc' (false branch)", () => {
     expect(evaluateXPath("if(6 > 7, 5, 'abc')")).toBe("abc");
   });
 
-  it.fails("if('', 5, 'abc') → 'abc' (empty string is falsy)", () => {
+  it("if('', 5, 'abc') → 'abc' (empty string is falsy)", () => {
     expect(evaluateXPath("if('', 5, 'abc')")).toBe("abc");
   });
 });
@@ -74,32 +74,32 @@ describe("XPath functions — if()", () => {
 // Source: XPathEvalTest.java boolean_functions()
 // ---------------------------------------------------------------------------
 describe("XPath functions — selected()", () => {
-  it.fails("selected('apple baby crimson', 'apple') → true", () => {
+  it("selected('apple baby crimson', 'apple') → true", () => {
     expect(evaluateXPath("selected('apple baby crimson', 'apple')")).toBe(true);
   });
 
-  it.fails("selected('apple baby crimson', 'baby') → true", () => {
+  it("selected('apple baby crimson', 'baby') → true", () => {
     expect(evaluateXPath("selected('apple baby crimson', 'baby')")).toBe(true);
   });
 
-  it.fails("selected('apple baby crimson', 'crimson') → true", () => {
+  it("selected('apple baby crimson', 'crimson') → true", () => {
     expect(evaluateXPath("selected('apple baby crimson', 'crimson')")).toBe(true);
   });
 
-  it.fails("selected('apple baby crimson', '  baby  ') → true (trims whitespace)", () => {
+  it("selected('apple baby crimson', '  baby  ') → true (trims whitespace)", () => {
     // JavaRosa: testEval("selected('apple baby crimson', '  baby  ')", TRUE)
     expect(evaluateXPath("selected('apple baby crimson', '  baby  ')")).toBe(true);
   });
 
-  it.fails("selected('apple baby crimson', 'babby') → false (partial match fails)", () => {
+  it("selected('apple baby crimson', 'babby') → false (partial match fails)", () => {
     expect(evaluateXPath("selected('apple baby crimson', 'babby')")).toBe(false);
   });
 
-  it.fails("selected('apple baby crimson', 'bab') → false (prefix match fails)", () => {
+  it("selected('apple baby crimson', 'bab') → false (prefix match fails)", () => {
     expect(evaluateXPath("selected('apple baby crimson', 'bab')")).toBe(false);
   });
 
-  it.fails("selected('', 'apple') → false", () => {
+  it("selected('', 'apple') → false", () => {
     expect(evaluateXPath("selected('', 'apple')")).toBe(false);
   });
 });
@@ -109,20 +109,20 @@ describe("XPath functions — selected()", () => {
 // Source: XPathEvalTest.java boolean_functions()
 // ---------------------------------------------------------------------------
 describe("XPath functions — count-selected() / selected-at()", () => {
-  it.fails("count-selected('apple baby crimson') → 3.0", () => {
+  it("count-selected('apple baby crimson') → 3.0", () => {
     expect(evaluateXPath("count-selected('apple baby crimson')")).toBe(3.0);
   });
 
-  it.fails("count-selected('') → 0.0", () => {
+  it("count-selected('') → 0.0", () => {
     expect(evaluateXPath("count-selected('')")).toBe(0.0);
   });
 
-  it.fails("selected-at('apple baby crimson', 2) → 'crimson' (1-indexed)", () => {
+  it("selected-at('apple baby crimson', 2) → 'crimson' (1-indexed)", () => {
     // JavaRosa: testEval("selected-at('apple baby crimson', 2)", "crimson")
     expect(evaluateXPath("selected-at('apple baby crimson', 2)")).toBe("crimson");
   });
 
-  it.fails("selected-at('apple baby', 2) → '' (out-of-bounds → empty)", () => {
+  it("selected-at('apple baby', 2) → '' (out-of-bounds → empty)", () => {
     expect(evaluateXPath("selected-at('apple baby', 2)")).toBe("");
   });
 });
@@ -132,16 +132,16 @@ describe("XPath functions — count-selected() / selected-at()", () => {
 // Source: XPathEvalTest.java boolean_functions()
 // ---------------------------------------------------------------------------
 describe("XPath functions — checklist()", () => {
-  it.fails("checklist(1, 3, 'foo', 'bar') → true (2 selected, in [1,3])", () => {
+  it("checklist(1, 3, 'foo', 'bar') → true (2 selected, in [1,3])", () => {
     // JavaRosa: testEval("checklist(1, 3, 'foo', 'bar')", true)
     expect(evaluateXPath("checklist(1, 3, 'foo', 'bar')")).toBe(true);
   });
 
-  it.fails("checklist(-1, 1, 'foo', 'bar') → false (2 selected > max 1)", () => {
+  it("checklist(-1, 1, 'foo', 'bar') → false (2 selected > max 1)", () => {
     expect(evaluateXPath("checklist(-1, 1, 'foo', 'bar')")).toBe(false);
   });
 
-  it.fails("checklist(3, 5, 'foo', 'bar') → false (2 selected < min 3)", () => {
+  it("checklist(3, 5, 'foo', 'bar') → false (2 selected < min 3)", () => {
     expect(evaluateXPath("checklist(3, 5, 'foo', 'bar')")).toBe(false);
   });
 });
@@ -152,15 +152,15 @@ describe("XPath functions — checklist()", () => {
 // coalesce('', 'fallback') = 'fallback'
 // ---------------------------------------------------------------------------
 describe("XPath functions — coalesce()", () => {
-  it.fails("coalesce('value', 'fallback') → 'value' (first non-empty wins)", () => {
+  it("coalesce('value', 'fallback') → 'value' (first non-empty wins)", () => {
     expect(evaluateXPath("coalesce('value', 'fallback')")).toBe("value");
   });
 
-  it.fails("coalesce('', 'fallback') → 'fallback'", () => {
+  it("coalesce('', 'fallback') → 'fallback'", () => {
     expect(evaluateXPath("coalesce('', 'fallback')")).toBe("fallback");
   });
 
-  it.fails("coalesce('', '') → ''", () => {
+  it("coalesce('', '') → ''", () => {
     expect(evaluateXPath("coalesce('', '')")).toBe("");
   });
 });
@@ -170,16 +170,16 @@ describe("XPath functions — coalesce()", () => {
 // Source: XPathEvalTest.java regex()
 // ---------------------------------------------------------------------------
 describe("XPath functions — regex()", () => {
-  it.fails("regex('12345','[0-9]+') → true", () => {
+  it("regex('12345','[0-9]+') → true", () => {
     // JavaRosa: testEval("regex('12345','[0-9]+')", null, ec, TRUE)
     expect(evaluateXPath("regex('12345','[0-9]+')")).toBe(true);
   });
 
-  it.fails("regex('abc','[0-9]+') → false", () => {
+  it("regex('abc','[0-9]+') → false", () => {
     expect(evaluateXPath("regex('abc','[0-9]+')")).toBe(false);
   });
 
-  it.fails("regex('hello world','\\\\w+') → true", () => {
+  it("regex('hello world','\\\\w+') → true", () => {
     expect(evaluateXPath("regex('hello world','\\w+')")).toBe(true);
   });
 });
@@ -190,38 +190,38 @@ describe("XPath functions — regex()", () => {
 // Note: DST/timezone edge cases intentionally excluded per JavaRosa comment.
 // ---------------------------------------------------------------------------
 describe("XPath functions — date()", () => {
-  it.fails("date(0) → epoch 1970-01-01", () => {
+  it("date(0) → epoch 1970-01-01", () => {
     // JavaRosa: testEval("date(0)", DateUtils.getDate(1970, 1, 1))
     // In XPath, date(0) should return a value that string() gives "1970-01-01"
     expect(evaluateXPath("string(date(0))")).toBe("1970-01-01");
   });
 
-  it.fails("date(1) → 1970-01-02 (days since epoch)", () => {
+  it("date(1) → 1970-01-02 (days since epoch)", () => {
     expect(evaluateXPath("string(date(1))")).toBe("1970-01-02");
   });
 
-  it.fails("date(-1) → 1969-12-31", () => {
+  it("date(-1) → 1969-12-31", () => {
     expect(evaluateXPath("string(date(-1))")).toBe("1969-12-31");
   });
 
-  it.fails("date('2000-01-01') → parses to date value", () => {
+  it("date('2000-01-01') → parses to date value", () => {
     expect(evaluateXPath("string(date('2000-01-01'))")).toBe("2000-01-01");
   });
 
-  it.fails("number(date('1970-01-01')) → 0.0 (days since epoch)", () => {
+  it("number(date('1970-01-01')) → 0.0 (days since epoch)", () => {
     // JavaRosa: testEval("number(date('1970-01-01'))", 0.0)
     expect(evaluateXPath("number(date('1970-01-01'))")).toBe(0.0);
   });
 
-  it.fails("number(date('1970-01-02')) → 1.0", () => {
+  it("number(date('1970-01-02')) → 1.0", () => {
     expect(evaluateXPath("number(date('1970-01-02'))")).toBe(1.0);
   });
 
-  it.fails("number(date('1969-12-31')) → -1.0", () => {
+  it("number(date('1969-12-31')) → -1.0", () => {
     expect(evaluateXPath("number(date('1969-12-31'))")).toBe(-1.0);
   });
 
-  it.fails("number(date('2008-09-05')) → 14127.0", () => {
+  it("number(date('2008-09-05')) → 14127.0", () => {
     expect(evaluateXPath("number(date('2008-09-05'))")).toBe(14127.0);
   });
 
@@ -238,7 +238,7 @@ describe("XPath functions — date()", () => {
     expectEvalError("date(true())");
   });
 
-  it.fails("format-date formats to custom pattern", () => {
+  it("format-date formats to custom pattern", () => {
     // JavaRosa: testEval("format-date('2018-01-02T10:20:30.123', \"%Y-%m-%e %H:%M:%S\")", "2018-01-2 10:20:30")
     expect(
       evaluateXPath("format-date('2018-01-02T10:20:30.123', \"%Y-%m-%e %H:%M:%S\")")
@@ -265,15 +265,15 @@ describe("XPath functions — true() / false()", () => {
 // Source: XPathEvalTest.java substring_functions()
 // ---------------------------------------------------------------------------
 describe("XPath functions — ends-with()", () => {
-  it.fails("ends-with('abc', 'c') → true", () => {
+  it("ends-with('abc', 'c') → true", () => {
     expect(evaluateXPath("ends-with('abc', 'c')")).toBe(true);
   });
 
-  it.fails("ends-with('abc', 'a') → false", () => {
+  it("ends-with('abc', 'a') → false", () => {
     expect(evaluateXPath("ends-with('abc', 'a')")).toBe(false);
   });
 
-  it.fails("ends-with('', '') → true", () => {
+  it("ends-with('', '') → true", () => {
     expect(evaluateXPath("ends-with('', '')")).toBe(true);
   });
 });

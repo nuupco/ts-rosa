@@ -99,9 +99,9 @@ describe("XPath parse — string literals", () => {
     expect(evaluateXPath("'   '")).toBe("   ");
   });
 
-  it.fails("parses string with embedded quote", () => {
+  it("parses string with embedded quote", () => {
     // JavaRosa: {"'\"'", "{str:'\"'}"}
-    expect(evaluateXPath(`'"`)).toBe('"');
+    expect(evaluateXPath(`'"'`)).toBe('"');
   });
 
   it("rejects unterminated string", () => {
