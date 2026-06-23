@@ -19,6 +19,7 @@ import {
   bind,
   input,
   group,
+  repeat,
   t,
   title,
 } from '../../harness/XFormsElement.ts';
@@ -93,7 +94,7 @@ describe('Equivalence — navigation: cursor position (Slice 4.1)', () => {
     },
   );
 
-  it.fails(
+  it(
     // S4.1-D: FormIndex at a question has kind 'at' with path of length 1
     'formIndex_atQuestion_hasKindAt',
     () => {
@@ -104,6 +105,178 @@ describe('Equivalence — navigation: cursor position (Slice 4.1)', () => {
       const asAt = idx as unknown as { kind: string; path: unknown[] };
       expect(asAt.kind).toBe('at');
       expect(asAt.path).toHaveLength(1);
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Slice 4.2 — incrementIndex / decrementIndex + real next() / prev() (RED BAR)
+// ---------------------------------------------------------------------------
+
+/** Three top-level questions form */
+function threeQuestionForm() {
+  return html(
+    head(
+      title('Three Questions'),
+      model(
+        mainInstance(t('data id="three"', t('q1'), t('q2'), t('q3'))),
+        bind('/data/q1').type('string'),
+        bind('/data/q2').type('string'),
+        bind('/data/q3').type('string'),
+      ),
+    ),
+    body(
+      input('/data/q1'),
+      input('/data/q2'),
+      input('/data/q3'),
+    ),
+  );
+}
+
+/** Form with a group containing two questions */
+function groupWithTwoQuestionsForm() {
+  return html(
+    head(
+      title('Group Form'),
+      model(
+        mainInstance(t('data id="group"', t('g', t('q1'), t('q2')))),
+        bind('/data/g/q1').type('string'),
+        bind('/data/g/q2').type('string'),
+      ),
+    ),
+    body(
+      group('/data/g', input('/data/g/q1'), input('/data/g/q2')),
+    ),
+  );
+}
+
+/** Form with an empty group then a sibling question */
+function emptyGroupWithSiblingForm() {
+  return html(
+    head(
+      title('Empty Group'),
+      model(
+        mainInstance(t('data id="empty-group"', t('g'), t('q1'))),
+        bind('/data/q1').type('string'),
+      ),
+    ),
+    body(
+      group('/data/g'),
+      input('/data/q1'),
+    ),
+  );
+}
+
+describe('Equivalence — navigation: incrementIndex / decrementIndex + stepping (Slice 4.2)', () => {
+  it(
+    // S4.2-A: next() from BOF lands on first question
+    'next_fromBof_reachesFirstQuestion',
+    () => {
+      const scenario = Scenario.init(singleQuestionForm());
+      const code = scenario.next();
+      expect(code).toBe(FORM_ENTRY_EVENT.QUESTION);
+      expect(scenario.atQuestion()).toBe(true);
+    },
+  );
+
+  it(
+    // S4.2-B: next() past last question reaches EOF
+    'next_pastLastQuestion_reachesEof',
+    () => {
+      const scenario = Scenario.init(singleQuestionForm());
+      scenario.next(); // to q1
+      const code = scenario.next(); // to EOF
+      expect(code).toBe(FORM_ENTRY_EVENT.END_OF_FORM);
+      expect(scenario.atTheEndOfForm()).toBe(true);
+    },
+  );
+
+  it(
+    // S4.2-C: prev() from EOF reaches last question
+    'prev_fromEof_reachesLastQuestion',
+    () => {
+      const scenario = Scenario.init(singleQuestionForm());
+      scenario.next(); // to q1
+      scenario.next(); // to EOF
+      const code = scenario.prev();
+      expect(code).toBe(FORM_ENTRY_EVENT.QUESTION);
+      expect(scenario.atQuestion()).toBe(true);
+    },
+  );
+
+  it(
+    // S4.2-D: next()/prev() round-trip across three questions
+    'nextPrev_roundTrip_threeQuestions',
+    () => {
+      const scenario = Scenario.init(threeQuestionForm());
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION); // q1
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION); // q2
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION); // q3
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.END_OF_FORM);
+      expect(scenario.prev()).toBe(FORM_ENTRY_EVENT.QUESTION); // q3
+      expect(scenario.prev()).toBe(FORM_ENTRY_EVENT.QUESTION); // q2
+      expect(scenario.prev()).toBe(FORM_ENTRY_EVENT.QUESTION); // q1
+    },
+  );
+
+  it(
+    // S4.2-E: incrementIndex over group visits its children (group then q1, q2)
+    'incrementIndex_overGroup_visitsChildren',
+    () => {
+      const scenario = Scenario.init(groupWithTwoQuestionsForm());
+      // BOF → group → q1 → q2 → EOF
+      const code1 = scenario.next(); // group
+      expect(code1).toBe(FORM_ENTRY_EVENT.GROUP);
+      const code2 = scenario.next(); // q1 inside group
+      expect(code2).toBe(FORM_ENTRY_EVENT.QUESTION);
+      const code3 = scenario.next(); // q2 inside group
+      expect(code3).toBe(FORM_ENTRY_EVENT.QUESTION);
+      const code4 = scenario.next(); // EOF
+      expect(code4).toBe(FORM_ENTRY_EVENT.END_OF_FORM);
+    },
+  );
+
+  it(
+    // Empty group is visited as a GROUP event (no children to descend into) then next sibling
+    'incrementIndex_emptyGroup_skipsToSibling',
+    () => {
+      const scenario = Scenario.init(emptyGroupWithSiblingForm());
+      // BOF → group (empty) → q1 → EOF
+      const code1 = scenario.next(); // empty group itself
+      expect(code1).toBe(FORM_ENTRY_EVENT.GROUP);
+      const code2 = scenario.next(); // q1 (sibling after group)
+      expect(code2).toBe(FORM_ENTRY_EVENT.QUESTION);
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.END_OF_FORM);
+    },
+  );
+
+  it(
+    // decrementIndex from second question returns first question
+    'decrementIndex_fromSecondQuestion_returnsFirst',
+    () => {
+      const scenario = Scenario.init(threeQuestionForm());
+      scenario.next(); // q1
+      scenario.next(); // q2
+      const code = scenario.prev(); // back to q1
+      expect(code).toBe(FORM_ENTRY_EVENT.QUESTION);
+      const idx = scenario.getCurrentIndex();
+      const asAt = idx as unknown as { kind: string; path: Array<{ elementIndex: number }> };
+      expect(asAt.kind).toBe('at');
+      expect(asAt.path[0]!.elementIndex).toBe(0); // first body element
+    },
+  );
+
+  it(
+    // S4.6-A: next(xPath) jumps to the named ref
+    'next_xPath_jumpsToNamedRef',
+    () => {
+      const scenario = Scenario.init(threeQuestionForm());
+      const code = scenario.next('/data/q2');
+      expect(code).toBe(FORM_ENTRY_EVENT.QUESTION);
+      const idx = scenario.getCurrentIndex();
+      const asAt = idx as unknown as { kind: string; path: Array<{ elementIndex: number }> };
+      expect(asAt.kind).toBe('at');
+      expect(asAt.path[0]!.elementIndex).toBe(1); // second body element (q2 at index 1)
     },
   );
 });
