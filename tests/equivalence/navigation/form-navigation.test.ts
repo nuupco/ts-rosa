@@ -280,3 +280,193 @@ describe('Equivalence — navigation: incrementIndex / decrementIndex + stepping
     },
   );
 });
+
+// ---------------------------------------------------------------------------
+// Slice 4.3 — Relevance skip during step (RED BAR)
+// ---------------------------------------------------------------------------
+
+/**
+ * Form with three top-level questions: a (relevant), b (relevant=false()), c (relevant).
+ * Used for S4.3-A and S4.3-B.
+ */
+function threeQuestionsWithMiddleNonRelevantForm() {
+  return html(
+    head(
+      title('Relevance Skip'),
+      model(
+        mainInstance(t('data id="relevance-skip"', t('a'), t('b'), t('c'))),
+        bind('/data/a').type('string'),
+        bind('/data/b').type('string').relevant('false()'),
+        bind('/data/c').type('string'),
+      ),
+    ),
+    body(
+      input('/data/a'),
+      input('/data/b'),
+      input('/data/c'),
+    ),
+  );
+}
+
+/**
+ * Form: before (relevant), group g with q1/q2 (group relevant=false()), after (relevant).
+ * Used for S4.3-C.
+ */
+function nonRelevantGroupForm() {
+  return html(
+    head(
+      title('Non-relevant Group'),
+      model(
+        mainInstance(t('data id="nonrel-group"', t('before'), t('g', t('q1'), t('q2')), t('after'))),
+        bind('/data/before').type('string'),
+        bind('/data/g').relevant('false()'),
+        bind('/data/g/q1').type('string'),
+        bind('/data/g/q2').type('string'),
+        bind('/data/after').type('string'),
+      ),
+    ),
+    body(
+      input('/data/before'),
+      group('/data/g', input('/data/g/q1'), input('/data/g/q2')),
+      input('/data/after'),
+    ),
+  );
+}
+
+/**
+ * Form where all questions are non-relevant. Used for S4.3-D.
+ */
+function allNonRelevantForm() {
+  return html(
+    head(
+      title('All Non-relevant'),
+      model(
+        mainInstance(t('data id="all-nonrel"', t('q1'), t('q2'))),
+        bind('/data/q1').type('string').relevant('false()'),
+        bind('/data/q2').type('string').relevant('false()'),
+      ),
+    ),
+    body(
+      input('/data/q1'),
+      input('/data/q2'),
+    ),
+  );
+}
+
+/**
+ * Fixture mirroring FormEntryModelTest.isIndexRelevant_respectsRelevanceOfOutermostGroup.
+ *
+ * Form structure:
+ *   /data/outer (group, relevant="/data/outerYesNo = 'yes'")
+ *     /data/outer/inner (group, relevant="/data/innerYesNo = 'yes'")
+ *       /data/outer/inner/q1 (question)
+ *   /data/outerYesNo (question, default "no")
+ *   /data/innerYesNo (question, default "no")
+ */
+function nestedRelevanceForm() {
+  return html(
+    head(
+      title('Nested relevance'),
+      model(
+        mainInstance(
+          t('data id="nested_relevance"',
+            t('outer', t('inner', t('q1'))),
+            t('innerYesNo', 'no'),
+            t('outerYesNo', 'no'),
+          ),
+        ),
+        bind('/data/outer').relevant("/data/outerYesNo = 'yes'"),
+        bind('/data/outer/inner').relevant("/data/innerYesNo = 'yes'"),
+      ),
+    ),
+    body(
+      group('/data/outer',
+        group('/data/outer/inner',
+          input('/data/outer/inner/q1'),
+        ),
+      ),
+      input('/data/outerYesNo'),
+      input('/data/innerYesNo'),
+    ),
+  );
+}
+
+describe('Equivalence — navigation: relevance skip during step (Slice 4.3)', () => {
+  it.fails(
+    // S4.3-A: non-relevant question b is skipped forward (a → skip b → c)
+    'next_skipsNonRelevantQuestion',
+    () => {
+      const scenario = Scenario.init(threeQuestionsWithMiddleNonRelevantForm());
+      // BOF → a (skip b) → c → EOF
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION); // a
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION); // c (b skipped)
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.END_OF_FORM);
+    },
+  );
+
+  it.fails(
+    // S4.3-B: non-relevant question b is skipped backward (c → skip b → a)
+    'prev_skipsNonRelevantQuestion',
+    () => {
+      const scenario = Scenario.init(threeQuestionsWithMiddleNonRelevantForm());
+      // Navigate to c first (relevance-skipping step must already work for this,
+      // so we jump directly via indexOf to set up cursor at c)
+      scenario.next('/data/c');
+      // prev from c should skip b and land on a
+      expect(scenario.prev()).toBe(FORM_ENTRY_EVENT.QUESTION);
+      const idx = scenario.getCurrentIndex();
+      const asAt = idx as unknown as { kind: string; path: Array<{ elementIndex: number }> };
+      expect(asAt.kind).toBe('at');
+      expect(asAt.path[0]!.elementIndex).toBe(0); // /data/a is at body index 0
+    },
+  );
+
+  it.fails(
+    // S4.3-C: non-relevant group and all its children are skipped
+    'next_skipsEntireNonRelevantGroup',
+    () => {
+      const scenario = Scenario.init(nonRelevantGroupForm());
+      // BOF → before → (g and g/q1, g/q2 all skipped) → after → EOF
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION); // before
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION); // after (entire group skipped)
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.END_OF_FORM);
+    },
+  );
+
+  it.fails(
+    // S4.3-D: all non-relevant → next() from BOF reaches EOF
+    'next_allNonRelevant_reachesEof',
+    () => {
+      const scenario = Scenario.init(allNonRelevantForm());
+      const code = scenario.next();
+      expect(code).toBe(FORM_ENTRY_EVENT.END_OF_FORM);
+      expect(scenario.atTheEndOfForm()).toBe(true);
+    },
+  );
+
+  it.fails(
+    // Ported from FormEntryModelTest#isIndexRelevant_respectsRelevanceOfOutermostGroup
+    // Source: org.javarosa.form.api.FormEntryModelTest#isIndexRelevant_respectsRelevanceOfOutermostGroup
+    //
+    // isEffectivelyRelevant for q1 (inside outer/inner) must reflect the
+    // relevance of the OUTERMOST ancestor group, not just the immediate parent.
+    'isIndexRelevant_respectsRelevanceOfOutermostGroup',
+    () => {
+      const scenario = Scenario.init(nestedRelevanceForm());
+
+      // q1 is inside outer (non-relevant) and inner (non-relevant) → not relevant
+      scenario.next('/data/outer/inner/q1');
+      expect(scenario.atQuestion()).toBe(false); // non-relevant; stepToNextEvent skips it
+
+      // Making inner relevant still leaves outer non-relevant → q1 still not relevant
+      scenario.answer('/data/innerYesNo', 'yes');
+      scenario.next('/data/outer/inner/q1');
+      expect(scenario.atQuestion()).toBe(false);
+
+      // Making outer relevant too → q1 is now relevant
+      scenario.answer('/data/outerYesNo', 'yes');
+      scenario.next('/data/outer/inner/q1');
+      expect(scenario.atQuestion()).toBe(true);
+    },
+  );
+});
