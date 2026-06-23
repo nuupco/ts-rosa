@@ -74,14 +74,28 @@ src/
     Triggerable.ts          Condition | Recalculate as data, not behavior wrappers
     TriggerableDag.ts       topological graph; sole owner of cascade edges
     EvaluationContext.ts    contextNode, instance, secondary, functions, vars, position
-  xpath/                    XPath engine = ADAPTATION LAYER over forked @getodk/xpath
-    XPathSeam.ts            ts-rosa's own XPath interface; engine depends ONLY on this
-    evaluator.ts            wraps @getodk/xpath generic `Evaluator` (NOT XFormsXPathEvaluator)
-    DomAdapter.ts           XPathDOMAdapter<T> over @xmldom/xmldom (replaces WHATWG adapter
-                            that requires browser globals — the blocker we remove)
-    functions/              FunctionLibraryCollection: xpath1.0 + ODK/jr + pulldata
-                            (client extensions registered without touching core)
-    value.ts                XPathValue = Boolean|Number|String|XDate|NodeSet (seam-level union)
+  xpath/                    XPath engine (Phase 2, IMPLEMENTED)
+    index.ts                Public seam barrel; re-exports from seam/XPathSeam.ts
+    seam/XPathSeam.ts       ONLY XPath import boundary for the rest of the engine.
+                            Exports: evaluateXPath, evaluateXPathTyped, compileXPath,
+                            CompiledExpression, EvaluationContext, XPathValue
+    evaluator/
+      XmldomEvaluator.ts    Vendored Evaluator<XmldomNode> with injected pure-JS parser,
+                            XmldomXPathAdapter, and FunctionLibraryCollection. No WASM.
+    adapter/                XPathDOMAdapter<XmldomNode> over @xmldom/xmldom (~20 methods)
+      XmldomXPathAdapter.ts   bridges xmldom nodes to the vendored evaluator
+      XmldomNode.ts, kind.ts, traversal.ts, names.ts, values.ts
+    parser/                 Pure-JS XPath 1.0 parser (NO WASM / tree-sitter)
+      PureJSExpressionParser.ts  recursive-descent + precedence-climbing; LRU cache
+      SyntaxNode.ts              ts-rosa SyntaxNode types (tree-sitter-compatible vocabulary)
+      Tokenizer.ts               lexer → Token[]
+    functions/
+      index.ts              FunctionLibraryCollection: XPath 1.0 + ODK/jr: + xforms fns
+    vendor/                 Vendored source (Apache-2.0, upstream commit c02a421)
+      VENDOR.md             Provenance: repo, commit, license, what was pruned
+      PATCHES.md            8 conformance patches — MUST re-apply on re-vendor
+      common/               Subset of @getodk/common (pure-TS, no browser globals)
+      xpath/                Subset of @getodk/xpath (Evaluator, interfaces, functions)
   parse/                    XForm -> model (uses XmlParser via injection)
     XFormParser.ts          instance-scoped (no static parseLock/handlers)
     handlers.ts             Map<tag, Handler> dispatch
@@ -247,61 +261,186 @@ event type.
 
 ---
 
-## 7. XPath engine — fork and adapt @getodk/xpath (CONFIRMED)
+## 7. XPath engine — vendored subset of @getodk/xpath (IMPLEMENTED, Phase 2 complete)
 
-We do NOT hand-write a lexer/parser. We **fork and adapt @getodk/xpath** (Apache-2.0, v0.11),
-ODK's own XPath 1.0 + ODK-extensions engine, and put it behind a ts-rosa seam. This avoids
-reimplementing the well-tested XPath grammar, coercions and ODK/`jr:` functions while keeping
-our core portable.
+Phase 2 implemented the full XPath evaluation stack. The integration strategy changed from
+"npm dependency" to **vendored source** during Phase 2 Slice 1, when the team discovered that
+`@getodk/common` is a private package (never published to npm) and `@getodk/xpath` depends on
+it. Additionally, `ts-rosa` requires internal, non-public exports of `@getodk/xpath`
+(`FunctionLibraryCollection`, `fn/javarosa/xforms` function libraries) that are not available
+from a dist bundle. Vendoring the minimum TypeScript source subset is the only portable,
+publishable approach. Apache-2.0 permits this.
+
+### 7.1 Vendored subset (`src/xpath/vendor/`)
+
+The subset was copied from upstream commit **`c02a421`** (`getodk/web-forms`, branch `main`,
+2026-06-23). Provenance and license are recorded in `src/xpath/vendor/VENDOR.md`. Internal
+`@getodk/common` and `@getodk/xpath` import specifiers have been rewritten to relative paths;
+no external `@getodk/*` imports remain in the vendor tree.
+
+**What was vendored:**
+
+- `vendor/common/` — pure-TS subset of `@getodk/common`: `constants/`, `env/detection`,
+  `lib/collections/`, `lib/error/`, `lib/string/`.
+- `vendor/xpath/` — the generic `Evaluator<T>`, `XPathDOMAdapter` interfaces, `SyntaxNode`
+  types, evaluation result types, and the full function libraries (`fn/`, `javarosa/`,
+  `xforms/`).
+
+**What was intentionally excluded:**
+
+| Module | Reason |
+|---|---|
+| `xpath/expressionParser.ts` (tree-sitter / WASM) | WASM parser — ts-rosa uses its own pure-JS parser |
+| `xpath/static/grammar/TreeSitterXPathParser.ts` | Same — WASM dependency |
+| `common/lib/dom/compatibility.ts` | Browser globals (`document`, `window`) |
+| `common/lib/web-compat/*` | Browser globals (`atob`, `fetch`, etc.) |
+
+**Vendor patches** (`src/xpath/vendor/PATCHES.md`): 8 conformance patches were applied to the
+vendor tree to achieve XPath 1.0 / JavaRosa parity. Every deviation from upstream is documented
+with the file, change, and the specific JavaRosa test that drove it. A future re-vendor MUST
+re-apply all listed patches. Key patches include:
+- Patch 1: `string(NaN)` → `"NaN"` (XPath 1.0 §4.2)
+- Patch 2: `or`/`and` return `BooleanEvaluation`, not the raw operand (XPath 1.0 §3.4)
+- Patch 3: JavaRosa-compatible string-to-number (rejects `Infinity`, scientific notation)
+- Patch 4: float equality tolerance `1e-12` (matches JVM double arithmetic)
+- Patch 6: `round(-0.5)` → `-0` (XPath 1.0 / JavaRosa behavior)
+- Patch 7: `date()` throws `XPathTypeMismatchException` for invalid inputs
+- Patch 8: `format-date()` supports time specifiers (`%H`, `%M`, `%S`, `%3`)
+
+**Browser-globals firewall:** an ESLint `no-restricted-imports` rule blocks any re-introduction
+of the excluded browser-global paths. Must be re-audited on every re-vendor.
+
+### 7.2 Component layout and data flow
 
 ```
-EvaluationContext --> xpath/XPathSeam (ts-rosa interface, engine depends ONLY on this)
-                            |
-                            v
-              xpath/evaluator.ts  wraps @getodk/xpath generic `Evaluator`
-                            |        + FunctionLibraryCollection (ODK/jr fns)
-                            v
-              xpath/DomAdapter.ts  XPathDOMAdapter<T> over @xmldom/xmldom
-                            |
-                            v
-              XPathValue = Boolean | Number | String | XDate | NodeSet (seam-level union)
+src/xpath/
+  index.ts               Public seam barrel — exports evaluateXPath, evaluateXPathTyped,
+                         compileXPath, CompiledExpression, EvaluationContext, XPathValue
+  seam/
+    XPathSeam.ts         ONLY import boundary for XPath within ts-rosa.
+                         Exposes evaluateXPath (primitive coercion), evaluateXPathTyped
+                         (discriminated union), and compileXPath / CompiledExpression
+                         (parse-once / eval-many — Phase 3 DataBinding handoff).
+  evaluator/
+    XmldomEvaluator.ts   Subclass / instantiation of vendored Evaluator<XmldomNode>.
+                         Injects PureJSExpressionParser + XmldomXPathAdapter +
+                         FunctionLibraryCollection (fn + javarosa + xforms).
+                         Does NOT import expressionParser.ts (WASM); zero WASM dep.
+  adapter/
+    XmldomXPathAdapter.ts  XPathDOMAdapter<XmldomNode> over @xmldom/xmldom — 20 methods
+                           covering node kind, name, value, tree traversal, document order.
+                           Replaces the default WHATWG adapter (requires browser globals).
+    XmldomNode.ts        Type alias for the xmldom Node union used across the adapter.
+    kind.ts              Node-kind helpers.
+    traversal.ts         Tree traversal utilities.
+    names.ts             Namespace/local-name helpers.
+    values.ts            Node-value extraction.
+  parser/
+    PureJSExpressionParser.ts  Recursive-descent + precedence-climbing XPath 1.0 parser.
+                               Emits SyntaxNode trees structurally identical to the
+                               tree-sitter-xpath grammar (.type vocabulary, child ordering,
+                               wrapper nodes). Backed by a simple LRU cache.
+    SyntaxNode.ts        ts-rosa's own SyntaxNode / ASyntaxNode / ParsedTree types,
+                         structurally compatible with the vendored SyntaxNode interface.
+    Tokenizer.ts         Lexer: tokenizes XPath 1.0 expression strings → Token[].
+  functions/
+    index.ts             Constructs the FunctionLibraryCollection for the evaluator:
+                         XPath 1.0 + ODK/jr: + xforms functions. Circular-dependency
+                         modules (javarosa/node-set, xforms/node-set) excluded pending
+                         Slice 4 / Phase 3 NodeSet support.
+  vendor/                Vendored source (see §7.1 above).
+    VENDOR.md            Provenance: repo, upstream commit c02a421, license Apache-2.0.
+    PATCHES.md           All 8 patches with file, change, and JavaRosa test reference.
+    common/              Subset of @getodk/common (pure-TS only).
+    xpath/               Subset of @getodk/xpath (evaluator, functions, types).
 ```
 
-- **Reuse the GENERIC `Evaluator`** from @getodk/xpath. It accepts an injected
-  `XPathDOMAdapter<T>` and a `FunctionLibraryCollection` — it does NOT assume the DOM. This is
-  the integration point that makes the fork viable off-browser.
-- **Do NOT use `XFormsXPathEvaluator` directly.** That class is wired to browser DOM
-  expectations. We wrap the generic `Evaluator` behind ts-rosa's `XPathSeam` so the rest of the
-  engine never imports @getodk/xpath types directly — the seam is our stable boundary.
-- **Implement our own `XPathDOMAdapter<T>` over @xmldom/xmldom.** @getodk/xpath ships a default
-  WHATWG adapter that requires browser globals; that adapter is THE blocker we replace. Our
-  adapter binds the generic evaluator to the same `@xmldom/xmldom` node model the rest of the
-  engine uses (consistent with the `XmlParser` seam, §2).
-- **Functions** are registered through a `FunctionLibraryCollection`: XPath 1.0 + ODK/`jr:`
-  functions + client extensions, without touching core (audit §10.1, §11). The `xpath/`
-  module is therefore an **adaptation layer + function registry + wrapper behind the seam**,
-  not an in-house implementation.
-- **`XPathValue`**: strict seam-level union (never `Object`/`any`). Equality coercion priority
-  Boolean > Number > String; double comparison tolerance `1e-12` must match JavaRosa exactly —
-  verified against the ported `XPathEvalTest`/`XPathFuncExprTest` suites.
+**Data flow:**
 
-### 7.1 Mandatory pre-flight GATE (before committing to the fork)
+```
+caller
+  └─► evaluateXPath(expr, context?)  [seam/XPathSeam.ts — only public entry]
+        │
+        ▼
+  XmldomEvaluator.evaluate(expr, contextNode)  [vendored Evaluator<XmldomNode>]
+        │
+        ├─► PureJSExpressionParser.init(expr)  [tokenize → recursive-descent → SyntaxNode tree]
+        │         (cached via LRU; same vocabulary as tree-sitter-xpath)
+        │
+        ├─► XmldomXPathAdapter  [20-method bridge over @xmldom/xmldom]
+        │
+        └─► FunctionLibraryCollection  [XPath 1.0 + ODK/jr: + xforms]
+              │
+              ▼
+        XPathEvaluationResult  [coerced to number | string | boolean | XmldomNode[]]
+```
 
-**Audit the transitive dependency `@getodk/common` BEFORE adopting @getodk/xpath.** It is the
-chief risk for pulling in browser globals; if it does, the off-browser/Hermes portability
-guarantee breaks. This gate must pass before any Phase 2 integration work proceeds.
+### 7.3 Public seam (`src/xpath/index.ts`)
 
-### 7.2 Known caveats to track
+The seam exposes three functions and their types:
 
-- **XPath variables (`$var`) are NOT implemented** in @getodk/xpath — track and plan a
-  workaround if any target form relies on them.
-- **`pulldata` support is unconfirmed** — verify against the upstream function library.
-- **No direct comparison tests against JavaRosa exist upstream** — our ported XPath equivalence
-  suite is the only oracle; treat it as load-bearing from Phase 2 day 1.
-- **Pre-1.0 (v0.11)** — FREEZE the exact version and keep the adaptation layer (`XPathSeam`)
-  thick enough to absorb upstream breaking changes.
+```ts
+// Primitive coercion — primary entry point for equivalence tests
+evaluateXPath(expr: string, context?: EvaluationContext)
+  → number | string | boolean | readonly XmldomNode[]
 
-This decision materializes in **Phase 2**; it does NOT affect Phase 0.
+// Typed discriminated union — for callers that need type dispatch
+evaluateXPathTyped(expr: string, context?: EvaluationContext)
+  → XPathValue  // { type: 'BOOLEAN'|'NUMBER'|'STRING'|'NODESET'; value/nodes }
+
+// Parse-once / eval-many — Phase 3 DataBinding handoff
+compileXPath(expr: string) → CompiledExpression
+  // validates at compile time; compiled.evaluate(context?) re-evaluates cheaply
+```
+
+`EvaluationContext` carries `instance` (primary instance document), `contextNode`, and an
+optional `secondaryInstances` map. When no context is provided, a minimal stub document is used
+so the vendored evaluator always receives a valid DOM context node.
+
+### 7.4 Parser strategy — pure-JS, write-own (RESOLVED)
+
+**Decision: bespoke recursive-descent + precedence-climbing parser, written from scratch.**
+(The Phase 2 pre-design open question — write-own vs. adapt an existing library — is closed.)
+
+`PureJSExpressionParser` implements a two-stage pipeline:
+1. **Tokenizer** (`Tokenizer.ts`): tokenizes XPath 1.0 expression strings into a `Token[]`
+   array with discriminated `TokenKind`.
+2. **Parser** (`PureJSExpressionParser.ts`): recursive-descent + precedence-climbing,
+   emitting `SyntaxNode` trees structurally identical to the tree-sitter-xpath grammar.
+
+The parser is validated against the real tree-sitter-xpath parser via **golden tests**: the
+same expressions are parsed by both parsers and the resulting `SyntaxNode` trees are compared
+structurally. This ensures the `SyntaxNode` vocabulary (`.type`, `.childCount`, `.children`,
+`.child()`, `.text`) remains compatible with all 30+ vendored expression evaluators.
+
+**Why WASM was rejected:** Hermes WASM support arrived in React Native 0.84 (February 2026)
+and is not hardened for production. The pure-JS parser eliminates the WASM dependency entirely
+and works on every supported RN version.
+
+### 7.5 Phase 2 gate status
+
+- **~223 / 225 `it.fail` XPath tests activated and passing** (GREEN). The two remaining
+  deferred tests involve `indexed-repeat` (requires the NodeSet→InstanceTree bridge, Phase 3)
+  and `$var` variable references (Phase 3 reactive variable resolution).
+- `indexed-repeat` — deferred to Phase 3: requires the NodeSet→InstanceTree bridge.
+- `$var` (`VariableReferenceNode`) — deferred to Phase 3: requires DAG variable orchestration.
+
+### 7.6 Known caveats and maintenance notes
+
+- **Vendor patch maintenance:** when re-vendoring from a newer upstream commit, all 8 patches
+  in `PATCHES.md` must be re-applied manually. The PATCHES.md file is the authoritative list.
+- **Pre-1.0 upstream (`c02a421`):** the vendor is frozen at this commit. The thick
+  `XPathSeam` boundary absorbs future upstream breaking changes without touching the rest of
+  the engine.
+- **Circular-dependency function modules:** `javarosa/node-set.ts` and `xforms/node-set.ts`
+  are present in the vendor but excluded from `FunctionLibraryCollection` construction in
+  `src/xpath/functions/index.ts` because they import `XFormsXPathEvaluator` circularly.
+  They are deferred to Slice 4 / Phase 3 NodeSet support.
+- **NodeSet→InstanceTree bridge:** deferred to Phase 3. Phase 2 delivers on-demand XPath
+  expression evaluation; the bridge that maps `XmldomNode` NodeSet results to
+  `InstanceNode`/`TreeReference` positions in the engine's instance tree is not yet built.
+- **`pulldata`** — wired via the vendored function libraries; full integration with secondary
+  instances is a Phase 2/6 task.
 
 ---
 
@@ -368,7 +507,7 @@ The harness (proposal `sdd/test-equivalence-harness`) already enforces this arch
 |---|---|---|
 | 0 (done/in progress) | DSL, Scenario, AnswerResult, harness | `tests/harness`, `platform/XmlParser` |
 | 1 Data core | answer types, instance tree, minimal parser | `model/data`, `model/instance`, `parse` (subset) |
-| 2 XPath | GATE: audit `@getodk/common`; fork+adapt @getodk/xpath (own `XPathDOMAdapter` over @xmldom/xmldom), wire functions behind `XPathSeam` | `xpath/*` |
+| 2 XPath (done) | Vendored `@getodk/xpath` + `@getodk/common` subset at commit `c02a421` (Apache-2.0); 8 conformance patches in `PATCHES.md`. Pure-JS `PureJSExpressionParser` (recursive-descent + precedence-climbing), validated by golden tests. `XmldomXPathAdapter` (~20 methods). `XPathSeam` as sole import boundary (`evaluateXPath`, `evaluateXPathTyped`, `compileXPath`). ~223/225 XPath it.fails GREEN. `indexed-repeat` and `$var` deferred to P3. | `xpath/{vendor,adapter,parser,evaluator,functions,seam,index}` |
 | 3 Reactivity | Triggerable + parse-time DAG, relevance/calc/required, constraint, NodeState map, `OpaqueReactiveObjectFactory` seam | `eval/*`, `model/state`, `platform/ReactiveObjectFactory` |
 | 4 Navigation/repeats | FormIndex, session events, repeats | `session/*` |
 | 5 Dynamic selects + i18n | itemset, itext, secondary instances | `model/def/ItemsetBinding`, `platform/SecondaryInstanceLoader` |
@@ -387,7 +526,7 @@ Deliberate boundary between what we build and what we reuse from the ODK ecosyst
 | Component | Decision | Rationale |
 |---|---|---|
 | @getodk/xforms-engine (full) | **Do NOT fork** | Bound to `DOMParser` and Solid; no React Native story. Wholesale adoption would import the exact browser/runtime coupling we are trying to avoid. |
-| @getodk/xpath (v0.11) | **Fork and adapt** (Apache-2.0) | Generic `Evaluator` accepts an injected `XPathDOMAdapter<T>` and is not DOM-bound. We supply our own adapter over `@xmldom/xmldom` and wrap it behind `XPathSeam`. Saves reimplementing a tested XPath 1.0 + ODK grammar. Subject to the §7.1 gate and §7.2 caveats. |
+| @getodk/xpath (upstream commit c02a421) | **Vendored subset** (Apache-2.0) | `@getodk/common` is private (never published to npm) and `@getodk/xpath` depends on it. Both packages also expose only internal, non-public exports that `ts-rosa` needs. Vendoring the minimum TypeScript source subset is the only portable, publishable approach. Pruned: WASM parser, browser-global modules. Added: 8 conformance patches (see §7.1). Provenance in `VENDOR.md`; patches in `PATCHES.md`. Generic `Evaluator<T>` + own `XmldomXPathAdapter` + own pure-JS parser + own `XPathSeam` boundary. |
 | @getodk/xforms-engine + `packages/scenario` | **Reference only** | Used as a design reference and as an equivalence/behavior cross-check, NOT compiled into ts-rosa. Our own `Scenario` harness (Phase 0) plays the executable-contract role. |
 | Reactivity runtime (Solid/Zustand/Jotai/Vue) | **Adopt at the EDGE, not in core** | Core stays runtime-free and mutates plain objects; the client injects an `OpaqueReactiveObjectFactory` (pattern borrowed from @getodk/xforms-engine). |
 
@@ -403,11 +542,14 @@ churn from leaking into the engine.
 | Risk | Mitigation |
 |---|---|
 | (c) hybrid drifts from JR DAG order | parse-time DAG topology + cascade order + cycle detection asserted directly by `TriggerableDagTest`, the gate before any Phase 3 merge |
-| `@getodk/xpath` pulls browser globals via transitive `@getodk/common` | MANDATORY pre-flight gate: audit `@getodk/common` BEFORE committing to the fork (§7.1); if it brings globals, the off-browser guarantee breaks |
-| `@getodk/xpath` missing/incomplete features (`$var` not implemented, `pulldata` unconfirmed) | Track caveats (§7.2); keep `XPathSeam` thick enough to add/override functions; plan workarounds per target form |
-| `@getodk/xpath` is pre-1.0 (v0.11) with no upstream JR comparison tests | Freeze the exact version; our ported `XPathEvalTest`/`XPathFuncExprTest` is the sole equivalence oracle; adaptation layer absorbs upstream breaking changes |
-| Default WHATWG adapter requires browser globals | Replace with our own `XPathDOMAdapter<T>` over `@xmldom/xmldom`, consistent with the `XmlParser` seam |
-| XPath coercion/`1e-12`/position()/current() subtleties | Port `XPathEvalTest`/`XPathFuncExprTest` as equivalence suite from Phase 2 day 1 |
+| `@getodk/common` subset pulls browser globals | **MITIGATED (gate: GO).** Only `constants`, `lib/collections`, `lib/error`, `lib/string`, `env/detection` are imported. `lib/dom/compatibility.ts` and `lib/web-compat/*` are forbidden via `no-restricted-imports` ESLint rule. Re-audit on every @getodk/common version bump. |
+| WASM (tree-sitter) parser unviable on Hermes | **MITIGATED (Phase 2).** Pure-JS `PureJSExpressionParser` (recursive-descent + precedence-climbing) implemented and validated via golden tests against the real tree-sitter-xpath parser. Zero WASM dependency. Works on all RN versions. |
+| `@getodk/xpath` pre-1.0 drift / upstream breaking changes | **MITIGATED.** Source vendored at commit `c02a421`; frozen. `XPathSeam` is the only import boundary; upstream changes require only a targeted re-vendor + re-apply of `PATCHES.md`. Ported `XPathEvalTest`/`XPathFuncExprTest` (225+ it.fails) remains the sole equivalence oracle. |
+| Vendor patch drift — re-vendor loses conformance fixes | `PATCHES.md` documents all 8 patches with file, change, and the JavaRosa test that drove each. Re-vendor procedure: copy source, rewrite imports, re-apply patches, update commit in `VENDOR.md`. |
+| `@getodk/xpath` missing `$var` / `VariableReferenceNode` | Scoped to Phase 3 (DAG orchestration). Phase 2 = on-demand expression evaluation only; `$var` deferred. |
+| Default WHATWG adapter requires browser globals | **MITIGATED (Phase 2).** Replaced by `XmldomXPathAdapter` (~20 methods) over `@xmldom/xmldom`, consistent with the `XmlParser` seam. NodeSet→InstanceTree bridge deferred to Phase 3. |
+| NodeSet→InstanceTree bridge | Phase 3 work. `XmldomNode` NodeSet results from the XPath engine need to be mapped back to `InstanceNode`/`TreeReference` positions for reactive evaluation. Phase 2 delivers expression evaluation only. |
+| XPath coercion / `1e-12` / `position()` / `current()` subtleties | 225+ it.fails as equivalence suite, green from Phase 2 day 1. Coercion parity validated by ported test suite. |
 | `@xmldom/xmldom` unviable on Hermes | Phase 0 RN smoke test gates before building on top; `XmlParser` interface lets us swap providers |
 | Discriminated-union refactor diverges from class-based JR semantics | Behavior covered by ported tests, not structure; unions reviewed against audit §3 |
 | Client reactive factory misuse (e.g. returning a non-equivalent object) | `OpaqueReactiveObjectFactory` contract requires structural identity; core default is identity; document edge adapters (Solid/Zustand) |
@@ -418,10 +560,22 @@ churn from leaking into the engine.
 
 - [x] Reactivity model — CONFIRMED: option (c) Hybrid, with parse-time DAG + separate
       NodeState + injected `OpaqueReactiveObjectFactory` (see §4).
-- [x] XPath engine — CONFIRMED: fork and adapt @getodk/xpath behind `XPathSeam` (see §7).
-- [ ] Result of the `@getodk/common` browser-globals audit (§7.1 gate) — pass/fail decides
-      whether the @getodk/xpath fork proceeds as-is or needs deeper surgery.
-- [ ] Workaround strategy for XPath `$var` (not implemented upstream) if any target form needs it.
-- [ ] Confirm `pulldata` is available in the upstream function library or must be added in `xpath/functions`.
+- [x] XPath integration strategy — RESOLVED (Phase 2): **vendored source** (not npm dep).
+      `@getodk/common` is private; internal exports required. Vendored at commit `c02a421`
+      under `src/xpath/vendor/` (Apache-2.0). See §7.1.
+- [x] `@getodk/common` browser-globals audit — GATE: GO. Permitted subset vendored;
+      forbidden paths (`lib/dom/compatibility.ts`, `lib/web-compat/*`) excluded from vendor
+      and blocked via ESLint `no-restricted-imports` rule.
+- [x] WASM / tree-sitter parser for Hermes — REJECTED. Pure-JS parser implemented (see §7.4).
+      Hermes WASM (RN 0.84, Feb 2026) not hardened; pure-JS portable across all RN versions.
+- [x] **Pure-JS parser: write bespoke vs. adapt existing library — RESOLVED (Phase 2).**
+      Bespoke `PureJSExpressionParser` (recursive-descent + precedence-climbing) written from
+      scratch. Validated via golden tests against real tree-sitter-xpath parser. See §7.4.
+- [ ] NodeSet→InstanceTree bridge — Phase 3. Maps `XmldomNode` NodeSet results to
+      `InstanceNode`/`TreeReference` for reactive evaluation. Blocks `indexed-repeat` and 2
+      remaining XPath tests.
+- [ ] XPath `$var` (`VariableReferenceNode`) — Phase 3 (DAG + reactivity variable resolution).
+- [ ] `pulldata` full wiring — vendored function library present; integration with secondary
+      instances deferred to Phase 2/6.
 - [ ] Whether `FormDefinition` reuse across multiple concurrent sessions is a real product
       requirement (affects how strictly definition stays immutable).
