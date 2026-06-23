@@ -19,8 +19,15 @@ import { DOMImplementation } from '@xmldom/xmldom';
 import type { XmldomNode } from '../adapter/XmldomXPathAdapter.ts';
 import { xmldomEvaluator } from '../evaluator/XmldomEvaluator.ts';
 import {
+	instanceEvaluator,
+	type InstanceEvaluationContext,
+} from '../evaluator/InstanceEvaluator.ts';
+import type { InstanceXPathNode } from '../adapter/instance/InstanceXPathNode.ts';
+import {
 	XPATH_EVALUATION_RESULT,
 } from '../vendor/xpath/evaluator/result/XPathEvaluationResult.ts';
+
+export type { InstanceEvaluationContext } from '../evaluator/InstanceEvaluator.ts';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -181,4 +188,107 @@ export function compileXPath(expr: string): CompiledExpression {
 			return evaluateXPath(expr, context);
 		},
 	};
+}
+
+// ---------------------------------------------------------------------------
+// InstanceTree XPath compilation — Phase 3 (Option A bridge)
+// ---------------------------------------------------------------------------
+
+/**
+ * Result types for InstanceEvaluator evaluation.
+ */
+export type InstanceXPathValue =
+	| { readonly type: 'BOOLEAN'; readonly value: boolean }
+	| { readonly type: 'NUMBER'; readonly value: number }
+	| { readonly type: 'STRING'; readonly value: string }
+	| { readonly type: 'NODESET'; readonly nodes: readonly InstanceXPathNode[] };
+
+/**
+ * A CompiledExpression variant that evaluates over an InstanceTree via the
+ * InstanceEvaluator (Option A bridge).
+ *
+ * The xmldom CompiledExpression and this type are intentionally distinct to
+ * prevent accidental cross-evaluator usage.
+ */
+export interface CompiledInstanceExpression {
+	/** The original expression string, for debugging and caching. */
+	readonly source: string;
+	/**
+	 * Evaluate over an InstanceTree context.
+	 * When context is omitted the expression is evaluated with no context
+	 * (useful for constant expressions).
+	 */
+	evaluateTyped(context?: InstanceEvaluationContext): InstanceXPathValue;
+	evaluate(context?: InstanceEvaluationContext): number | string | boolean | readonly InstanceXPathNode[];
+}
+
+/**
+ * Parse an XPath expression once and return a reusable CompiledInstanceExpression
+ * that evaluates over InstanceTree via the InstanceEvaluator.
+ *
+ * The xmldom compileXPath() and evaluateXPath() surfaces are UNCHANGED — this
+ * is an additive entry point only. The XPathSeam remains the sole XPath import
+ * boundary.
+ */
+export function compileInstanceXPath(expr: string): CompiledInstanceExpression {
+	return {
+		source: expr,
+
+		evaluateTyped(context?: InstanceEvaluationContext): InstanceXPathValue {
+			const contextNode = context?.contextNode;
+			if (contextNode === undefined) {
+				// No context — evaluate as constant; result is usually a string/number/boolean
+				const result = instanceEvaluator.evaluate(
+					expr,
+					// Use a minimal stub: we need some node to pass; create a simple doc
+					// by evaluating with the xmldom evaluator's context mechanism.
+					// For constant expressions (no node access) the context node is irrelevant.
+					// We re-use the same trick as the xmldom path: pass contextNode as undefined
+					// will fail type-check, so we fall back to an exception for now —
+					// callers SHOULD provide a context.
+					null as unknown as InstanceXPathNode,
+					null,
+					XPATH_EVALUATION_RESULT.ANY_TYPE,
+				);
+				return decodeInstanceResult(result);
+			}
+			const result = instanceEvaluator.evaluate(
+				expr,
+				contextNode,
+				null,
+				XPATH_EVALUATION_RESULT.ANY_TYPE,
+			);
+			return decodeInstanceResult(result);
+		},
+
+		evaluate(context?: InstanceEvaluationContext): number | string | boolean | readonly InstanceXPathNode[] {
+			const typed = this.evaluateTyped(context);
+			switch (typed.type) {
+				case 'NUMBER': return typed.value;
+				case 'STRING': return typed.value;
+				case 'BOOLEAN': return typed.value;
+				case 'NODESET': return typed.nodes;
+			}
+		},
+	};
+}
+
+function decodeInstanceResult(result: ReturnType<typeof instanceEvaluator.evaluate>): InstanceXPathValue {
+	switch (result.resultType) {
+		case XPATH_EVALUATION_RESULT.BOOLEAN_TYPE:
+			return { type: 'BOOLEAN', value: result.booleanValue };
+		case XPATH_EVALUATION_RESULT.NUMBER_TYPE:
+			return { type: 'NUMBER', value: result.numberValue };
+		case XPATH_EVALUATION_RESULT.STRING_TYPE:
+			return { type: 'STRING', value: result.stringValue };
+		default: {
+			const nodes: InstanceXPathNode[] = [];
+			let node = result.iterateNext();
+			while (node !== null) {
+				nodes.push(node);
+				node = result.iterateNext();
+			}
+			return { type: 'NODESET', nodes };
+		}
+	}
 }
