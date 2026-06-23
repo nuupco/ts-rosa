@@ -246,8 +246,10 @@ export class Scenario {
 
   /**
    * Mirrors JavaRosa next() and next(int amount).
+   * Overload next(xPath: string) mirrors web-forms Scenario.next(ref) which
+   * navigates to a specific node by reference.
    */
-  next(_amount?: number): number {
+  next(_amountOrRef?: number | string): number {
     return notImplemented("next");
   }
 
