@@ -225,16 +225,16 @@ describe("XPath functions — date()", () => {
     expect(evaluateXPath("number(date('2008-09-05'))")).toBe(14127.0);
   });
 
-  it.fails("date('1983-09-31') throws — invalid date", () => {
+  it("date('1983-09-31') throws — invalid date", () => {
     // JavaRosa: testEval("date('1983-09-31')", new XPathTypeMismatchException())
     expectEvalError("date('1983-09-31')");
   });
 
-  it.fails("date('not a date') throws", () => {
+  it("date('not a date') throws", () => {
     expectEvalError("date('not a date')");
   });
 
-  it.fails("date(true()) throws — boolean not convertible to date", () => {
+  it("date(true()) throws — boolean not convertible to date", () => {
     expectEvalError("date(true())");
   });
 
@@ -251,11 +251,11 @@ describe("XPath functions — date()", () => {
 // Source: XPathEvalTest.java boolean_functions() and type_conversions()
 // ---------------------------------------------------------------------------
 describe("XPath functions — true() / false()", () => {
-  it.fails("true() → true", () => {
+  it("true() → true", () => {
     expect(evaluateXPath("true()")).toBe(true);
   });
 
-  it.fails("false() → false", () => {
+  it("false() → false", () => {
     expect(evaluateXPath("false()")).toBe(false);
   });
 });

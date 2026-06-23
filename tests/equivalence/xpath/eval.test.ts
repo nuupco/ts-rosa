@@ -31,28 +31,28 @@ import { evaluateXPath } from "../../../src/xpath/index.ts";
 // Source: XPathEvalTest.java numeric_literals()
 // ---------------------------------------------------------------------------
 describe("XPath eval — numeric literals", () => {
-  it.fails("5 → 5.0", () => {
+  it("5 → 5.0", () => {
     // JavaRosa: testEval("5", 5.0)
     expect(evaluateXPath("5")).toBe(5.0);
   });
 
-  it.fails("555555.555 → 555555.555", () => {
+  it("555555.555 → 555555.555", () => {
     expect(evaluateXPath("555555.555")).toBe(555555.555);
   });
 
-  it.fails(".000555 → 0.000555", () => {
+  it(".000555 → 0.000555", () => {
     expect(evaluateXPath(".000555")).toBe(0.000555);
   });
 
-  it.fails("0 → 0.0", () => {
+  it("0 → 0.0", () => {
     expect(evaluateXPath("0")).toBe(0.0);
   });
 
-  it.fails("-5 → -5.0", () => {
+  it("-5 → -5.0", () => {
     expect(evaluateXPath("-5")).toBe(-5.0);
   });
 
-  it.fails("1.23e21 scientific literal", () => {
+  it("1.23e21 scientific literal", () => {
     expect(evaluateXPath("1230000000000000000000")).toBe(1.23e21);
   });
 });
@@ -62,15 +62,15 @@ describe("XPath eval — numeric literals", () => {
 // Source: XPathEvalTest.java string_literals()
 // ---------------------------------------------------------------------------
 describe("XPath eval — string literals", () => {
-  it.fails("empty string '' → ''", () => {
+  it("empty string '' → ''", () => {
     expect(evaluateXPath("''")).toBe("");
   });
 
-  it.fails("double-quoted string", () => {
+  it("double-quoted string", () => {
     expect(evaluateXPath('"test string"')).toBe("test string");
   });
 
-  it.fails("whitespace string '   ' preserves spaces", () => {
+  it("whitespace string '   ' preserves spaces", () => {
     expect(evaluateXPath("'   '")).toBe("   ");
   });
 });
@@ -80,88 +80,88 @@ describe("XPath eval — string literals", () => {
 // Source: XPathEvalTest.java math_operators()
 // ---------------------------------------------------------------------------
 describe("XPath eval — arithmetic operators", () => {
-  it.fails("5.5 + 5.5 → 11.0", () => {
+  it("5.5 + 5.5 → 11.0", () => {
     expect(evaluateXPath("5.5 + 5.5")).toBe(11.0);
   });
 
-  it.fails("0 + 0 → 0.0", () => {
+  it("0 + 0 → 0.0", () => {
     expect(evaluateXPath("0 + 0")).toBe(0.0);
   });
 
-  it.fails("6.1 - 7.8 → -1.7 (float rounding handled)", () => {
+  it("6.1 - 7.8 → -1.7 (float rounding handled)", () => {
     expect(evaluateXPath("6.1 - 7.8")).toBeCloseTo(-1.7, 10);
   });
 
-  it.fails("-3 + 4 → 1.0", () => {
+  it("-3 + 4 → 1.0", () => {
     expect(evaluateXPath("-3 + 4")).toBe(1.0);
   });
 
-  it.fails("1 - 2 - 3 → -4.0 (left-associative)", () => {
+  it("1 - 2 - 3 → -4.0 (left-associative)", () => {
     expect(evaluateXPath("1 - 2 - 3")).toBe(-4.0);
   });
 
-  it.fails("1 - (2 - 3) → 2.0 (parentheses override associativity)", () => {
+  it("1 - (2 - 3) → 2.0 (parentheses override associativity)", () => {
     expect(evaluateXPath("1 - (2 - 3)")).toBe(2.0);
   });
 
-  it.fails("-(8*5) → -40.0", () => {
+  it("-(8*5) → -40.0", () => {
     expect(evaluateXPath("-(8*5)")).toBe(-40.0);
   });
 
-  it.fails("-'19' coerces string to number → -19.0", () => {
+  it("-'19' coerces string to number → -19.0", () => {
     // JavaRosa: testEval("-'19'", -19.0)
     expect(evaluateXPath("-'19'")).toBe(-19.0);
   });
 
-  it.fails("1.1 * -1.1 → -1.21", () => {
+  it("1.1 * -1.1 → -1.21", () => {
     expect(evaluateXPath("1.1 * -1.1")).toBeCloseTo(-1.21, 10);
   });
 
-  it.fails("-10 div -4 → 2.5", () => {
+  it("-10 div -4 → 2.5", () => {
     expect(evaluateXPath("-10 div -4")).toBe(2.5);
   });
 
-  it.fails("2 * 3 div 8 * 2 → 1.5 (left-associative)", () => {
+  it("2 * 3 div 8 * 2 → 1.5 (left-associative)", () => {
     expect(evaluateXPath("2 * 3 div 8 * 2")).toBe(1.5);
   });
 
-  it.fails("3 + 3 * 3 → 12.0 (mul before add)", () => {
+  it("3 + 3 * 3 → 12.0 (mul before add)", () => {
     expect(evaluateXPath("3 + 3 * 3")).toBe(12.0);
   });
 
-  it.fails("1 div 0 → Infinity", () => {
+  it("1 div 0 → Infinity", () => {
     expect(evaluateXPath("1 div 0")).toBe(Infinity);
   });
 
-  it.fails("-1 div 0 → -Infinity", () => {
+  it("-1 div 0 → -Infinity", () => {
     expect(evaluateXPath("-1 div 0")).toBe(-Infinity);
   });
 
-  it.fails("0 div 0 → NaN", () => {
+  it("0 div 0 → NaN", () => {
     expect(evaluateXPath("0 div 0")).toBeNaN();
   });
 
-  it.fails("3.1 mod 3.1 → 0.0", () => {
+  it("3.1 mod 3.1 → 0.0", () => {
     expect(evaluateXPath("3.1 mod 3.1")).toBe(0.0);
   });
 
-  it.fails("5 mod 3.1 → 1.9", () => {
+  it("5 mod 3.1 → 1.9", () => {
     expect(evaluateXPath("5 mod 3.1")).toBeCloseTo(1.9, 10);
   });
 
-  it.fails("-5 mod 3 → -2.0 (sign follows dividend)", () => {
+  it("-5 mod 3 → -2.0 (sign follows dividend)", () => {
     expect(evaluateXPath("-5 mod 3")).toBe(-2.0);
   });
 
-  it.fails("5 mod 0 → NaN", () => {
+  it("5 mod 0 → NaN", () => {
     expect(evaluateXPath("5 mod 0")).toBeNaN();
   });
 
-  it.fails("'123' * '456' → 56088.0 (string coercion)", () => {
+  it("'123' * '456' → 56088.0 (string coercion)", () => {
     expect(evaluateXPath("'123' * '456'")).toBe(56088.0);
   });
 
-  it.fails("5 * (6 + 7) → 65.0", () => {
+  it("5 * (6 + 7) → 65.0", () => {
     expect(evaluateXPath("5 * (6 + 7)")).toBe(65.0);
   });
 });
@@ -171,55 +171,55 @@ describe("XPath eval — arithmetic operators", () => {
 // Source: XPathEvalTest.java strange_operators() and odd_comparisons()
 // ---------------------------------------------------------------------------
 describe("XPath eval — comparison operators", () => {
-  it.fails("4 < 5 → true", () => {
+  it("4 < 5 → true", () => {
     expect(evaluateXPath("4 < 5")).toBe(true);
   });
 
-  it.fails("5 < 5 → false", () => {
+  it("5 < 5 → false", () => {
     expect(evaluateXPath("5 < 5")).toBe(false);
   });
 
-  it.fails("6 < 5 → false", () => {
+  it("6 < 5 → false", () => {
     expect(evaluateXPath("6 < 5")).toBe(false);
   });
 
-  it.fails("4 <= 5 → true", () => {
+  it("4 <= 5 → true", () => {
     expect(evaluateXPath("4 <= 5")).toBe(true);
   });
 
-  it.fails("5 <= 5 → true", () => {
+  it("5 <= 5 → true", () => {
     expect(evaluateXPath("5 <= 5")).toBe(true);
   });
 
-  it.fails("6 > 5 → true", () => {
+  it("6 > 5 → true", () => {
     expect(evaluateXPath("6 > 5")).toBe(true);
   });
 
-  it.fails("5 >= 5 → true", () => {
+  it("5 >= 5 → true", () => {
     expect(evaluateXPath("5 >= 5")).toBe(true);
   });
 
-  it.fails("-3 > -6 → true", () => {
+  it("-3 > -6 → true", () => {
     expect(evaluateXPath("-3 > -6")).toBe(true);
   });
 
-  it.fails("3 = 3 → true", () => {
+  it("3 = 3 → true", () => {
     expect(evaluateXPath("3 = 3")).toBe(true);
   });
 
-  it.fails("3 = 4 → false", () => {
+  it("3 = 4 → false", () => {
     expect(evaluateXPath("3 = 4")).toBe(false);
   });
 
-  it.fails("3 != 4 → true", () => {
+  it("3 != 4 → true", () => {
     expect(evaluateXPath("3 != 4")).toBe(true);
   });
 
-  it.fails("'abc' = 'abc' → true", () => {
+  it("'abc' = 'abc' → true", () => {
     expect(evaluateXPath("'abc' = 'abc'")).toBe(true);
   });
 
-  it.fails("'abc' = 'def' → false", () => {
+  it("'abc' = 'def' → false", () => {
     expect(evaluateXPath("'abc' = 'def'")).toBe(false);
   });
 
@@ -228,43 +228,43 @@ describe("XPath eval — comparison operators", () => {
     expect(evaluateXPath("6.1 - 7.8 = -1.7")).toBe(true);
   });
 
-  it.fails("'-17' > '-172' → true (numeric comparison, not string)", () => {
+  it("'-17' > '-172' → true (numeric comparison, not string)", () => {
     // JavaRosa: testEval("'-17' > '-172'", TRUE) — no string comparison: converted to number
     expect(evaluateXPath("'-17' > '-172'")).toBe(true);
   });
 
-  it.fails("'abc' < 'abcd' → false (NaN comparison)", () => {
+  it("'abc' < 'abcd' → false (NaN comparison)", () => {
     // JavaRosa: testEval("'abc' < 'abcd'", FALSE) — no string comparison: converted to NaN
     expect(evaluateXPath("'abc' < 'abcd'")).toBe(false);
   });
 
-  it.fails("true() = 17 → true (boolean-to-number coercion)", () => {
+  it("true() = 17 → true (boolean-to-number coercion)", () => {
     // JavaRosa: testEval("true() = 17", TRUE)
     expect(evaluateXPath("true() = 17")).toBe(true);
   });
 
-  it.fails("0 = false() → true", () => {
+  it("0 = false() → true", () => {
     expect(evaluateXPath("0 = false()")).toBe(true);
   });
 
-  it.fails("17 = '17.0000000' → true (cross-type numeric equality)", () => {
+  it("17 = '17.0000000' → true (cross-type numeric equality)", () => {
     expect(evaluateXPath("17 = '17.0000000'")).toBe(true);
   });
 
-  it.fails("'0017.' = 17 → true (string to number coercion)", () => {
+  it("'0017.' = 17 → true (string to number coercion)", () => {
     expect(evaluateXPath("'0017.' = 17")).toBe(true);
   });
 
-  it.fails("'017.' = '17.000' → false (both strings, no cross-coercion)", () => {
+  it("'017.' = '17.000' → false (both strings, no cross-coercion)", () => {
     expect(evaluateXPath("'017.' = '17.000'")).toBe(false);
   });
 
-  it.fails("3 < 4 < 5 → true (left-assoc chained comparison)", () => {
+  it("3 < 4 < 5 → true (left-assoc chained comparison)", () => {
     // JavaRosa: testEval("3 < 4 < 5", TRUE) — (3<4)=true, true<5 → 1<5 → true
     expect(evaluateXPath("3 < 4 < 5")).toBe(true);
   });
 
-  it.fails("-3 < 3 = 6 >= 6 → true (precedence chain)", () => {
+  it("-3 < 3 = 6 >= 6 → true (precedence chain)", () => {
     expect(evaluateXPath("-3 < 3 = 6 >= 6")).toBe(true);
   });
 });
@@ -274,63 +274,63 @@ describe("XPath eval — comparison operators", () => {
 // Source: XPathEvalTest.java strange_operators()
 // ---------------------------------------------------------------------------
 describe("XPath eval — boolean operators", () => {
-  it.fails("true() and true() → true", () => {
+  it("true() and true() → true", () => {
     expect(evaluateXPath("true() and true()")).toBe(true);
   });
 
-  it.fails("true() and false() → false", () => {
+  it("true() and false() → false", () => {
     expect(evaluateXPath("true() and false()")).toBe(false);
   });
 
-  it.fails("false() and false() → false", () => {
+  it("false() and false() → false", () => {
     expect(evaluateXPath("false() and false()")).toBe(false);
   });
 
-  it.fails("true() or false() → true", () => {
+  it("true() or false() → true", () => {
     expect(evaluateXPath("true() or false()")).toBe(true);
   });
 
-  it.fails("false() or false() → false", () => {
+  it("false() or false() → false", () => {
     expect(evaluateXPath("false() or false()")).toBe(false);
   });
 
-  it.fails("true() or true() and false() → true (and before or)", () => {
+  it("true() or true() and false() → true (and before or)", () => {
     expect(evaluateXPath("true() or true() and false()")).toBe(true);
   });
 
-  it.fails("(true() or true()) and false() → false", () => {
+  it("(true() or true()) and false() → false", () => {
     expect(evaluateXPath("(true() or true()) and false()")).toBe(false);
   });
 
-  it.fails("true() or date('') short-circuits (does not eval right side)", () => {
+  it("true() or date('') short-circuits (does not eval right side)", () => {
     // JavaRosa: testEval("true() or date('')", TRUE) — short-circuiting
     expect(evaluateXPath("true() or date('')")).toBe(true);
   });
 
-  it.fails("false() and date('') short-circuits", () => {
+  it("false() and date('') short-circuits", () => {
     // JavaRosa: testEval("false() and date('')", FALSE) — short-circuiting
     expect(evaluateXPath("false() and date('')")).toBe(false);
   });
 
-  it.fails("'' or 17 → true (empty string is falsy, 17 is truthy)", () => {
+  it("'' or 17 → true (empty string is falsy, 17 is truthy)", () => {
     expect(evaluateXPath("'' or 17")).toBe(true);
   });
 
-  it.fails("false() or 0 + 2 → true", () => {
+  it("false() or 0 + 2 → true", () => {
     // JavaRosa: testEval("false() or 0 + 2", TRUE) — precedence: or < +
     expect(evaluateXPath("false() or 0 + 2")).toBe(true);
   });
 
-  it.fails("(false() or 0) + 2 → 2.0", () => {
+  it("(false() or 0) + 2 → 2.0", () => {
     // JavaRosa: testEval("(false() or 0) + 2", 2.0)
     expect(evaluateXPath("(false() or 0) + 2")).toBe(2.0);
   });
 
-  it.fails("false() and false() < true() → false", () => {
+  it("false() and false() < true() → false", () => {
     expect(evaluateXPath("false() and false() < true()")).toBe(false);
   });
 
-  it.fails("(false() and false()) < true() → true", () => {
+  it("(false() and false()) < true() → true", () => {
     expect(evaluateXPath("(false() and false()) < true()")).toBe(true);
   });
 });
@@ -341,65 +341,65 @@ describe("XPath eval — boolean operators", () => {
 // ---------------------------------------------------------------------------
 describe("XPath eval — type conversions", () => {
   // boolean()
-  it.fails("boolean(true()) → true", () => {
+  it("boolean(true()) → true", () => {
     expect(evaluateXPath("boolean(true())")).toBe(true);
   });
 
-  it.fails("boolean(false()) → false", () => {
+  it("boolean(false()) → false", () => {
     expect(evaluateXPath("boolean(false())")).toBe(false);
   });
 
-  it.fails("boolean(1) → true", () => {
+  it("boolean(1) → true", () => {
     expect(evaluateXPath("boolean(1)")).toBe(true);
   });
 
-  it.fails("boolean(0) → false", () => {
+  it("boolean(0) → false", () => {
     expect(evaluateXPath("boolean(0)")).toBe(false);
   });
 
-  it.fails("boolean('') → false", () => {
+  it("boolean('') → false", () => {
     expect(evaluateXPath("boolean('')")).toBe(false);
   });
 
-  it.fails("boolean('asdf') → true", () => {
+  it("boolean('asdf') → true", () => {
     expect(evaluateXPath("boolean('asdf')")).toBe(true);
   });
 
-  it.fails("boolean('false') → true (non-empty string)", () => {
+  it("boolean('false') → true (non-empty string)", () => {
     // JavaRosa: testEval("boolean('false')", TRUE)
     expect(evaluateXPath("boolean('false')")).toBe(true);
   });
 
-  it.fails("boolean(1 div 0) → true (Infinity is truthy)", () => {
+  it("boolean(1 div 0) → true (Infinity is truthy)", () => {
     expect(evaluateXPath("boolean(1 div 0)")).toBe(true);
   });
 
-  it.fails("boolean(number('NaN')) → false", () => {
+  it("boolean(number('NaN')) → false", () => {
     expect(evaluateXPath("boolean(number('NaN'))")).toBe(false);
   });
 
   // number()
-  it.fails("number(true()) → 1.0", () => {
+  it("number(true()) → 1.0", () => {
     expect(evaluateXPath("number(true())")).toBe(1.0);
   });
 
-  it.fails("number(false()) → 0.0", () => {
+  it("number(false()) → 0.0", () => {
     expect(evaluateXPath("number(false())")).toBe(0.0);
   });
 
-  it.fails("number('100') → 100.0", () => {
+  it("number('100') → 100.0", () => {
     expect(evaluateXPath("number('100')")).toBe(100.0);
   });
 
-  it.fails("number('not a number') → NaN", () => {
+  it("number('not a number') → NaN", () => {
     expect(evaluateXPath("number('not a number')")).toBeNaN();
   });
 
-  it.fails("number(' -12345.6789  ') trims and parses → -12345.6789", () => {
+  it("number(' -12345.6789  ') trims and parses → -12345.6789", () => {
     expect(evaluateXPath("number(' -12345.6789  ')")).toBeCloseTo(-12345.6789, 4);
   });
 
-  it.fails("number('NaN') → NaN", () => {
+  it("number('NaN') → NaN", () => {
     expect(evaluateXPath("number('NaN')")).toBeNaN();
   });
 
@@ -412,56 +412,56 @@ describe("XPath eval — type conversions", () => {
     expect(evaluateXPath("number('1.1e6')")).toBeNaN();
   });
 
-  it.fails("number(1 div 0) → Infinity", () => {
+  it("number(1 div 0) → Infinity", () => {
     expect(evaluateXPath("number(1 div 0)")).toBe(Infinity);
   });
 
-  it.fails("number(-1 div 0) → -Infinity", () => {
+  it("number(-1 div 0) → -Infinity", () => {
     expect(evaluateXPath("number(-1 div 0)")).toBe(-Infinity);
   });
 
   // string()
-  it.fails("string(true()) → 'true'", () => {
+  it("string(true()) → 'true'", () => {
     expect(evaluateXPath("string(true())")).toBe("true");
   });
 
-  it.fails("string(false()) → 'false'", () => {
+  it("string(false()) → 'false'", () => {
     expect(evaluateXPath("string(false())")).toBe("false");
   });
 
-  it.fails("string(number('NaN')) → 'NaN'", () => {
+  it("string(number('NaN')) → 'NaN'", () => {
     expect(evaluateXPath("string(number('NaN'))")).toBe("NaN");
   });
 
-  it.fails("string(1 div 0) → 'Infinity'", () => {
+  it("string(1 div 0) → 'Infinity'", () => {
     expect(evaluateXPath("string(1 div 0)")).toBe("Infinity");
   });
 
-  it.fails("string(-1 div 0) → '-Infinity'", () => {
+  it("string(-1 div 0) → '-Infinity'", () => {
     expect(evaluateXPath("string(-1 div 0)")).toBe("-Infinity");
   });
 
-  it.fails("string(0) → '0'", () => {
+  it("string(0) → '0'", () => {
     expect(evaluateXPath("string(0)")).toBe("0");
   });
 
-  it.fails("string(-0) → '0' (negative zero prints as 0)", () => {
+  it("string(-0) → '0' (negative zero prints as 0)", () => {
     expect(evaluateXPath("string(-0)")).toBe("0");
   });
 
-  it.fails("string(123456.0000) → '123456' (no trailing zeros)", () => {
+  it("string(123456.0000) → '123456' (no trailing zeros)", () => {
     expect(evaluateXPath("string(123456.0000)")).toBe("123456");
   });
 
-  it.fails("string(.557586) → '0.557586'", () => {
+  it("string(.557586) → '0.557586'", () => {
     expect(evaluateXPath("string(.557586)")).toBe("0.557586");
   });
 
-  it.fails("string('a string') → 'a string'", () => {
+  it("string('a string') → 'a string'", () => {
     expect(evaluateXPath("string('a string')")).toBe("a string");
   });
 
-  it.fails("true() + 8 → 9.0 (boolean coerced to 1)", () => {
+  it("true() + 8 → 9.0 (boolean coerced to 1)", () => {
     // JavaRosa: testEval("true() + 8", 9.0)
     expect(evaluateXPath("true() + 8")).toBe(9.0);
   });
@@ -472,19 +472,19 @@ describe("XPath eval — type conversions", () => {
 // Source: XPathEvalTest.java boolean_functions()
 // ---------------------------------------------------------------------------
 describe("XPath eval — not()", () => {
-  it.fails("not(true()) → false", () => {
+  it("not(true()) → false", () => {
     expect(evaluateXPath("not(true())")).toBe(false);
   });
 
-  it.fails("not(false()) → true", () => {
+  it("not(false()) → true", () => {
     expect(evaluateXPath("not(false())")).toBe(true);
   });
 
-  it.fails("not('') → true (empty string is falsy)", () => {
+  it("not('') → true (empty string is falsy)", () => {
     expect(evaluateXPath("not('')")).toBe(true);
   });
 
-  it.fails("not(contains('a', 'b')) → true", () => {
+  it("not(contains('a', 'b')) → true", () => {
     expect(evaluateXPath("not(contains('a', 'b'))")).toBe(true);
   });
 });
@@ -494,64 +494,64 @@ describe("XPath eval — not()", () => {
 // Source: XPathEvalTest.java substring_functions() and type_conversions()
 // ---------------------------------------------------------------------------
 describe("XPath eval — string functions", () => {
-  it.fails("contains('a', 'a') → true", () => {
+  it("contains('a', 'a') → true", () => {
     expect(evaluateXPath("contains('a', 'a')")).toBe(true);
   });
 
-  it.fails("contains('a', 'b') → false", () => {
+  it("contains('a', 'b') → false", () => {
     expect(evaluateXPath("contains('a', 'b')")).toBe(false);
   });
 
-  it.fails("contains('abc', 'b') → true", () => {
+  it("contains('abc', 'b') → true", () => {
     expect(evaluateXPath("contains('abc', 'b')")).toBe(true);
   });
 
-  it.fails("contains('abc', 'bcd') → false", () => {
+  it("contains('abc', 'bcd') → false", () => {
     expect(evaluateXPath("contains('abc', 'bcd')")).toBe(false);
   });
 
-  it.fails("starts-with('abc', 'a') → true", () => {
+  it("starts-with('abc', 'a') → true", () => {
     expect(evaluateXPath("starts-with('abc', 'a')")).toBe(true);
   });
 
-  it.fails("starts-with('', 'a') → false", () => {
+  it("starts-with('', 'a') → false", () => {
     expect(evaluateXPath("starts-with('', 'a')")).toBe(false);
   });
 
-  it.fails("starts-with('', '') → true", () => {
+  it("starts-with('', '') → true", () => {
     expect(evaluateXPath("starts-with('', '')")).toBe(true);
   });
 
-  it.fails("concat() → ''", () => {
+  it("concat() → ''", () => {
     // JavaRosa: testEval("concat()", "", ec, "")
     expect(evaluateXPath("concat()")).toBe("");
   });
 
-  it.fails("concat('a') → 'a'", () => {
+  it("concat('a') → 'a'", () => {
     expect(evaluateXPath("concat('a')")).toBe("a");
   });
 
-  it.fails("concat('a','b','') → 'ab'", () => {
+  it("concat('a','b','') → 'ab'", () => {
     expect(evaluateXPath("concat('a','b','')")).toBe("ab");
   });
 
-  it.fails("concat('ab','cde','','fgh') → 'abcdefgh'", () => {
+  it("concat('ab','cde','','fgh') → 'abcdefgh'", () => {
     expect(evaluateXPath("concat('ab','cde','','fgh')")).toBe("abcdefgh");
   });
 
-  it.fails("substring-before('hello','l') → 'he'", () => {
+  it("substring-before('hello','l') → 'he'", () => {
     expect(evaluateXPath("substring-before('hello','l')")).toBe("he");
   });
 
-  it.fails("substring-before('hello','q') → ''", () => {
+  it("substring-before('hello','q') → ''", () => {
     expect(evaluateXPath("substring-before('hello','q')")).toBe("");
   });
 
-  it.fails("substring-after('hello','l') → 'lo'", () => {
+  it("substring-after('hello','l') → 'lo'", () => {
     expect(evaluateXPath("substring-after('hello','l')")).toBe("lo");
   });
 
-  it.fails("substring-after('hello','') → 'hello'", () => {
+  it("substring-after('hello','') → 'hello'", () => {
     expect(evaluateXPath("substring-after('hello','')")).toBe("hello");
   });
 
@@ -572,27 +572,27 @@ describe("XPath eval — string functions", () => {
     expect(evaluateXPath("substr('hello',-2)")).toBe("lo");
   });
 
-  it.fails("normalize-space('') → ''", () => {
+  it("normalize-space('') → ''", () => {
     expect(evaluateXPath("normalize-space('')")).toBe("");
   });
 
-  it.fails("normalize-space('  a    b  ') → 'a b'", () => {
+  it("normalize-space('  a    b  ') → 'a b'", () => {
     expect(evaluateXPath("normalize-space(' a    b ')")).toBe("a b");
   });
 
-  it.fails("string-length('cocotero') → 8.0", () => {
+  it("string-length('cocotero') → 8.0", () => {
     expect(evaluateXPath("string-length('cocotero')")).toBe(8.0);
   });
 
-  it.fails("translate('hello','l','L') → 'heLLo'", () => {
+  it("translate('hello','l','L') → 'heLLo'", () => {
     expect(evaluateXPath("translate('hello','l','L')")).toBe("heLLo");
   });
 
-  it.fails("translate('hello','l','') removes chars → 'heo'", () => {
+  it("translate('hello','l','') removes chars → 'heo'", () => {
     expect(evaluateXPath("translate('hello','l','')")).toBe("heo");
   });
 
-  it.fails("translate('2019/01/02','/','-') → '2019-01-02'", () => {
+  it("translate('2019/01/02','/','-') → '2019-01-02'", () => {
     expect(evaluateXPath("translate('2019/01/02','/','-')")).toBe("2019-01-02");
   });
 });
@@ -606,11 +606,11 @@ describe("XPath eval — math functions", () => {
     expect(evaluateXPath("abs(-3.5)")).toBe(3.5);
   });
 
-  it.fails("round('14.29123456789') → 14.0", () => {
+  it("round('14.29123456789') → 14.0", () => {
     expect(evaluateXPath("round('14.29123456789')")).toBe(14.0);
   });
 
-  it.fails("round('14.6') → 15.0", () => {
+  it("round('14.6') → 15.0", () => {
     expect(evaluateXPath("round('14.6')")).toBe(15.0);
   });
 
@@ -618,12 +618,12 @@ describe("XPath eval — math functions", () => {
     expect(evaluateXPath("round('14.29123456789', 2)")).toBe(14.29);
   });
 
-  it.fails("round('-0.5') → -0.0", () => {
+  it("round('-0.5') → -0.0", () => {
     // JavaRosa: testEval("round('-0.5')", -0.0)
     expect(evaluateXPath("round('-0.5')")).toBe(-0.0);
   });
 
-  it.fails("round('NaN') → NaN", () => {
+  it("round('NaN') → NaN", () => {
     expect(evaluateXPath("round('NaN')")).toBeNaN();
   });
 

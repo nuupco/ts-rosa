@@ -46,40 +46,40 @@ function expectParseError(expr: string): void {
 // Source: XPathParseTest.java parseTestCases[] lines 43-54
 // ---------------------------------------------------------------------------
 describe("XPath parse — numeric literals", () => {
-  it.fails("parses integer 10 → 10.0", () => {
+  it("parses integer 10 → 10.0", () => {
     // JavaRosa: {"10", "{num:10.0}"}
     expect(evaluateXPath("10")).toBe(10.0);
   });
 
-  it.fails("parses decimal 734.04 → 734.04", () => {
+  it("parses decimal 734.04 → 734.04", () => {
     // JavaRosa: {"734.04", "{num:734.04}"}
     expect(evaluateXPath("734.04")).toBe(734.04);
   });
 
-  it.fails("parses leading-dot .666 → 0.666", () => {
+  it("parses leading-dot .666 → 0.666", () => {
     // JavaRosa: {".666", "{num:0.666}"}
     expect(evaluateXPath(".666")).toBe(0.666);
   });
 
-  it.fails("parses trailing-dot 123. → 123.0", () => {
+  it("parses trailing-dot 123. → 123.0", () => {
     // JavaRosa: {"123.", "{num:123.0}"}
     expect(evaluateXPath("123.")).toBe(123.0);
   });
 
-  it.fails("parses zero 0 → 0.0", () => {
+  it("parses zero 0 → 0.0", () => {
     expect(evaluateXPath("0")).toBe(0.0);
   });
 
-  it.fails("parses large integer in scientific form 1230000000000000000000 → 1.23e21", () => {
+  it("parses large integer in scientific form 1230000000000000000000 → 1.23e21", () => {
     // JavaRosa: {"1230000000000000000000", "{num:1.23E21}"}
     expect(evaluateXPath("1230000000000000000000")).toBe(1.23e21);
   });
 
-  it.fails("parses tiny decimal 0.00000000000000000123 → 1.23e-18", () => {
+  it("parses tiny decimal 0.00000000000000000123 → 1.23e-18", () => {
     expect(evaluateXPath("0.00000000000000000123")).toBe(1.23e-18);
   });
 
-  it.fails("normalizes leading zeros 00000333.3330000 → 333.333", () => {
+  it("normalizes leading zeros 00000333.3330000 → 333.333", () => {
     // JavaRosa: {"00000333.3330000", "{num:333.333}"}
     expect(evaluateXPath("00000333.3330000")).toBe(333.333);
   });
@@ -90,12 +90,12 @@ describe("XPath parse — numeric literals", () => {
 // Source: XPathParseTest.java parseTestCases[] lines 55-62
 // ---------------------------------------------------------------------------
 describe("XPath parse — string literals", () => {
-  it.fails("parses empty double-quoted string", () => {
+  it("parses empty double-quoted string", () => {
     // JavaRosa: {"\"\"", "{str:''}"}
     expect(evaluateXPath('""')).toBe("");
   });
 
-  it.fails("parses whitespace string '   '", () => {
+  it("parses whitespace string '   '", () => {
     expect(evaluateXPath("'   '")).toBe("   ");
   });
 
@@ -104,7 +104,7 @@ describe("XPath parse — string literals", () => {
     expect(evaluateXPath(`'"`)).toBe('"');
   });
 
-  it.fails("rejects unterminated string", () => {
+  it("rejects unterminated string", () => {
     // JavaRosa: {"'unterminated string...", null}
     expectParseError("'unterminated string...");
   });
@@ -115,27 +115,27 @@ describe("XPath parse — string literals", () => {
 // Source: XPathParseTest.java parseTestCases[] lines 104-119
 // ---------------------------------------------------------------------------
 describe("XPath parse — operator associativity", () => {
-  it.fails("or is right-associative: 1 or 2 or 3 → or(1, or(2, 3))", () => {
+  it("or is right-associative: 1 or 2 or 3 → or(1, or(2, 3))", () => {
     // JavaRosa: {"1 or 2 or 3", "{binop-expr:or,{num:1.0},{binop-expr:or,{num:2.0},{num:3.0}}}"}
     // Eval effect: true (all non-zero)
     expect(evaluateXPath("1 or 2 or 3")).toBe(true);
   });
 
-  it.fails("and is right-associative: 1 and 2 and 3", () => {
+  it("and is right-associative: 1 and 2 and 3", () => {
     expect(evaluateXPath("1 and 2 and 3")).toBe(true);
   });
 
-  it.fails("arithmetic left-associative: 1 + 2 - 3 - 4 + 5 → 1", () => {
+  it("arithmetic left-associative: 1 + 2 - 3 - 4 + 5 → 1", () => {
     // JavaRosa: {"1 + 2 - 3 - 4 + 5", "{binop-expr:+,{...}}"}
     expect(evaluateXPath("1 + 2 - 3 - 4 + 5")).toBe(1.0);
   });
 
-  it.fails("mul/div/mod left-associative: 1 mod 2 div 3 div 4 * 5", () => {
+  it("mul/div/mod left-associative: 1 mod 2 div 3 div 4 * 5", () => {
     // JavaRosa parseResult confirms structure; eval: (((1%2)/3)/4)*5 = ((1/3)/4)*5 ≈ 0.4167
     expect(evaluateXPath("1 mod 2 div 3 div 4 * 5")).toBeCloseTo(5 / 12, 5);
   });
 
-  it.fails("mul higher precedence than add: 3 + 3 * 3 → 12", () => {
+  it("mul higher precedence than add: 3 + 3 * 3 → 12", () => {
     // This is also an eval test; confirms precedence is correct
     expect(evaluateXPath("3 + 3 * 3")).toBe(12.0);
   });
@@ -146,56 +146,56 @@ describe("XPath parse — operator associativity", () => {
 // Source: XPathParseTest.java parseTestCases[] null entries
 // ---------------------------------------------------------------------------
 describe("XPath parse — syntax errors", () => {
-  it.fails("empty expression throws", () => {
+  it("empty expression throws", () => {
     expectParseError("");
   });
 
-  it.fails("whitespace-only expression throws", () => {
+  it("whitespace-only expression throws", () => {
     expectParseError("     ");
   });
 
-  it.fails("unbalanced open paren throws", () => {
+  it("unbalanced open paren throws", () => {
     expectParseError("(");
   });
 
-  it.fails("unbalanced close paren throws", () => {
+  it("unbalanced close paren throws", () => {
     expectParseError(")");
   });
 
-  it.fails("empty parens () throws", () => {
+  it("empty parens () throws", () => {
     expectParseError("()");
   });
 
-  it.fails("5/5 is invalid (div, not slash) throws", () => {
+  it("5/5 is invalid (div, not slash) throws", () => {
     // JavaRosa: {"5/5", null} — slash is not the division operator
     expectParseError("5/5");
   });
 
-  it.fails("5%5 is invalid (use mod) throws", () => {
+  it("5%5 is invalid (use mod) throws", () => {
     expectParseError("5%5");
   });
 
-  it.fails("== is not valid XPath equality operator", () => {
+  it("== is not valid XPath equality operator", () => {
     expectParseError("5 == 5");
   });
 
-  it.fails("<> is not valid XPath inequality operator", () => {
+  it("<> is not valid XPath inequality operator", () => {
     expectParseError("5 <> 5");
   });
 
-  it.fails("bare >= without operands throws", () => {
+  it("bare >= without operands throws", () => {
     expectParseError(">=");
   });
 
-  it.fails("'asdf'!= without right-hand side throws", () => {
+  it("'asdf'!= without right-hand side throws", () => {
     expectParseError("'asdf'!=");
   });
 
-  it.fails("prefix-only operator +- throws", () => {
+  it("prefix-only operator +- throws", () => {
     expectParseError("+-");
   });
 
-  it.fails("8|-9 (union with negation) throws per XPath spec", () => {
+  it("8|-9 (union with negation) throws per XPath spec", () => {
     // JavaRosa: {"8|-9", null} — disallowed by the XPath spec
     expectParseError("8|-9");
   });
@@ -206,17 +206,17 @@ describe("XPath parse — syntax errors", () => {
 // Source: XPathParseTest.java parseTestCases[] lines 146+
 // ---------------------------------------------------------------------------
 describe("XPath parse — path expressions compile", () => {
-  it.fails("absolute path /data parses without throwing", () => {
+  it("absolute path /data parses without throwing", () => {
     // Should not throw during parse; evaluation result depends on instance
     expect(() => evaluateXPath("/data")).not.toThrow();
   });
 
-  it.fails("self step . parses", () => {
+  it("self step . parses", () => {
     // JavaRosa: {".", "{path-expr:rel,{{step:self,node()}}}"}
     expect(() => evaluateXPath(".")).not.toThrow();
   });
 
-  it.fails("parent step .. parses", () => {
+  it("parent step .. parses", () => {
     expect(() => evaluateXPath("..")).not.toThrow();
   });
 });
