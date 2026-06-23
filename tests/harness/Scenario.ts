@@ -22,6 +22,7 @@ import { cast, stringValue } from "../../src/model/data/codecs.ts";
 import { parseAbsoluteRef } from "../../src/model/instance/TreeReference.ts";
 import { resolveReference } from "../../src/model/instance/InstanceTree.ts";
 import { parseForm } from "../../src/parse/XFormParser.ts";
+import { createFormSession, type FormSession } from "../../src/session/FormSession.ts";
 
 // ---------------------------------------------------------------------------
 // Stub type placeholders for JavaRosa types not yet implemented
@@ -97,6 +98,8 @@ function notImplemented(methodName: string): never {
 export class Scenario {
   // Internal form definition (set by init)
   private def!: FormDefinition;
+  // FormSession with evaluator (set by init — wired in Slice 3.4)
+  private session!: FormSession;
 
   // -------------------------------------------------------------------------
   // Static factory methods (mirrors JavaRosa static init / createFormDef)
@@ -121,6 +124,7 @@ export class Scenario {
     const xml = typeof arg === 'string' ? arg : (arg as XFormsElement).asXml();
     const s = new Scenario();
     s.def = parseForm(xml);
+    s.session = createFormSession(s.def);
     return s;
   }
 
@@ -214,8 +218,17 @@ export class Scenario {
     const ref = parseAbsoluteRef(xPathOrValue);
     const node = resolveReference(this.def.mainInstance, ref);
     if (!node) throw new Error(`node not found: ${xPathOrValue}`);
-    node.value = cast(node.dataType, String(valueOrExtra)) ?? stringValue(String(valueOrExtra));
-    return 0; // AnswerResult.OK — no constraint/DAG eval in Phase 1
+    // Coerce the incoming value to the node's dataType
+    const coerced = cast(node.dataType, String(valueOrExtra)) ?? stringValue(String(valueOrExtra));
+    // Slice 3.4: write via evaluator so the DAG cascade fires
+    if (this.def.dag !== null) {
+      // setValue writes the node value; triggerTriggerables fires the cascade
+      this.session.evaluator.setValue(ref, coerced);
+      this.session.evaluator.triggerTriggerables(ref);
+    } else {
+      node.value = coerced;
+    }
+    return 0; // AnswerResult.OK — constraint/required validation is Slice 3.6
   }
 
   // -------------------------------------------------------------------------
