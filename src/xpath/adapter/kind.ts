@@ -6,7 +6,8 @@
  * No browser globals used — all constants are inlined.
  */
 
-import type { UnspecifiedNonXPathNodeKind, XPathNodeKind } from '@getodk/xpath';
+import type { XPathNodeKind } from '../vendor/xpath/adapter/interface/XPathNode.ts';
+import type { UnspecifiedNonXPathNodeKind } from '../vendor/xpath/adapter/interface/XPathNode.ts';
 
 // Inlined to avoid importing from @getodk/common (which has no npm release).
 const XMLNS_NAMESPACE_URI = 'http://www.w3.org/2000/xmlns/';

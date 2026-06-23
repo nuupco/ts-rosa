@@ -8,7 +8,7 @@
  * typing with the minimal interface shapes that xmldom nodes satisfy.
  */
 
-import { XPathNodeKindKey } from '@getodk/xpath';
+import { XPathNodeKindKey } from '../vendor/xpath/adapter/interface/XPathNode.ts';
 
 // Minimal structural interfaces for xmldom node shapes.
 // We avoid importing from @xmldom/xmldom to keep src/ free of devDependencies.

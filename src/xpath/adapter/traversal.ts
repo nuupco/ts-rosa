@@ -6,7 +6,7 @@
  * so those are built via sibling-node iteration.
  */
 
-import type { DocumentOrderComparison } from '@getodk/xpath';
+import type { DocumentOrderComparison } from '../vendor/xpath/adapter/interface/XPathTraversalAdapter.ts';
 import { isXmldomDocument, isXmldomElement, isXmldomAttribute, isXmldomNamespaceDeclaration, isXmldomParentNode } from './kind.ts';
 
 // Minimal structural types to avoid importing from @xmldom/xmldom directly

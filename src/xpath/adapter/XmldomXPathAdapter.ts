@@ -18,15 +18,13 @@ import type {
   XPathNodeKind,
   UnspecifiedNonXPathNodeKind,
   DocumentOrderComparison,
-} from '@getodk/xpath';
-import type {
   AdapterChildNode,
   AdapterDocument,
   AdapterElement,
   AdapterNode,
   AdapterAttribute,
   AdapterNamespaceDeclaration,
-} from '@getodk/xpath';
+} from '../vendor/xpath/adapter/interface/XPathDOMAdapter.ts';
 import type {
   XmldomAttribute,
   XmldomDocument,
