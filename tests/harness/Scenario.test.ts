@@ -56,12 +56,13 @@ describe("Scenario instance method stubs", () => {
 
   // answer and answerOf are now real — tested in Scenario-init.test.ts
 
-  it("next() throws not implemented: next", () => {
-    expectNotImplemented(() => scenario.next(), "next");
+  // next() and next(amount) are now implemented (Slice 3.5 basic navigation)
+  it("next() returns a number (basic navigation implemented)", () => {
+    expect(typeof scenario.next()).toBe("number");
   });
 
-  it("next(amount) throws not implemented: next", () => {
-    expectNotImplemented(() => scenario.next(3), "next");
+  it("next(amount) returns a number (basic navigation implemented)", () => {
+    expect(typeof scenario.next(3)).toBe("number");
   });
 
   it("prev() throws not implemented: prev", () => {
@@ -149,8 +150,9 @@ describe("Scenario instance method stubs", () => {
     expectNotImplemented(() => scenario.getQuestionAtIndex(), "getQuestionAtIndex");
   });
 
-  it("getAnswerNode(xpath) throws not implemented: getAnswerNode", () => {
-    expectNotImplemented(() => scenario.getAnswerNode("/data/q1"), "getAnswerNode");
+  // getAnswerNode() is now implemented (Slice 3.5); on uninitialized Scenario it throws node not found
+  it("getAnswerNode(xpath) on uninitialized Scenario throws (node not found)", () => {
+    expect(() => scenario.getAnswerNode("/data/q1")).toThrow();
   });
 
   it("onDagEvent(cb) throws not implemented: onDagEvent", () => {

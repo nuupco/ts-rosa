@@ -43,8 +43,7 @@ import "../../harness/matchers.ts";
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — relevant: inherited non-relevance", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 relevance propagation is implemented
+  it(
     // Source: TriggerableDagTest.java#non_relevance_is_inherited_from_ancestors
     // web-forms: relevant.test.ts "is inherited from ancestors"
     "non-relevance is inherited from ancestor nodes",
@@ -96,7 +95,7 @@ describe("Equivalence — relevant: inherited non-relevance", () => {
     },
   );
 
-  it.fails(
+  it(
     // ACTIVATE: remove .fails when Phase 3 relevance + model-nesting is implemented
     // Source: web-forms/relevant.test.ts "is determined by model nesting"
     "relevance is determined by model nesting, not body nesting",
@@ -136,8 +135,7 @@ describe("Equivalence — relevant: inherited non-relevance", () => {
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — relevant: calculates inside non-relevant group", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 relevance + calculate interaction implemented
+  it(
     // Source: TriggerableDagTest.java#verify_relation_between_calculate_expressions_and_relevancy_conditions
     // web-forms: (same fixture in relevant.test.ts calculate-in-group)
     "calculate expressions inside a non-relevant group return null for nested nodes",
@@ -201,8 +199,7 @@ describe("Equivalence — relevant: calculates inside non-relevant group", () =>
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 non-relevant-value semantics implemented
+  it(
     // Source: TriggerableDagTest.java#non_relevant_node_values_are_always_null_regardless_of_their_actual_value
     "non-relevant node values are null for downstream calculations regardless of stored value",
     () => {

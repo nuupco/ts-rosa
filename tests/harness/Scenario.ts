@@ -19,10 +19,12 @@ import type { XFormsElement } from "./XFormsElement.ts";
 import type { AnswerValue } from "../../src/model/data/AnswerValue.ts";
 import type { FormDefinition } from "../../src/model/def/FormDefinition.ts";
 import { cast, stringValue } from "../../src/model/data/codecs.ts";
-import { parseAbsoluteRef } from "../../src/model/instance/TreeReference.ts";
+import { parseAbsoluteRef, refToString } from "../../src/model/instance/TreeReference.ts";
 import { resolveReference } from "../../src/model/instance/InstanceTree.ts";
 import { parseForm } from "../../src/parse/XFormParser.ts";
 import { createFormSession, type FormSession } from "../../src/session/FormSession.ts";
+import { walkControls } from "../../src/model/def/FormDefinition.ts";
+import type { FormElement } from "../../src/model/def/FormElement.ts";
 
 // ---------------------------------------------------------------------------
 // Stub type placeholders for JavaRosa types not yet implemented
@@ -100,6 +102,10 @@ export class Scenario {
   private def!: FormDefinition;
   // FormSession with evaluator (set by init — wired in Slice 3.4)
   private session!: FormSession;
+  // Flat list of question elements in traversal order (for navigation)
+  private questions: Array<FormElement & { kind: 'question' }> = [];
+  // Current question index (-1 = before first question)
+  private currentQuestionIndex = -1;
 
   // -------------------------------------------------------------------------
   // Static factory methods (mirrors JavaRosa static init / createFormDef)
@@ -125,6 +131,8 @@ export class Scenario {
     const s = new Scenario();
     s.def = parseForm(xml);
     s.session = createFormSession(s.def);
+    // Build flat question list for navigation
+    walkControls(s.def, (q) => s.questions.push(q));
     return s;
   }
 
@@ -207,8 +215,29 @@ export class Scenario {
    *   answer(xPath: string, choice: SelectChoiceStub): AnswerResultValue
    */
   answer(xPathOrValue: string | number | boolean | SelectChoiceStub, valueOrExtra?: string | number | boolean | SelectChoiceStub | string[]): AnswerResultValue {
-    // Only handles answer(xpath: string, value: string|number|boolean) in Phase 1.
-    // All other overloads remain not implemented.
+    // answer(value) — answer the current question (no xpath)
+    if (
+      valueOrExtra === undefined &&
+      (typeof xPathOrValue === 'number' || typeof xPathOrValue === 'boolean')
+    ) {
+      return this.answerCurrentQuestion(xPathOrValue);
+    }
+
+    // answer(value: string) — could be "answer the current question" if no xpath dest
+    // Heuristic: if valueOrExtra is undefined and xPathOrValue is a string, it's a
+    // single-value answer to the current question (not an xpath).
+    // But JavaRosa also uses answer(xpath, value) — disambiguate by checking if
+    // xPathOrValue looks like an absolute XPath (starts with '/').
+    if (typeof xPathOrValue === 'string' && valueOrExtra === undefined) {
+      if (xPathOrValue.startsWith('/')) {
+        // answer(xpath) — not a standard overload; not implemented
+        return notImplemented("answer(xpath-only)");
+      }
+      // answer(value: string) — answer the current question
+      return this.answerCurrentQuestion(xPathOrValue);
+    }
+
+    // answer(xpath, value) — the primary 2-arg overload
     if (typeof xPathOrValue !== 'string' || valueOrExtra === undefined) {
       return notImplemented("answer");
     }
@@ -218,17 +247,32 @@ export class Scenario {
     const ref = parseAbsoluteRef(xPathOrValue);
     const node = resolveReference(this.def.mainInstance, ref);
     if (!node) throw new Error(`node not found: ${xPathOrValue}`);
-    // Coerce the incoming value to the node's dataType
     const coerced = cast(node.dataType, String(valueOrExtra)) ?? stringValue(String(valueOrExtra));
-    // Slice 3.4: write via evaluator so the DAG cascade fires
     if (this.def.dag !== null) {
-      // setValue writes the node value; triggerTriggerables fires the cascade
       this.session.evaluator.setValue(ref, coerced);
       this.session.evaluator.triggerTriggerables(ref);
     } else {
       node.value = coerced;
     }
-    return 0; // AnswerResult.OK — constraint/required validation is Slice 3.6
+    return 0;
+  }
+
+  private answerCurrentQuestion(value: string | number | boolean): AnswerResultValue {
+    const q = this.questions[this.currentQuestionIndex];
+    if (q === undefined) {
+      throw new Error(`No current question to answer (currentQuestionIndex=${this.currentQuestionIndex})`);
+    }
+    const ref = q.ref;
+    const node = resolveReference(this.def.mainInstance, ref);
+    if (!node) throw new Error(`node not found: ${q.ref}`);
+    const coerced = cast(node.dataType, String(value)) ?? stringValue(String(value));
+    if (this.def.dag !== null) {
+      this.session.evaluator.setValue(ref, coerced);
+      this.session.evaluator.triggerTriggerables(ref);
+    } else {
+      node.value = coerced;
+    }
+    return 0;
   }
 
   // -------------------------------------------------------------------------
@@ -238,7 +282,11 @@ export class Scenario {
   answerOf(xPath: string): AnswerValue | null {
     const ref = parseAbsoluteRef(xPath);
     const node = resolveReference(this.def.mainInstance, ref);
-    return node ? node.value : null;
+    if (!node) return null;
+    // Return the stored value. Non-relevant semantics (null effective value) apply
+    // only inside XPath evaluation (via the relevanceOf closure in the adapter),
+    // not to direct reads — mirroring JavaRosa TreeElement.getStringValue() behavior.
+    return node.value;
   }
 
   countRepeatInstancesOf(_xPath: string): number {
@@ -249,8 +297,18 @@ export class Scenario {
     return notImplemented("choicesOf");
   }
 
-  getAnswerNode(_xPath: string): TreeElementStub {
-    return notImplemented("getAnswerNode");
+  getAnswerNode(xPath: string): TreeElementStub {
+    const ref = parseAbsoluteRef(xPath);
+    const node = resolveReference(this.def.mainInstance, ref);
+    if (!node) throw new Error(`node not found: ${xPath}`);
+    const isRelevant =
+      this.def.dag !== null
+        ? this.session.evaluator.isEffectivelyRelevant(ref)
+        : true;
+    return {
+      __type: 'TreeElement',
+      isRelevant,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -263,7 +321,17 @@ export class Scenario {
    * navigates to a specific node by reference.
    */
   next(_amountOrRef?: number | string): number {
-    return notImplemented("next");
+    // Basic linear navigation — advance current question by 1
+    // (Phase 4 will implement full FormIndex navigation)
+    if (_amountOrRef === undefined || typeof _amountOrRef === 'number') {
+      const amount = typeof _amountOrRef === 'number' ? _amountOrRef : 1;
+      this.currentQuestionIndex = Math.min(
+        this.currentQuestionIndex + amount,
+        this.questions.length - 1,
+      );
+      return this.currentQuestionIndex;
+    }
+    return notImplemented("next(ref)");
   }
 
   prev(): number {

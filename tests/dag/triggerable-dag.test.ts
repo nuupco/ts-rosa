@@ -221,8 +221,7 @@ describe("TriggerableDag — Cycle detection", () => {
 // ---------------------------------------------------------------------------
 
 describe("TriggerableDag — Relevance", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: non_relevance_is_inherited_from_ancestors
     "non-relevance is inherited from ancestor nodes",
     () => {
@@ -272,8 +271,7 @@ describe("TriggerableDag — Relevance", () => {
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: verify_relation_between_calculate_expressions_and_relevancy_conditions
     "calculate expressions inside a non-relevant group return null",
     () => {
@@ -335,8 +333,7 @@ describe("TriggerableDag — Relevance", () => {
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: non_relevant_node_values_are_always_null_regardless_of_their_actual_value
     "non-relevant node values are always null regardless of their stored value",
     () => {

@@ -127,9 +127,10 @@ describe('Scenario.answerOf — empty leaf', () => {
 // ---------------------------------------------------------------------------
 
 describe('unimplemented methods still throw', () => {
-  it('next() still throws not implemented', () => {
+  // next() is now implemented (Slice 3.5 basic navigation) — returns a number
+  it('next() is now implemented (basic navigation)', () => {
     const s = Scenario.init(formWithAlice);
-    expect(() => s.next()).toThrow(/not implemented/i);
+    expect(typeof s.next()).toBe('number');
   });
 
   it('prev() still throws not implemented', () => {
