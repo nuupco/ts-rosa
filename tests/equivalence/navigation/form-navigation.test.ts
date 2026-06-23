@@ -1,12 +1,21 @@
 /**
- * Equivalence tests — FormIndex + FormNavigator (Phase 4, Slices 4.1+)
+ * Navigation equivalence tests — FormIndex + FormNavigator (Phase 4, Slices 4.1+)
  *
- * Source: JavaRosa FormEntryModelTest, FormEntryControllerTest (LINEAR mode only).
+ * This file is a MIX of two kinds of tests:
+ *
+ * (a) FAITHFUL PORTS from JavaRosa — tests where the source method is confirmed
+ *     to exist in reference/javarosa. Each such test carries an inline
+ *     "// Source: <JavaRosaClass>#<method>" comment.
+ *
+ * (b) ORIGINAL ts-rosa behavioral tests — granular assertions (e.g. next() from
+ *     BOF, specific event-code values, path-level invariants) that have NO direct
+ *     JavaRosa counterpart. JavaRosa tests navigation via FormNavigationTestCase
+ *     with full index-sequence parametrization against XML fixtures, not via
+ *     individual next-from-BOF assertions. These are marked
+ *     "// original ts-rosa behavioral test (no direct JavaRosa counterpart)".
  *
  * Strict TDD: tests are added as it.fails BEFORE implementation, then
  * activated (changed to `it`) as each slice's implementation lands.
- *
- * Slice 4.1 red bar: getCurrentIndex/atTheEndOfForm/atQuestion/getEvent/formIndex shape.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -45,7 +54,8 @@ function singleQuestionForm() {
 }
 
 // ---------------------------------------------------------------------------
-// Slice 4.1 — cursor position queries (RED BAR)
+// Slice 4.1 — cursor position queries
+// original ts-rosa behavioral tests (no direct JavaRosa counterpart)
 // ---------------------------------------------------------------------------
 
 describe('Equivalence — navigation: cursor position (Slice 4.1)', () => {
@@ -110,7 +120,9 @@ describe('Equivalence — navigation: cursor position (Slice 4.1)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Slice 4.2 — incrementIndex / decrementIndex + real next() / prev() (RED BAR)
+// Slice 4.2 — incrementIndex / decrementIndex + real next() / prev()
+// original ts-rosa behavioral tests (no direct JavaRosa counterpart —
+// JavaRosa tests navigation via FormNavigationTestCase with full index sequences)
 // ---------------------------------------------------------------------------
 
 /** Three top-level questions form */
@@ -282,7 +294,10 @@ describe('Equivalence — navigation: incrementIndex / decrementIndex + stepping
 });
 
 // ---------------------------------------------------------------------------
-// Slice 4.3 — Relevance skip during step (RED BAR)
+// Slice 4.3 — Relevance skip during step
+// S4.3-A/B/C/D: original ts-rosa behavioral tests (no direct JavaRosa counterpart)
+// isIndexRelevant_respectsRelevanceOfOutermostGroup: faithful port from JavaRosa
+//   Source: org.javarosa.form.api.FormEntryModelTest#isIndexRelevant_respectsRelevanceOfOutermostGroup
 // ---------------------------------------------------------------------------
 
 /**
@@ -392,7 +407,7 @@ function nestedRelevanceForm() {
 }
 
 describe('Equivalence — navigation: relevance skip during step (Slice 4.3)', () => {
-  it.fails(
+  it(
     // S4.3-A: non-relevant question b is skipped forward (a → skip b → c)
     'next_skipsNonRelevantQuestion',
     () => {
@@ -404,7 +419,7 @@ describe('Equivalence — navigation: relevance skip during step (Slice 4.3)', (
     },
   );
 
-  it.fails(
+  it(
     // S4.3-B: non-relevant question b is skipped backward (c → skip b → a)
     'prev_skipsNonRelevantQuestion',
     () => {
@@ -421,7 +436,7 @@ describe('Equivalence — navigation: relevance skip during step (Slice 4.3)', (
     },
   );
 
-  it.fails(
+  it(
     // S4.3-C: non-relevant group and all its children are skipped
     'next_skipsEntireNonRelevantGroup',
     () => {
@@ -433,7 +448,7 @@ describe('Equivalence — navigation: relevance skip during step (Slice 4.3)', (
     },
   );
 
-  it.fails(
+  it(
     // S4.3-D: all non-relevant → next() from BOF reaches EOF
     'next_allNonRelevant_reachesEof',
     () => {
@@ -444,29 +459,41 @@ describe('Equivalence — navigation: relevance skip during step (Slice 4.3)', (
     },
   );
 
-  it.fails(
+  it(
     // Ported from FormEntryModelTest#isIndexRelevant_respectsRelevanceOfOutermostGroup
     // Source: org.javarosa.form.api.FormEntryModelTest#isIndexRelevant_respectsRelevanceOfOutermostGroup
     //
-    // isEffectivelyRelevant for q1 (inside outer/inner) must reflect the
-    // relevance of the OUTERMOST ancestor group, not just the immediate parent.
+    // JavaRosa: formEntryModel.isIndexRelevant(q1Index) must respect the outermost
+    // ancestor group's relevance, not just the immediate parent.
+    // ts-rosa equivalent: evaluator.isEffectivelyRelevant(ref) at the q1 ref
+    // (called via scenario.isIndexRelevant, which delegates to the evaluator).
+    //
+    // We verify this by using next() (which uses stepToNextEvent with relevance
+    // skip): when q1 is non-relevant, stepToNextEvent skips it and does NOT
+    // land on it, so next('/data/outer/inner/q1') still lands the cursor at the
+    // non-relevant position via jumpToIndex (relevance-blind), but the
+    // relevance state is confirmed via the evaluator.
+    //
+    // The test mirrors JavaRosa's three assertions:
+    //   1. outerYesNo=no → q1 not relevant
+    //   2. innerYesNo=yes, outerYesNo=no → q1 still not relevant (outer blocks)
+    //   3. both yes → q1 relevant
     'isIndexRelevant_respectsRelevanceOfOutermostGroup',
     () => {
       const scenario = Scenario.init(nestedRelevanceForm());
+      // Obtain the q1 index via indexOf (relevance-blind walk)
+      const q1Index = scenario.indexOf('/data/outer/inner/q1');
 
-      // q1 is inside outer (non-relevant) and inner (non-relevant) → not relevant
-      scenario.next('/data/outer/inner/q1');
-      expect(scenario.atQuestion()).toBe(false); // non-relevant; stepToNextEvent skips it
+      // 1. Both outer and inner non-relevant → q1 not relevant
+      expect(scenario.isIndexRelevant(q1Index)).toBe(false);
 
-      // Making inner relevant still leaves outer non-relevant → q1 still not relevant
+      // 2. inner is now relevant, but outer is still not → q1 still not relevant
       scenario.answer('/data/innerYesNo', 'yes');
-      scenario.next('/data/outer/inner/q1');
-      expect(scenario.atQuestion()).toBe(false);
+      expect(scenario.isIndexRelevant(q1Index)).toBe(false);
 
-      // Making outer relevant too → q1 is now relevant
+      // 3. outer is now relevant too → q1 is relevant
       scenario.answer('/data/outerYesNo', 'yes');
-      scenario.next('/data/outer/inner/q1');
-      expect(scenario.atQuestion()).toBe(true);
+      expect(scenario.isIndexRelevant(q1Index)).toBe(true);
     },
   );
 });
