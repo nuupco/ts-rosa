@@ -6,22 +6,14 @@
  * It injects our pure-JS parser in place of the WASM-based ExpressionParser so
  * that NO web-tree-sitter / WASM dependency reaches production code.
  *
- * Slice 2: uses only the `fn` (XPath 1.0 core) FunctionLibrary.
- * Slice 3: will replace defaultFunctions with fn + javarosa + xforms.
+ * Slice 3: uses the full function library collection (fn + javarosa + xforms).
  */
 
 import { Evaluator } from '../vendor/xpath/evaluator/Evaluator.ts';
-import { FunctionLibraryCollection } from '../vendor/xpath/evaluator/functions/FunctionLibraryCollection.ts';
-import { fn } from '../vendor/xpath/functions/fn/index.ts';
 import { xmldomXPathAdapter, type XmldomNode } from '../adapter/XmldomXPathAdapter.ts';
 import { PureJSExpressionParser } from '../parser/PureJSExpressionParser.ts';
 import type { ExpressionParser } from '../vendor/xpath/static/grammar/ExpressionParser.ts';
-
-/**
- * Default function collection for Slice 2: XPath 1.0 core only.
- * Slice 3 will expand this to [fn, javarosa, xforms].
- */
-const defaultFunctions = new FunctionLibraryCollection([fn]);
+import { defaultFunctions } from '../functions/index.ts';
 
 /**
  * Singleton parser instance — shared across all evaluator instances.
@@ -40,8 +32,14 @@ const sharedParser = new PureJSExpressionParser() as unknown as ExpressionParser
  * Usage:
  *   const result = xmldomEvaluator.evaluate(expr, contextNode, null, XPATH_EVALUATION_RESULT.ANY_TYPE);
  */
+/**
+ * Use UTC so date arithmetic (date(0) → "1970-01-01", date(1) → "1970-01-02")
+ * is deterministic and matches JavaRosa oracle expectations. JavaRosa uses UTC
+ * internally for epoch-based date conversions.
+ */
 export const xmldomEvaluator = new Evaluator<XmldomNode>({
 	domAdapter: xmldomXPathAdapter,
 	parser: sharedParser,
 	functions: defaultFunctions,
+	timeZoneId: 'UTC',
 });
