@@ -164,6 +164,7 @@ describe('FormDefinition and walkControls', () => {
       mainInstance: { root: { name: 'data', multiplicity: 0, value: null, children: [], attributes: new Map(), dataType: 'string', parent: null }, name: null },
       bindings: new Map(),
       body: [q1, group],
+      dag: null,
     };
   }
 

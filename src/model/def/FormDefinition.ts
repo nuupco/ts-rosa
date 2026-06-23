@@ -1,6 +1,7 @@
 import type { InstanceTree } from '../instance/InstanceTree';
 import type { DataBinding } from './DataBinding';
 import type { FormElement } from './FormElement';
+import type { TriggerableDag } from '../../eval/TriggerableDag';
 
 /**
  * FormDefinition — pure definition record for a parsed XForms form.
@@ -13,6 +14,8 @@ export type FormDefinition = {
   readonly mainInstance: InstanceTree;
   readonly bindings: ReadonlyMap<string, DataBinding>; // key = nodeset
   readonly body: readonly FormElement[];               // control tree (input/select/group/repeat)
+  /** Topologically sorted reactive DAG (built from compiled bindings in Slice 3.3). */
+  readonly dag: TriggerableDag | null;
 };
 
 /**

@@ -18,6 +18,11 @@ import { INDEX_TEMPLATE } from '../model/instance/multiplicity.ts';
 import { cast } from '../model/data/codecs.ts';
 import { getXmlParser } from '../platform/XmlParser.ts';
 import { bindProcessor } from './bindProcessor.ts';
+import { bindProcessor2 } from './bindProcessor2.ts';
+import { finalizeDag, addTriggerable } from '../eval/TriggerableDag.ts';
+import { makeRecalculate, makeCondition, type Triggerable } from '../eval/Triggerable.ts';
+import { genericize, refToString } from '../model/instance/TreeReference.ts';
+import type { TriggerableDag } from '../eval/TriggerableDag.ts';
 import { bodyHandlers } from './handlers.ts';
 import { childElementsByLocalName, firstByLocalName, directTextContent, textContent } from './domHelpers.ts';
 
@@ -179,6 +184,70 @@ function findByLocalNameDeep(el: Element, localName: string): Element | null {
 }
 
 // ---------------------------------------------------------------------------
+// Step 2b: Build reactive DAG from bindProcessor2 compiled bindings
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the TriggerableDag from compiled bindings.
+ *
+ * 1. Runs bindProcessor2 to get CompiledBindings per nodeset.
+ * 2. For each non-constraint CompiledBinding, creates a Triggerable and adds
+ *    it via addTriggerable (dedup via context intersection).
+ * 3. Calls finalizeDag (Kahn topo sort + cycle detection).
+ *
+ * Throws /Cycle detected/i if a cycle is found — this propagates through
+ * Scenario.init() → parseForm() → parseDocument() → here.
+ *
+ * Constraint bindings are explicitly excluded from allTriggerables (they are
+ * validation-only, not cascade sources). A constraint self-ref does NOT create
+ * a cycle edge by this design.
+ */
+function buildReactiveDag(
+  bindEls: Element[],
+  tree: InstanceTree,
+): TriggerableDag {
+  const allTriggerables = new Set<Triggerable>();
+  const triggerablesPerTrigger = new Map<string, Set<Triggerable>>();
+
+  const processedBindings = bindProcessor2(bindEls);
+
+  for (const processed of processedBindings.values()) {
+    for (const cb of processed.compiledBindings) {
+      // Constraints are NOT cascade sources — exclude from DAG
+      if (cb.kind === 'condition' && cb.action === 'constraint') {
+        continue;
+      }
+
+      let triggerable: Triggerable;
+      if (cb.kind === 'recalculate') {
+        triggerable = makeRecalculate(
+          cb.expr,
+          cb.targets,
+          cb.triggers,
+          cb.contextRef,
+          cb.originalContextRef,
+        );
+      } else {
+        // cb.action is ConditionKind here (not 'constraint')
+        triggerable = makeCondition(
+          cb.expr,
+          cb.targets,
+          cb.triggers,
+          cb.contextRef,
+          cb.originalContextRef,
+          cb.action as import('../eval/Triggerable.ts').ConditionKind,
+        );
+      }
+
+      addTriggerable(triggerable, allTriggerables, triggerablesPerTrigger);
+    }
+  }
+
+  // finalizeDag throws on cycle detection (Slice 3.3 requirement)
+  return finalizeDag(allTriggerables, triggerablesPerTrigger, tree);
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -189,7 +258,7 @@ function findByLocalNameDeep(el: Element, localName: string): Element | null {
 export function parseDocument(doc: Document): FormDefinition {
   const root = doc.documentElement;
   if (!root) {
-    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [] };
+    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [], dag: null };
   }
 
   // Find model (under h:head/head)
@@ -208,6 +277,10 @@ export function parseDocument(doc: Document): FormDefinition {
     : [];
   const bindings = bindProcessor(bindEls);
 
+  // Step 2b: bindProcessor2 — compile expressions + extract triggers (Phase 3)
+  // Then finalizeDag — throws on cycle detection (Slice 3.3)
+  const dag = buildReactiveDag(bindEls, mainInstance);
+
   // Step 3: Find body (h:body or body)
   const bodyEl = findByLocalNameDeep(root, 'body');
   const body: readonly FormElement[] = bodyEl ? buildBody(bodyEl, bindings) : [];
@@ -218,7 +291,7 @@ export function parseDocument(doc: Document): FormDefinition {
   // Title
   const title = extractTitle(doc);
 
-  return { title, mainInstance, bindings, body };
+  return { title, mainInstance, bindings, body, dag };
 }
 
 /**
