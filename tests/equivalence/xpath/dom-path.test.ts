@@ -16,23 +16,29 @@
 import { describe, it, expect } from "vitest";
 import { DOMParser } from "@xmldom/xmldom";
 import { evaluateXPath, type EvaluationContext } from "../../../src/xpath/index.ts";
+import type { XmldomNode } from "../../../src/xpath/adapter/XmldomXPathAdapter.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function parseXml(xml: string): Document {
-  return new DOMParser().parseFromString(xml, "text/xml");
+function parseXml(xml: string): XmldomNode {
+  return new DOMParser().parseFromString(xml, "text/xml") as unknown as XmldomNode;
+}
+
+/** Get documentElement of a parsed doc. */
+function docEl(doc: XmldomNode): XmldomNode {
+  return (doc as unknown as { documentElement: XmldomNode }).documentElement;
 }
 
 /**
- * Build an EvaluationContext with the document root as both instance and
- * contextNode, unless a specific contextNode is provided.
+ * Build an EvaluationContext with the document as instance.
+ * contextNode defaults to the document itself.
  */
-function ctx(doc: Document, contextNode?: Node): EvaluationContext {
+function ctx(doc: XmldomNode, contextNode?: XmldomNode): EvaluationContext {
   return {
-    instance: doc as unknown as import("@xmldom/xmldom").Node,
-    contextNode: (contextNode ?? doc) as unknown as import("@xmldom/xmldom").Node,
+    instance: doc,
+    contextNode: contextNode ?? doc,
   };
 }
 
@@ -54,7 +60,7 @@ describe("XPath path — absolute path selects nodes", () => {
   it("/root/a returns nodeset of 1 node", () => {
     const result = evaluateXPath("/root/a", ctx(doc));
     expect(Array.isArray(result)).toBe(true);
-    expect((result as Node[]).length).toBe(1);
+    expect((result as readonly XmldomNode[]).length).toBe(1);
   });
 
   it("string(/root/a) → 'hello'", () => {
@@ -71,7 +77,7 @@ describe("XPath path — absolute path selects nodes", () => {
 // ---------------------------------------------------------------------------
 describe("XPath path — count() over child axis", () => {
   const doc = parseXml("<group><item>a</item><item>b</item><item>c</item></group>");
-  const root = doc.documentElement!;
+  const root = docEl(doc);
 
   it("count(item) from root context → 3", () => {
     expect(evaluateXPath("count(item)", ctx(doc, root))).toBe(3);
@@ -87,12 +93,12 @@ describe("XPath path — count() over child axis", () => {
 // ---------------------------------------------------------------------------
 describe("XPath path — relative path from context element", () => {
   const doc = parseXml("<data><meta><deviceid>abc</deviceid></meta></data>");
-  const dataEl = doc.documentElement!;
+  const dataEl = docEl(doc);
 
   it("meta/deviceid from data context → nodeset of 1", () => {
     const result = evaluateXPath("meta/deviceid", ctx(doc, dataEl));
     expect(Array.isArray(result)).toBe(true);
-    expect((result as Node[]).length).toBe(1);
+    expect((result as readonly XmldomNode[]).length).toBe(1);
   });
 
   it("string(meta/deviceid) from data context → 'abc'", () => {
@@ -105,12 +111,12 @@ describe("XPath path — relative path from context element", () => {
 // ---------------------------------------------------------------------------
 describe("XPath path — predicate with position()", () => {
   const doc = parseXml("<list><x>one</x><x>two</x><x>three</x></list>");
-  const listEl = doc.documentElement!;
+  const listEl = docEl(doc);
 
   it("x[1] returns first element", () => {
     const result = evaluateXPath("x[1]", ctx(doc, listEl));
     expect(Array.isArray(result)).toBe(true);
-    expect((result as Node[]).length).toBe(1);
+    expect((result as readonly XmldomNode[]).length).toBe(1);
   });
 
   it("string(x[2]) → 'two'", () => {
@@ -131,7 +137,7 @@ describe("XPath path — predicate with position()", () => {
 // ---------------------------------------------------------------------------
 describe("XPath path — last()", () => {
   const doc = parseXml("<root><n>1</n><n>2</n><n>3</n></root>");
-  const rootEl = doc.documentElement!;
+  const rootEl = docEl(doc);
 
   it("count(n[last()]) → 1", () => {
     expect(evaluateXPath("count(n[last()])", ctx(doc, rootEl))).toBe(1);
@@ -147,7 +153,7 @@ describe("XPath path — last()", () => {
 // ---------------------------------------------------------------------------
 describe("XPath path — name() / local-name()", () => {
   const doc = parseXml("<root><foo/></root>");
-  const rootEl = doc.documentElement!;
+  const rootEl = docEl(doc);
 
   it("name(/root) → 'root'", () => {
     expect(evaluateXPath("name(/root)", ctx(doc))).toBe("root");
@@ -169,7 +175,7 @@ describe("XPath path — predicate with value comparison", () => {
   const doc = parseXml(
     "<data><field id='a'>yes</field><field id='b'>no</field></data>"
   );
-  const dataEl = doc.documentElement!;
+  const dataEl = docEl(doc);
 
   it("count(field[@id='a']) → 1", () => {
     expect(evaluateXPath("count(field[@id='a'])", ctx(doc, dataEl))).toBe(1);
@@ -185,7 +191,7 @@ describe("XPath path — predicate with value comparison", () => {
 // ---------------------------------------------------------------------------
 describe("XPath path — wildcard child axis", () => {
   const doc = parseXml("<root><a/><b/><c/></root>");
-  const rootEl = doc.documentElement!;
+  const rootEl = docEl(doc);
 
   it("count(*) from root → 3", () => {
     expect(evaluateXPath("count(*)", ctx(doc, rootEl))).toBe(3);
