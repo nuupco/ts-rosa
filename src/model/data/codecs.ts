@@ -81,6 +81,43 @@ function formatGeoPoints(pts: readonly GeoPoint[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Defensive Date helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Create an AnswerValue record for a Date-valued kind (date, time, dateTime).
+ *
+ * The `value` property is backed by a getter that returns a fresh Date copy on
+ * every access, mirroring JavaRosa's defensive copy strategy (DateData /
+ * TimeData / DateTimeData each store the Date by value, not by reference).
+ *
+ * This means:
+ *   - Mutating the Date passed to this function after creation has no effect.
+ *   - Mutating the Date returned by `.value` has no effect on subsequent reads.
+ *
+ * The TypeScript structural type is identical to a plain `{ kind, value, displayText }`
+ * record — callers see no difference.
+ */
+function makeDateRecord<K extends "date" | "time" | "dateTime">(
+  kind: K,
+  internal: Date,
+  displayText: string
+): Extract<AnswerValue, { kind: K }> {
+  // Clone the incoming Date so external mutations after construction are isolated.
+  const stored = new Date(internal.getTime());
+  const record = Object.create(null) as Record<string, unknown>;
+  record.kind = kind;
+  record.displayText = displayText;
+  // Getter returns a fresh copy on each access — isolates internal from callers.
+  Object.defineProperty(record, "value", {
+    get(): Date { return new Date(stored.getTime()); },
+    enumerable: true,
+    configurable: false,
+  });
+  return record as unknown as Extract<AnswerValue, { kind: K }>;
+}
+
+// ---------------------------------------------------------------------------
 // cast: raw string → typed AnswerValue (or null for empty / no-answer)
 // ---------------------------------------------------------------------------
 
@@ -105,8 +142,12 @@ export function cast(type: DataType, raw: string): AnswerValue | null {
 
     case "boolean": {
       if (raw === "") return null;
-      const b = raw === "true" || raw === "1";
-      return { kind: "boolean", value: b, displayText: b ? "true" : "false" };
+      // JavaRosa BooleanData.cast(): "1" → true, "0" → false (only these two values).
+      // Reject anything else (JavaRosa throws IllegalArgumentException).
+      if (raw !== "1" && raw !== "0") return null;
+      const b = raw === "1";
+      // JavaRosa BooleanData.getDisplayText(): capital "True" / "False"
+      return { kind: "boolean", value: b, displayText: b ? "True" : "False" };
     }
 
     case "date": {
@@ -114,7 +155,7 @@ export function cast(type: DataType, raw: string): AnswerValue | null {
       // Parse ISO YYYY-MM-DD at UTC midnight
       const d = new Date(`${raw}T00:00:00.000Z`);
       if (isNaN(d.getTime())) return null;
-      return { kind: "date", value: d, displayText: formatUtcDate(d) };
+      return makeDateRecord("date", d, formatUtcDate(d));
     }
 
     case "time": {
@@ -125,14 +166,14 @@ export function cast(type: DataType, raw: string): AnswerValue | null {
       // Appending to 1970-01-01T... makes the Date constructor handle offsets correctly.
       const d = new Date(`1970-01-01T${raw}`);
       if (isNaN(d.getTime())) return null;
-      return { kind: "time", value: d, displayText: formatUtcTime(d) };
+      return makeDateRecord("time", d, formatUtcTime(d));
     }
 
     case "dateTime": {
       if (raw === "") return null;
       const d = new Date(raw);
       if (isNaN(d.getTime())) return null;
-      return { kind: "dateTime", value: d, displayText: d.toISOString() };
+      return makeDateRecord("dateTime", d, d.toISOString());
     }
 
     case "selectOne": {
@@ -205,7 +246,8 @@ export function uncast(v: AnswerValue): string {
     case "string":      return v.value;
     case "int":         return String(Math.trunc(v.value));
     case "decimal":     return formatDecimal(v.value as number);
-    case "boolean":     return v.value ? "true" : "false";
+    // JavaRosa BooleanData.uncast() → "1" (true) | "0" (false)
+    case "boolean":     return v.value ? "1" : "0";
     case "date":        return formatUtcDate(v.value);
     case "time":        return formatUtcTime(v.value);
     case "dateTime":    return v.value.toISOString();
@@ -238,11 +280,12 @@ export function decimalValue(n: number): AnswerValue {
 }
 
 export function booleanValue(b: boolean): AnswerValue {
-  return { kind: "boolean", value: b, displayText: b ? "true" : "false" };
+  // displayText matches JavaRosa BooleanData.getDisplayText(): "True" | "False"
+  return { kind: "boolean", value: b, displayText: b ? "True" : "False" };
 }
 
 export function dateValue(d: Date): AnswerValue {
-  return { kind: "date", value: d, displayText: formatUtcDate(d) };
+  return makeDateRecord("date", d, formatUtcDate(d));
 }
 
 export function selectOneValue(token: string): AnswerValue {

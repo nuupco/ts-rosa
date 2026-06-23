@@ -27,15 +27,20 @@ describe("codecs: cast", () => {
     expect((v!.value as number)).toBeCloseTo(3.14);
   });
 
-  it("cast('boolean', 'true') → value true", () => {
-    const v = cast("boolean", "true");
+  // JavaRosa BooleanData.cast(): "1" → true, "0" → false (NOT "true"/"false")
+  it("cast('boolean', '1') → value true", () => {
+    const v = cast("boolean", "1");
     expect(v!.kind).toBe("boolean");
     expect(v!.value).toBe(true);
   });
 
-  it("cast('boolean', 'false') → value false", () => {
-    const v = cast("boolean", "false");
+  it("cast('boolean', '0') → value false", () => {
+    const v = cast("boolean", "0");
     expect(v!.value).toBe(false);
+  });
+
+  it("cast('boolean', 'true') → null (JavaRosa only accepts '1'/'0')", () => {
+    expect(cast("boolean", "true")).toBeNull();
   });
 
   it("cast('date', '2024-03-15') → Date UTC midnight", () => {
@@ -108,12 +113,13 @@ describe("codecs: uncast", () => {
     expect(uncast(cast("decimal", "3.14")!)).toBe("3.14");
   });
 
-  it("uncast(cast('boolean', 'true')) round-trip", () => {
-    expect(uncast(cast("boolean", "true")!)).toBe("true");
+  // JavaRosa BooleanData.uncast() → "1" | "0"
+  it("uncast(cast('boolean', '1')) round-trip → \"1\"", () => {
+    expect(uncast(cast("boolean", "1")!)).toBe("1");
   });
 
-  it("uncast(cast('boolean', 'false')) round-trip", () => {
-    expect(uncast(cast("boolean", "false")!)).toBe("false");
+  it("uncast(cast('boolean', '0')) round-trip → \"0\"", () => {
+    expect(uncast(cast("boolean", "0")!)).toBe("0");
   });
 
   it("uncast(cast('date', '2024-03-15')) round-trip", () => {
@@ -163,14 +169,16 @@ describe("codecs: convenience constructors", () => {
     const v = booleanValue(true);
     expect(v.kind).toBe("boolean");
     expect(v.value).toBe(true);
-    expect(v.displayText).toBe("true");
+    // JavaRosa BooleanData.getDisplayText() → "True" (capital T)
+    expect(v.displayText).toBe("True");
   });
 
   it("dateValue(date)", () => {
     const d = new Date("2024-01-01T00:00:00Z");
     const v = dateValue(d);
     expect(v.kind).toBe("date");
-    expect(v.value).toBe(d);
+    // Defensive copy: value has same time but is a different reference
+    expect(v.value).toStrictEqual(d);
     expect(v.displayText).toBe("2024-01-01");
   });
 
