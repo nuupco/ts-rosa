@@ -260,14 +260,14 @@ describe('getAttributes', () => {
   it('returns non-xmlns attributes', () => {
     const attrs = xmldomXPathAdapter.getAttributes(aEl as any);
     expect(attrs).toHaveLength(1);
-    expect((attrs[0] as Attr).name).toBe('id');
+    expect((attrs[0] as unknown as Attr).name).toBe('id');
   });
 
   it('excludes xmlns declarations from attributes', () => {
     const attrs = xmldomXPathAdapter.getAttributes(nsRootEl as any);
     // xmlns:foo should not be in attributes
     for (const attr of attrs) {
-      expect((attr as Attr).name).not.toMatch(/^xmlns/);
+      expect((attr as unknown as Attr).name).not.toMatch(/^xmlns/);
     }
   });
 
