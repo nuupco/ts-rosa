@@ -28,8 +28,6 @@ import {
 } from "../../src/model/instance/InstanceTree.ts";
 import { parseForm } from "../../src/parse/XFormParser.ts";
 import { createFormSession, type FormSession } from "../../src/session/FormSession.ts";
-import { walkControls } from "../../src/model/def/FormDefinition.ts";
-import type { FormElement } from "../../src/model/def/FormElement.ts";
 import { AnswerResult } from "../../src/session/AnswerResult.ts";
 import type { FormIndex } from "../../src/session/FormIndex.ts";
 
@@ -109,12 +107,6 @@ export class Scenario {
   private def!: FormDefinition;
   // FormSession with evaluator (set by init — wired in Slice 3.4)
   private session!: FormSession;
-  // Flat list of question elements in traversal order (for navigation)
-  private questions: Array<FormElement & { kind: 'question' }> = [];
-  // Current question index (-1 = before first question)
-  private currentQuestionIndex = -1;
-  // Current question override by xpath (from next(xPath)) — takes priority over index
-  private currentRef: string | null = null;
 
   // -------------------------------------------------------------------------
   // Static factory methods (mirrors JavaRosa static init / createFormDef)
@@ -140,8 +132,6 @@ export class Scenario {
     const s = new Scenario();
     s.def = parseForm(xml);
     s.session = createFormSession(s.def);
-    // Build flat question list for navigation
-    walkControls(s.def, (q) => s.questions.push(q));
     return s;
   }
 
@@ -174,8 +164,8 @@ export class Scenario {
     };
   }
 
-  indexOf(xPath: string): FormIndexStub {
-    return { __type: 'FormIndex', nodeset: xPath } as unknown as FormIndexStub;
+  indexOf(xPath: string): FormIndex {
+    return this.session.navigator.indexOf(xPath);
   }
 
   getCurrentIndex(): FormIndex {
@@ -198,7 +188,7 @@ export class Scenario {
 
     return {
       __type: 'ValidateOutcome',
-      failedPrompt: { __type: 'FormIndex', nodeset: outcome.failedNodeset } as unknown as FormIndexStub,
+      failedPrompt: this.session.navigator.indexOf(outcome.failedNodeset) as unknown as FormIndexStub,
       outcome: outcome.status as unknown as number,
     };
   }
@@ -289,26 +279,13 @@ export class Scenario {
   }
 
   private answerCurrentQuestion(value: string | number | boolean): AnswerResultValue {
-    // If currentRef is set (by next(xPath)), use that ref directly
-    if (this.currentRef !== null) {
-      const ref = parseAbsoluteRef(this.currentRef);
-      const node = resolveReference(this.def.mainInstance, ref);
-      if (!node) throw new Error(`node not found: ${this.currentRef}`);
-      const coerced = cast(node.dataType, String(value)) ?? stringValue(String(value));
-      if (this.def.dag !== null) {
-        return this.session.evaluator.answerQuestion(ref, coerced) as unknown as AnswerResultValue;
-      } else {
-        node.value = coerced;
-        return AnswerResult.OK as unknown as AnswerResultValue;
-      }
+    // Use navigator.refAtIndex() to get the current question's ref
+    const ref = this.session.navigator.refAtIndex();
+    if (ref === null) {
+      throw new Error('No current question to answer (cursor is not at a question)');
     }
-    const q = this.questions[this.currentQuestionIndex];
-    if (q === undefined) {
-      throw new Error(`No current question to answer (currentQuestionIndex=${this.currentQuestionIndex})`);
-    }
-    const ref = q.ref;
     const node = resolveReference(this.def.mainInstance, ref);
-    if (!node) throw new Error(`node not found: ${q.ref}`);
+    if (!node) throw new Error(`node not found at current index`);
     const coerced = cast(node.dataType, String(value)) ?? stringValue(String(value));
     if (this.def.dag !== null) {
       return this.session.evaluator.answerQuestion(ref, coerced) as unknown as AnswerResultValue;
@@ -361,32 +338,34 @@ export class Scenario {
 
   /**
    * Mirrors JavaRosa next() and next(int amount).
-   * Overload next(xPath: string) mirrors web-forms Scenario.next(ref) which
-   * navigates to a specific node by reference.
+   * Overload next(xPath: string) navigates directly to the named ref via
+   * navigator.jumpToIndex(navigator.indexOf(xPath)).
+   *
+   * Returns the FormEntryEvent code (integer) matching JavaRosa EVENT_* constants.
    */
-  next(_amountOrRef?: number | string): number {
-    // Basic linear navigation — advance current question by 1
-    // (Phase 4 will implement full FormIndex navigation)
-    if (_amountOrRef === undefined || typeof _amountOrRef === 'number') {
-      const amount = typeof _amountOrRef === 'number' ? _amountOrRef : 1;
-      this.currentRef = null;
-      this.currentQuestionIndex = Math.min(
-        this.currentQuestionIndex + amount,
-        this.questions.length - 1,
-      );
-      return this.currentQuestionIndex;
+  next(amountOrRef?: number | string): number {
+    if (typeof amountOrRef === 'string') {
+      // next(xPath): jump to the specific ref
+      const targetIndex = this.session.navigator.indexOf(amountOrRef);
+      const event = this.session.navigator.jumpToIndex(targetIndex);
+      return event.code;
     }
-    // next(xPath): set currentRef to the given xpath so the next answer() uses it
-    this.currentRef = _amountOrRef;
-    return -1;
+    // next() or next(amount): step forward N times
+    const amount = typeof amountOrRef === 'number' ? amountOrRef : 1;
+    let event = this.session.navigator.getEvent();
+    for (let step = 0; step < amount; step++) {
+      event = this.session.navigator.stepToNextEvent();
+    }
+    return event.code;
   }
 
   prev(): number {
-    return notImplemented("prev");
+    const event = this.session.navigator.stepToPreviousEvent();
+    return event.code;
   }
 
   jumpToBeginningOfForm(): void {
-    return notImplemented("jumpToBeginningOfForm");
+    this.session.navigator.jumpToBeginningOfForm();
   }
 
   // -------------------------------------------------------------------------

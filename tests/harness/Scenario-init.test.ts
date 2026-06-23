@@ -133,9 +133,10 @@ describe('unimplemented methods still throw', () => {
     expect(typeof s.next()).toBe('number');
   });
 
-  it('prev() still throws not implemented', () => {
+  it('prev() is now implemented (Slice 4.2 — navigator delegation)', () => {
     const s = Scenario.init(formWithAlice);
-    expect(() => s.prev()).toThrow(/not implemented/i);
+    // prev() from BOF returns BOF event code (0)
+    expect(typeof s.prev()).toBe('number');
   });
 
   it('createNewRepeat() still throws not implemented', () => {

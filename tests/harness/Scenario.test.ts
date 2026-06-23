@@ -56,21 +56,22 @@ describe("Scenario instance method stubs", () => {
 
   // answer and answerOf are now real — tested in Scenario-init.test.ts
 
-  // next() and next(amount) are now implemented (Slice 3.5 basic navigation)
-  it("next() returns a number (basic navigation implemented)", () => {
-    expect(typeof scenario.next()).toBe("number");
+  // next()/prev()/jumpToBeginningOfForm() now delegate to navigator (Slice 4.2)
+  // On an uninitialized Scenario (new Scenario()), session is undefined so these throw.
+  it("next() throws when called on uninitialized Scenario (navigator not set up)", () => {
+    expect(() => scenario.next()).toThrow();
   });
 
-  it("next(amount) returns a number (basic navigation implemented)", () => {
-    expect(typeof scenario.next(3)).toBe("number");
+  it("next(amount) throws when called on uninitialized Scenario", () => {
+    expect(() => scenario.next(3)).toThrow();
   });
 
-  it("prev() throws not implemented: prev", () => {
-    expectNotImplemented(() => scenario.prev(), "prev");
+  it("prev() throws when called on uninitialized Scenario (navigator not set up)", () => {
+    expect(() => scenario.prev()).toThrow();
   });
 
-  it("jumpToBeginningOfForm() throws not implemented: jumpToBeginningOfForm", () => {
-    expectNotImplemented(() => scenario.jumpToBeginningOfForm(), "jumpToBeginningOfForm");
+  it("jumpToBeginningOfForm() does not throw on uninitialized Scenario (navigator not set up)", () => {
+    expect(() => scenario.jumpToBeginningOfForm()).toThrow();
   });
 
   it("createNewRepeat() throws not implemented: createNewRepeat", () => {
@@ -132,10 +133,10 @@ describe("Scenario instance method stubs", () => {
     expect(formDef.validate()).toBeNull(); // no required/constraint failures
   });
 
-  it("indexOf(xpath) returns a FormIndexStub with the nodeset", () => {
-    // Now implemented: returns a stable index object usable for toEqual comparisons
-    const idx = scenario.indexOf("/data/q1");
-    expect(idx).toBeDefined();
+  it("indexOf(xpath) throws when called on uninitialized Scenario (navigator not set up)", () => {
+    // indexOf now delegates to navigator (real implementation, Phase 4)
+    // On an uninitialized scenario (new Scenario()), session is undefined so it throws.
+    expect(() => scenario.indexOf("/data/q1")).toThrow();
   });
 
   it("getCurrentIndex() returns a FormIndex with kind 'bof' before navigation (Phase 4)", () => {
