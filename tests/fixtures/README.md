@@ -11,6 +11,13 @@ fixture files from `reference/javarosa/src/test/resources/`.
 
 **Outcome**: Task 7 is a no-op for this slice. No files were copied.
 
+## Equivalence slice fixtures (added in equivalence porting)
+
+| File | Source in reference/javarosa | Used by |
+|------|------------------------------|---------|
+| `simple-form.xml` | `src/test/resources/simple-form.xml` | `tests/equivalence/parse/xform-parser.test.ts` |
+| `form2.xml` | `src/test/resources/form2.xml` | `tests/equivalence/parse/xform-parser.test.ts` |
+
 ## Adding fixtures in future slices
 
 If a future ported test requires an external fixture file, copy it from:

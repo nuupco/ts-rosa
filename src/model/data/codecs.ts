@@ -11,6 +11,21 @@ import type { AnswerValue, GeoPoint } from "./AnswerValue.ts";
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Format a number the way Java's Double.toString() / String.valueOf(double) does.
+ * For whole numbers, always includes a decimal point: 1.0, 0.0, -2.0.
+ * For fractional numbers, preserves the fraction: 3.14, -2.5.
+ * This matches JavaRosa DecimalData.getDisplayText() and uncast() output.
+ */
+function formatDecimal(n: number): string {
+  const s = String(n);
+  // If JS serialized it as an integer (no "." and no "e"), append ".0"
+  if (!s.includes(".") && !s.includes("e") && !s.includes("E") && s !== "Infinity" && s !== "-Infinity" && s !== "NaN") {
+    return s + ".0";
+  }
+  return s;
+}
+
 /** Format a Date as UTC "YYYY-MM-DD" */
 function formatUtcDate(d: Date): string {
   const y = d.getUTCFullYear();
@@ -81,7 +96,7 @@ export function cast(type: DataType, raw: string): AnswerValue | null {
       if (raw === "") return null;
       const n = Number(raw);
       if (isNaN(n)) return null;
-      return { kind: "decimal", value: n, displayText: String(n) };
+      return { kind: "decimal", value: n, displayText: formatDecimal(n) };
     }
 
     case "boolean": {
@@ -126,15 +141,24 @@ export function cast(type: DataType, raw: string): AnswerValue | null {
     }
 
     case "geopoint": {
-      // "lat lon alt acc" space-separated
+      // "lat lon [alt [acc]]" space-separated — minimum 2 components (JR: REQUIRED_ARRAY_SIZE = 2)
       const parts = raw.trim().split(/\s+/);
-      if (parts.length < 4) {
-        // Minimal graceful fallback — store as unsupported
-        return { kind: "unsupported", value: raw, displayText: raw };
-      }
-      const [lat, lon, alt, acc] = parts.map(Number);
-      const gp: GeoPoint = { lat: lat ?? 0, lon: lon ?? 0, alt: alt ?? 0, acc: acc ?? 0 };
-      return { kind: "geopoint", value: gp, displayText: raw };
+      if (parts.length < 2) return null;
+      const nums = parts.map(Number);
+      if (nums.some(isNaN)) return null;
+      const lat = nums[0] ?? 0;
+      const lon = nums[1] ?? 0;
+      const alt = nums[2] ?? 0;
+      const acc = nums[3] ?? 0;
+      const gp: GeoPoint = { lat, lon, alt, acc };
+      // JR: getDisplayText() returns "" when toBoolean() is false (all zero).
+      // toBoolean() = (gp[0] != 0.0 || gp[1] != 0.0 || gp[2] != 0.0 || gp[3] != 0.0)
+      // displayText uses Java double formatting and only len components (parts.length, max 4)
+      const len = Math.min(parts.length, 4);
+      const allZero = [lat, lon, alt, acc].slice(0, len).every(v => v === 0);
+      const displayParts = [lat, lon, alt, acc].slice(0, len);
+      const displayText = allZero ? "" : displayParts.map(formatDecimal).join(" ");
+      return { kind: "geopoint", value: gp, displayText };
     }
 
     case "binary":
@@ -172,7 +196,7 @@ export function uncast(v: AnswerValue): string {
   switch (v.kind) {
     case "string":      return v.value;
     case "int":         return String(Math.trunc(v.value));
-    case "decimal":     return String(v.value);
+    case "decimal":     return formatDecimal(v.value as number);
     case "boolean":     return v.value ? "true" : "false";
     case "date":        return formatUtcDate(v.value);
     case "time":        return formatUtcTime(v.value);
@@ -202,7 +226,7 @@ export function intValue(n: number): AnswerValue {
 }
 
 export function decimalValue(n: number): AnswerValue {
-  return { kind: "decimal", value: n, displayText: String(n) };
+  return { kind: "decimal", value: n, displayText: formatDecimal(n) };
 }
 
 export function booleanValue(b: boolean): AnswerValue {
