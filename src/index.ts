@@ -1,5 +1,8 @@
 // @nuup/ts-rosa — public entry point.
 // Behavior-compatible TypeScript reimplementation of JavaRosa (XForms engine).
-// Surface is intentionally empty until the first slice lands.
 
-export {};
+// Phase 1: Core data model + minimal parser
+export * from './model/data/index.ts';
+export * from './model/instance/index.ts';
+export * from './model/def/index.ts';
+export * from './parse/index.ts';

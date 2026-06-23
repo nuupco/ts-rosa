@@ -16,6 +16,12 @@
  */
 
 import type { XFormsElement } from "./XFormsElement.ts";
+import type { AnswerValue } from "../../src/model/data/AnswerValue.ts";
+import type { FormDefinition } from "../../src/model/def/FormDefinition.ts";
+import { cast, stringValue } from "../../src/model/data/codecs.ts";
+import { parseAbsoluteRef } from "../../src/model/instance/TreeReference.ts";
+import { resolveReference } from "../../src/model/instance/InstanceTree.ts";
+import { parseForm } from "../../src/parse/XFormParser.ts";
 
 // ---------------------------------------------------------------------------
 // Stub type placeholders for JavaRosa types not yet implemented
@@ -89,6 +95,9 @@ function notImplemented(methodName: string): never {
 // ---------------------------------------------------------------------------
 
 export class Scenario {
+  // Internal form definition (set by init)
+  private def!: FormDefinition;
+
   // -------------------------------------------------------------------------
   // Static factory methods (mirrors JavaRosa static init / createFormDef)
   // -------------------------------------------------------------------------
@@ -97,15 +106,22 @@ export class Scenario {
    * Initializes a Scenario from an XFormsElement DSL form,
    * a filename string, or a FormDef.
    *
-   * Overload 1: init(form: XFormsElement) — mirrors JavaRosa Scenario.init(XFormsElement)
-   * Overload 2: init(filename: string)    — mirrors JavaRosa Scenario.init(String)
+   * Overload 1: init(form: XFormsElement) — real implementation (Phase 1)
+   * Overload 2: init(filename: string)    — real for inline XML; file loading → notImplemented
    * Overload 3: init(formDef: FormDefStub)— mirrors JavaRosa Scenario.init(FormDef)
    */
   static init(form: XFormsElement): Scenario;
   static init(filename: string): Scenario;
   static init(formDef: FormDefStub): Scenario;
-  static init(_arg: XFormsElement | string | FormDefStub): Scenario {
-    return notImplemented("init");
+  static init(arg: XFormsElement | string | FormDefStub): Scenario {
+    // FormDefStub overload is not yet implemented
+    if (typeof arg !== 'string' && '__type' in arg && (arg as FormDefStub).__type === 'FormDef') {
+      return notImplemented("init");
+    }
+    const xml = typeof arg === 'string' ? arg : (arg as XFormsElement).asXml();
+    const s = new Scenario();
+    s.def = parseForm(xml);
+    return s;
   }
 
   /**
@@ -186,16 +202,30 @@ export class Scenario {
    *   answer(choice: SelectChoiceStub): AnswerResultValue
    *   answer(xPath: string, choice: SelectChoiceStub): AnswerResultValue
    */
-  answer(_xPathOrValue: string | number | boolean | SelectChoiceStub, _valueOrExtra?: string | number | boolean | SelectChoiceStub | string[]): AnswerResultValue {
-    return notImplemented("answer");
+  answer(xPathOrValue: string | number | boolean | SelectChoiceStub, valueOrExtra?: string | number | boolean | SelectChoiceStub | string[]): AnswerResultValue {
+    // Only handles answer(xpath: string, value: string|number|boolean) in Phase 1.
+    // All other overloads remain not implemented.
+    if (typeof xPathOrValue !== 'string' || valueOrExtra === undefined) {
+      return notImplemented("answer");
+    }
+    if (typeof valueOrExtra !== 'string' && typeof valueOrExtra !== 'number' && typeof valueOrExtra !== 'boolean') {
+      return notImplemented("answer");
+    }
+    const ref = parseAbsoluteRef(xPathOrValue);
+    const node = resolveReference(this.def.mainInstance, ref);
+    if (!node) throw new Error(`node not found: ${xPathOrValue}`);
+    node.value = cast(node.dataType, String(valueOrExtra)) ?? stringValue(String(valueOrExtra));
+    return 0; // AnswerResult.OK — no constraint/DAG eval in Phase 1
   }
 
   // -------------------------------------------------------------------------
   // Inspect the main instance
   // -------------------------------------------------------------------------
 
-  answerOf(_xPath: string): IAnswerDataStub | null {
-    return notImplemented("answerOf");
+  answerOf(xPath: string): AnswerValue | null {
+    const ref = parseAbsoluteRef(xPath);
+    const node = resolveReference(this.def.mainInstance, ref);
+    return node ? node.value : null;
   }
 
   countRepeatInstancesOf(_xPath: string): number {

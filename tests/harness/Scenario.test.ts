@@ -35,14 +35,8 @@ const minimalForm = html(
 // ---------------------------------------------------------------------------
 
 describe("Scenario.init (static factories)", () => {
-  it("init(XFormsElement) throws not implemented: init", () => {
-    expectNotImplemented(() => Scenario.init(minimalForm), "init");
-  });
-
-  it("init(string) throws not implemented: init", () => {
-    expectNotImplemented(() => Scenario.init("form.xml"), "init");
-  });
-
+  // init(XFormsElement), init(string), init(FormDef) are now real — tested in Scenario-init.test.ts.
+  // Only FormDef overload still throws (FormDef is a future stub).
   it("init(FormDef) throws not implemented: init", () => {
     expectNotImplemented(() => Scenario.init({ __type: "FormDef" } as unknown as import("./Scenario.ts").FormDefStub), "init");
   });
@@ -60,17 +54,7 @@ describe("Scenario instance method stubs", () => {
   // Use the non-throwing constructor path
   const scenario = new Scenario();
 
-  it("answer(string) throws not implemented: answer", () => {
-    expectNotImplemented(() => scenario.answer("hello"), "answer");
-  });
-
-  it("answer(xpath, value) throws not implemented: answer", () => {
-    expectNotImplemented(() => scenario.answer("/data/q1", "hello"), "answer");
-  });
-
-  it("answerOf(xpath) throws not implemented: answerOf", () => {
-    expectNotImplemented(() => scenario.answerOf("/data/q1"), "answerOf");
-  });
+  // answer and answerOf are now real — tested in Scenario-init.test.ts
 
   it("next() throws not implemented: next", () => {
     expectNotImplemented(() => scenario.next(), "next");
