@@ -88,8 +88,7 @@ function buildFormForDagCyclesCheck(
 // ---------------------------------------------------------------------------
 
 describe("TriggerableDag — DAG ordering", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: order_of_the_DAG_is_ensured
     "order of the DAG is ensured: cascaded calculates use updated upstream values",
     () => {

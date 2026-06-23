@@ -44,8 +44,7 @@ import "../../harness/matchers.ts";
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — DAG calculate cascade", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 calculate DAG is implemented
+  it(
     // Source: TriggerableDagTest.java#order_of_the_DAG_is_ensured
     // web-forms: calculate.test.ts "recomputes calculate expressions when their dependencies are updated"
     "cascaded calculates use upstream updated values in dependency order",
@@ -82,8 +81,7 @@ describe("Equivalence — DAG calculate cascade", () => {
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 calculate DAG is implemented
+  it(
     // Source: TriggerableDagTest.java (calculate with intermediate dependency)
     // web-forms: calculate.test.ts (same fixture)
     "calculate on a field that depends on another calculate is recomputed transitively",
