@@ -168,6 +168,17 @@ export class Scenario {
     return this.session.navigator.indexOf(xPath);
   }
 
+  /**
+   * Mirrors JavaRosa FormEntryModel.isIndexRelevant(FormIndex).
+   * Delegates to FormEvaluator.isEffectivelyRelevant for the ref at the given index.
+   * Returns false for BOF/EOF (no ref).
+   */
+  isIndexRelevant(idx: FormIndex): boolean {
+    const ref = this.session.navigator.refAtIndex(idx);
+    if (ref === null) return false;
+    return this.session.evaluator.isEffectivelyRelevant(ref);
+  }
+
   getCurrentIndex(): FormIndex {
     return this.session.navigator.getCurrentIndex();
   }

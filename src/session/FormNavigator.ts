@@ -227,26 +227,54 @@ export class FormNavigator {
   }
 
   // ---------------------------------------------------------------------------
-  // Stepping (Slice 4.2 base — no relevance skip; that lands in 4.3)
+  // Stepping with relevance skip (Slice 4.3)
   // ---------------------------------------------------------------------------
 
   /**
+   * Returns true when an AtFormIndex position is a stop that the user should
+   * see. Non-relevant positions are skipped.
+   *
+   * Delegates to FormEvaluator.isEffectivelyRelevant (which walks the full
+   * ancestor chain via NodeState), so a non-relevant group's descendants are
+   * automatically non-relevant without additional per-child checks (R4.3.5).
+   *
+   * For PROMPT_NEW_REPEAT positions, the repeat's own relevance is checked
+   * via the genericized ref (the concrete ref has multiplicity=0 but the
+   * relevance condition is stored under the generic key).
+   */
+  private isStopRelevant(idx: AtFormIndex): boolean {
+    return this.evaluator.isEffectivelyRelevant(idx.ref);
+  }
+
+  /**
    * @experimental
-   * Advance cursor by one raw step (no relevance filter yet — 4.3 adds the loop).
-   * Sets currentIndex and returns the event at the new position.
+   * Advance cursor, skipping non-relevant positions, until a relevant stop or
+   * EOF is reached. Sets currentIndex and returns the event at the new position.
+   *
+   * Mirrors JavaRosa FormEntryController.stepToNextEvent (LINEAR mode):
+   *   do { next = incrementIndex(next) } while next is at && not relevant
    */
   stepToNextEvent(): FormEntryEvent {
-    const next = this.incrementIndex(this.currentIndex);
+    let next = this.incrementIndex(this.currentIndex);
+    while (isAt(next) && !this.isStopRelevant(next)) {
+      next = this.incrementIndex(next);
+    }
     this.currentIndex = next;
     return this.eventAt(next);
   }
 
   /**
    * @experimental
-   * Retreat cursor by one raw step (no relevance filter yet).
+   * Retreat cursor, skipping non-relevant positions, until a relevant stop or
+   * BOF is reached. Sets currentIndex and returns the event at the new position.
+   *
+   * Mirrors the symmetric stepToPreviousEvent.
    */
   stepToPreviousEvent(): FormEntryEvent {
-    const prev = this.decrementIndex(this.currentIndex);
+    let prev = this.decrementIndex(this.currentIndex);
+    while (isAt(prev) && !this.isStopRelevant(prev)) {
+      prev = this.decrementIndex(prev);
+    }
     this.currentIndex = prev;
     return this.eventAt(prev);
   }
