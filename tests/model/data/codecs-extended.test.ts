@@ -46,7 +46,9 @@ describe("codecs — extended kinds", () => {
   // geoshape
   // -------------------------------------------------------------------------
   describe("geoshape", () => {
-    const raw = "0 0 0 0;1 1 0 0;0 1 0 0";
+    // Use canonical wire format: Java double format (formatDecimal) per component.
+    // JavaRosa GeoShapeData.getDisplayText() produces "0.0 0.0 0.0 0.0;1.0 1.0 0.0 0.0;..."
+    const raw = "0.0 0.0 0.0 0.0;1.0 1.0 0.0 0.0;0.0 1.0 0.0 0.0";
 
     it("cast('geoshape', raw) → kind:geoshape with 3 points", () => {
       const v = cast("geoshape", raw);
@@ -81,7 +83,8 @@ describe("codecs — extended kinds", () => {
   // geotrace
   // -------------------------------------------------------------------------
   describe("geotrace", () => {
-    const raw = "10 20 5 1;11 21 5 1";
+    // Use canonical wire format: Java double format per component.
+    const raw = "10.0 20.0 5.0 1.0;11.0 21.0 5.0 1.0";
 
     it("cast('geotrace', raw) → kind:geotrace with 2 points", () => {
       const v = cast("geotrace", raw);

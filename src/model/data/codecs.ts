@@ -34,12 +34,13 @@ function formatUtcDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Format a Date as UTC "HH:mm:ss" */
+/** Format a Date as UTC ISO 8601 time: "HH:mm:ss.sssZ" */
 function formatUtcTime(d: Date): string {
   const h = String(d.getUTCHours()).padStart(2, "0");
   const min = String(d.getUTCMinutes()).padStart(2, "0");
   const sec = String(d.getUTCSeconds()).padStart(2, "0");
-  return `${h}:${min}:${sec}`;
+  const ms = String(d.getUTCMilliseconds()).padStart(3, "0");
+  return `${h}:${min}:${sec}.${ms}Z`;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,9 +72,12 @@ function parseGeoPoints(raw: string): readonly GeoPoint[] | null {
 /**
  * Serialize a readonly GeoPoint array to JavaRosa wire format:
  * "lat lon alt acc;lat lon alt acc;..."
+ * Uses Java double toString format (formatDecimal) so integers appear as "1.0", etc.
  */
 function formatGeoPoints(pts: readonly GeoPoint[]): string {
-  return pts.map(p => `${p.lat} ${p.lon} ${p.alt} ${p.acc}`).join(";");
+  return pts.map(p =>
+    `${formatDecimal(p.lat)} ${formatDecimal(p.lon)} ${formatDecimal(p.alt)} ${formatDecimal(p.acc)}`
+  ).join(";");
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +119,10 @@ export function cast(type: DataType, raw: string): AnswerValue | null {
 
     case "time": {
       if (raw === "") return null;
-      // Represent time as a Date on epoch day 1970-01-01
+      // Anchor the time to the epoch date 1970-01-01.
+      // The raw string may include a timezone offset (e.g. "23:14:00.000+02:00")
+      // or end with "Z", or have no offset at all ("14:00").
+      // Appending to 1970-01-01T... makes the Date constructor handle offsets correctly.
       const d = new Date(`1970-01-01T${raw}`);
       if (isNaN(d.getTime())) return null;
       return { kind: "time", value: d, displayText: formatUtcTime(d) };
@@ -176,7 +183,8 @@ export function cast(type: DataType, raw: string): AnswerValue | null {
       if (raw === "") return null;
       const points = parseGeoPoints(raw);
       if (points === null) return null;
-      return { kind: type, value: points, displayText: raw };
+      // displayText uses Java double format per component (GeoShapeData/GeoTraceData.getDisplayText())
+      return { kind: type, value: points, displayText: formatGeoPoints(points) };
     }
 
     case "uncast":
@@ -203,7 +211,7 @@ export function uncast(v: AnswerValue): string {
     case "dateTime":    return v.value.toISOString();
     case "selectOne":   return v.value;
     case "selectMulti": return [...v.value].join(" ");
-    case "geopoint":    return `${v.value.lat} ${v.value.lon} ${v.value.alt} ${v.value.acc}`;
+    case "geopoint":    return `${formatDecimal(v.value.lat)} ${formatDecimal(v.value.lon)} ${formatDecimal(v.value.alt)} ${formatDecimal(v.value.acc)}`;
     case "binary":      return v.value;
     case "long":        return String(Math.trunc(v.value));
     case "geoshape":    return formatGeoPoints(v.value);
