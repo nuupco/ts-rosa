@@ -1,17 +1,18 @@
 /**
- * FormEvaluator — Slice 3.1 skeleton + Slice 3.4 cascade engine.
+ * FormEvaluator — Slice 3.1 skeleton + Slice 3.4 cascade engine + Slice 3.5 Condition/relevance.
  *
  * Responsibilities:
  *   - Evaluate XPath expressions over an InstanceTree via InstanceEvaluator
  *   - Manage reactive cascade (triggerTriggerables) via TriggerableDag
- *   - Manage NodeState per bound node
+ *   - Manage NodeState per bound node (Slice 3.5)
  *   - Wire answerQuestion + validate()
  *
- * Slice 3.4 adds:
- *   - initializeInstance(dag): evaluate all Recalculates in topological order
- *   - setValue(ref, value): write to InstanceNode + trigger cascade
- *   - triggerTriggerables(changedRef): DAG-ordered cascade execution
- *   - applyRecalculate(t, changedRef): eval + coerce + write to target nodes
+ * Slice 3.5 adds:
+ *   - NodeState map keyed by refToString(genericize(ref))
+ *   - OpaqueReactiveObjectFactory injection (default: identity)
+ *   - Condition evaluation in initializeInstance and triggerTriggerables
+ *   - isEffectivelyRelevant(ref): ancestor walk
+ *   - relevanceOf closure injected into adapter via setActiveRelevanceCheck
  */
 
 import type { InstanceTree } from '../model/instance/InstanceTree.ts';
@@ -19,6 +20,7 @@ import type { InstanceNode } from '../model/instance/InstanceNode.ts';
 import {
   makeInstanceDocumentNode,
   wrapInstanceNode,
+  setActiveRelevanceCheck,
 } from '../xpath/adapter/instance/InstanceNodeXPathAdapter.ts';
 import type {
   InstanceDocumentNode,
@@ -33,10 +35,15 @@ import type { CompiledInstanceExpression } from '../xpath/seam/XPathSeam.ts';
 import type { TriggerableDag } from '../eval/TriggerableDag.ts';
 import type { Triggerable } from '../eval/Triggerable.ts';
 import type { TreeReference } from '../model/instance/TreeReference.ts';
-import { genericize, refToString } from '../model/instance/TreeReference.ts';
-import { resolveReference, resolveAll } from '../model/instance/InstanceTree.ts';
-import { cast, uncast } from '../model/data/codecs.ts';
+import { genericize, refToString, parentOf, parseAbsoluteRef } from '../model/instance/TreeReference.ts';
+import { resolveReference } from '../model/instance/InstanceTree.ts';
+import { cast } from '../model/data/codecs.ts';
 import type { AnswerValue } from '../model/data/AnswerValue.ts';
+import { type NodeState, defaultNodeState } from '../model/state/NodeState.ts';
+import {
+  type OpaqueReactiveObjectFactory,
+  identityReactiveFactory,
+} from '../platform/ReactiveObjectFactory.ts';
 
 export class FormEvaluator {
   private readonly tree: InstanceTree;
@@ -44,9 +51,60 @@ export class FormEvaluator {
   /** Reactive DAG — set by initializeInstance; null until a form with bindings is loaded. */
   private dag: TriggerableDag | null = null;
 
-  constructor(tree: InstanceTree) {
+  /** NodeState per bound node — keyed by refToString(genericize(ref)). */
+  private readonly nodeStates: Map<string, NodeState> = new Map();
+
+  /** Factory for creating reactive node state objects (default: identity). */
+  private readonly factory: OpaqueReactiveObjectFactory;
+
+  constructor(tree: InstanceTree, factory?: OpaqueReactiveObjectFactory) {
     this.tree = tree;
     this.docNode = makeInstanceDocumentNode(tree);
+    this.factory = factory ?? identityReactiveFactory;
+  }
+
+  // ---------------------------------------------------------------------------
+  // NodeState management
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Get or create NodeState for a genericized ref key.
+   */
+  private getOrCreateState(key: string): NodeState {
+    let state = this.nodeStates.get(key);
+    if (state === undefined) {
+      state = this.factory(defaultNodeState());
+      this.nodeStates.set(key, state);
+    }
+    return state;
+  }
+
+  /**
+   * Return the effective relevance of a ref: own relevant AND all ancestors relevant.
+   *
+   * Mirrors JavaRosa TriggerableDag isEffectivelyRelevant — walks the ref's
+   * parent chain consulting own NodeState.relevant for each ancestor.
+   */
+  isEffectivelyRelevant(ref: TreeReference): boolean {
+    // Walk from the ref upward, checking NodeState.relevant at each level
+    let current: TreeReference = ref;
+    while (current.levels.length > 0) {
+      const key = refToString(genericize(current));
+      const state = this.nodeStates.get(key);
+      // If no state exists, assume relevant (no binding = no relevance expression)
+      if (state !== undefined && !state.relevant) {
+        return false;
+      }
+      current = parentOf(current);
+    }
+    return true;
+  }
+
+  /**
+   * Get the NodeState for a ref (by genericized key). Returns undefined if not found.
+   */
+  getNodeState(ref: TreeReference): NodeState | undefined {
+    return this.nodeStates.get(refToString(genericize(ref)));
   }
 
   // ---------------------------------------------------------------------------
@@ -111,7 +169,7 @@ export class FormEvaluator {
   }
 
   /**
-   * Evaluate a pre-compiled instance expression.
+   * Evaluate a pre-compiled instance expression with the active relevance closure.
    * Used by the DAG-based cascade.
    */
   evaluateCompiled(
@@ -119,7 +177,23 @@ export class FormEvaluator {
     contextNode?: InstanceNode | null,
   ): string | number | boolean {
     const ctx = this.makeContext(contextNode);
-    const result = compiled.evaluate(ctx);
+
+    // Inject the relevance closure into the adapter so non-relevant nodes return ''
+    setActiveRelevanceCheck((node: InstanceXPathNode) => {
+      if (node.kind !== 'element') return true;
+      // Build a minimal ref for this node by walking parents
+      const nodeRef = this.nodeToRef(node);
+      if (nodeRef === null) return true;
+      return this.isEffectivelyRelevant(nodeRef);
+    });
+
+    let result: ReturnType<typeof compiled.evaluate>;
+    try {
+      result = compiled.evaluate(ctx);
+    } finally {
+      setActiveRelevanceCheck(null);
+    }
+
     if (typeof result === 'string' || typeof result === 'number' || typeof result === 'boolean') {
       return result;
     }
@@ -134,6 +208,23 @@ export class FormEvaluator {
       null,
       XPATH_EVALUATION_RESULT.STRING_TYPE,
     ).stringValue;
+  }
+
+  /**
+   * Derive a TreeReference from an InstanceXPathNode by walking its parent chain.
+   * Returns null if the node cannot be mapped (e.g. document node).
+   */
+  private nodeToRef(node: InstanceXPathNode): TreeReference | null {
+    if (node.kind !== 'element') return null;
+    // Build path segments from root down to this node
+    const segments: string[] = [];
+    let current: InstanceNode | null = node.node;
+    while (current !== null) {
+      segments.unshift(current.name);
+      current = current.parent;
+    }
+    // segments[0] is the root name; build absolute TreeReference
+    return parseAbsoluteRef('/' + segments.join('/'));
   }
 
   /** Expose the document node for callers that need to build their own contexts. */
@@ -151,22 +242,32 @@ export class FormEvaluator {
   // ---------------------------------------------------------------------------
 
   /**
-   * Initialize all Recalculate triggerables in topological DAG order.
+   * Initialize all triggerables in topological DAG order.
    *
    * Mirrors JavaRosa TriggerableDag.initializeTriggerables (FormDef.java:447-466).
    * Called once at session creation to bring the instance to steady state.
-   * Conditions (relevant/required/readonly) are also evaluated here to set NodeState,
-   * but only Recalculate affects InstanceNode.value in Phase 3.4.
+   *
+   * Slice 3.5: also initializes NodeState for all bound nodes, and evaluates
+   * all Conditions (relevant/required/readonly) to set initial NodeState.
    */
   initializeInstance(dag: TriggerableDag): void {
-    // Store DAG for use in setValue/triggerTriggerables
     this.dag = dag;
 
+    // Pre-create NodeState for all targets in the DAG
+    for (const triggerable of dag.triggerablesDAG) {
+      for (const target of triggerable.targets) {
+        const key = refToString(genericize(target));
+        this.getOrCreateState(key);
+      }
+    }
+
+    // Evaluate all triggerables in topological order
     for (const triggerable of dag.triggerablesDAG) {
       if (triggerable.kind === 'recalculate') {
         this.applyRecalculate(triggerable, null);
+      } else if (triggerable.kind === 'condition') {
+        this.applyCondition(triggerable, null);
       }
-      // Condition (relevant/required/readonly) evaluation is in Slice 3.5
     }
   }
 
@@ -181,7 +282,6 @@ export class FormEvaluator {
     if (node !== null) {
       node.value = value;
     }
-    // triggerTriggerables uses stored this.dag — no-op if dag is null
   }
 
   /**
@@ -198,7 +298,6 @@ export class FormEvaluator {
   triggerTriggerables(changedRef: TreeReference, dag?: TriggerableDag | null): void {
     const activeDag = dag !== undefined ? dag : this.dag;
     if (activeDag === null) return;
-    // Rebind for use in the rest of this method
     const useDag = activeDag;
 
     const genericRef = genericize(changedRef);
@@ -206,10 +305,8 @@ export class FormEvaluator {
     const cascadeRoots = useDag.triggerablesPerTrigger.get(key);
     if (!cascadeRoots || cascadeRoots.size === 0) return;
 
-    // Expand cascade transitively via immediateCascades
     const toTrigger = getAllToTrigger(cascadeRoots, useDag.immediateCascades);
 
-    // Evaluate in DAG order (respecting alreadyEvaluated semantics from JR)
     const alreadyEvaluated = new Set<Triggerable>();
     for (const triggerable of useDag.triggerablesDAG) {
       if (!toTrigger.has(triggerable)) continue;
@@ -217,8 +314,9 @@ export class FormEvaluator {
 
       if (triggerable.kind === 'recalculate') {
         this.applyRecalculate(triggerable, changedRef);
+      } else if (triggerable.kind === 'condition') {
+        this.applyCondition(triggerable, changedRef);
       }
-      // Condition (relevant/required/readonly) is Slice 3.5
 
       alreadyEvaluated.add(triggerable);
     }
@@ -232,20 +330,18 @@ export class FormEvaluator {
    *     contextualized against changedRef when provided).
    *   - Result is coerced to target node's dataType via cast(dataType, string(result)).
    *
-   * @param t          The Recalculate triggerable to evaluate.
-   * @param changedRef The ref that triggered this recalculation (null during init).
+   * Slice 3.5: if the target node's parent(s) are non-relevant, effective value
+   * is '' — but we still compute and write (JavaRosa: calculates fire even inside
+   * non-relevant groups; only descendant nodes that depend on a non-relevant node
+   * see '' via the relevanceOf closure).
    */
   private applyRecalculate(t: Triggerable & { kind: 'recalculate' }, changedRef: TreeReference | null): void {
-    // Determine context node: first target node (or tree root as fallback)
-    // JavaRosa: Recalculate.apply uses the context of the target node
     for (const target of t.targets) {
       const targetNode = resolveReference(this.tree, target);
       if (targetNode === null) continue;
 
-      // Evaluate the expression with target node as context
       const rawResult = this.evaluateCompiled(t.expr, targetNode);
 
-      // Coerce result to target's dataType (mirrors JR Recalculate coerce())
       const rawString = typeof rawResult === 'string'
         ? rawResult
         : typeof rawResult === 'number'
@@ -258,6 +354,66 @@ export class FormEvaluator {
       targetNode.value = coerced;
     }
   }
+
+  /**
+   * Evaluate a Condition triggerable and update NodeState for its target nodes.
+   *
+   * Mirrors JavaRosa Condition.apply (Condition.java).
+   * Action semantics:
+   *   relevant  → state.relevant = boolean(result); then propagate inherited relevance
+   *   required  → state.required = boolean(result)
+   *   readonly  → state.readonly = boolean(result); state.enabled = !state.readonly
+   *
+   * After updating own relevant, propagates inherited relevance to descendants
+   * (ancestor walk semantics: a node is non-relevant if any ancestor is non-relevant).
+   */
+  private applyCondition(t: Triggerable & { kind: 'condition' }, changedRef: TreeReference | null): void {
+    for (const target of t.targets) {
+      const targetNode = resolveReference(this.tree, target);
+      if (targetNode === null) continue;
+
+      const rawResult = this.evaluateCompiled(t.expr, targetNode);
+      const boolResult = toBoolean(rawResult);
+
+      const key = refToString(genericize(target));
+      const state = this.getOrCreateState(key);
+
+      switch (t.action) {
+        case 'relevant':
+          state.relevant = boolResult;
+          // Propagate inherited relevance through descendants
+          this.propagateRelevanceToDescendants(targetNode);
+          break;
+        case 'required':
+          state.required = boolResult;
+          break;
+        case 'readonly':
+          state.readonly = boolResult;
+          state.enabled = !boolResult;
+          break;
+      }
+    }
+  }
+
+  /**
+   * Walk all descendant InstanceNodes of a node and ensure their effective
+   * relevance is consistent with the ancestor walk rule.
+   *
+   * This does NOT set state.relevant on descendants — only own NodeState.relevant
+   * reflects the Condition expression result. Effective relevance is always
+   * computed on-the-fly by isEffectivelyRelevant (ancestor walk).
+   *
+   * This method exists to trigger any downstream recalculates that depend on
+   * nodes inside the subtree (via a future event system). For now it is a no-op
+   * beyond the ancestor walk built into isEffectivelyRelevant.
+   *
+   * NOTE (spec S3.5): calculates inside a non-relevant group STILL fire — but
+   * descendants that depend on a non-relevant node see '' via relevanceOf closure.
+   */
+  private propagateRelevanceToDescendants(_node: InstanceNode): void {
+    // Effective relevance is computed lazily via isEffectivelyRelevant — no
+    // explicit propagation needed. This method is a hook for future event emission.
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -266,9 +422,6 @@ export class FormEvaluator {
 
 /**
  * Mirrors JavaRosa TriggerableDag.getAllToTrigger (TriggerableDag.java:503-523).
- *
- * Starting from cascadeRoots, expands transitively through immediateCascades
- * to produce the full set of triggerables that need to be evaluated.
  */
 function getAllToTrigger(
   cascadeRoots: ReadonlySet<Triggerable>,
@@ -293,4 +446,16 @@ function getAllToTrigger(
   }
 
   return toTrigger;
+}
+
+// ---------------------------------------------------------------------------
+// toBoolean — mirrors JavaRosa XPathFuncExpr.toBoolean / boolean() coercion
+// ---------------------------------------------------------------------------
+
+function toBoolean(value: string | number | boolean): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0 && !Number.isNaN(value);
+  // string: 'true' or '1' are true; '' or '0' or 'false' are false (JavaRosa rules)
+  const s = value.trim().toLowerCase();
+  return s === 'true' || s === '1';
 }

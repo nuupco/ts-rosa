@@ -48,6 +48,26 @@ import { XPathNodeKindKey } from '../../vendor/xpath/adapter/interface/XPathNode
 import { answerValueToXPathString } from './answerValueToXPathString.ts';
 
 // ---------------------------------------------------------------------------
+// Relevance slot — per-evaluation thread-local (single-threaded JS)
+//
+// FormEvaluator sets this before evaluating any expression so that
+// getNodeValue returns '' for non-relevant nodes (JavaRosa semantics).
+// Default = null (always relevant — used by pure XPath unit tests).
+// ---------------------------------------------------------------------------
+
+type RelevanceCheck = ((node: InstanceXPathNode) => boolean) | null;
+
+let activeRelevanceCheck: RelevanceCheck = null;
+
+/**
+ * Set the active relevance check for the current synchronous evaluation.
+ * Call with null to restore the default (all nodes relevant).
+ */
+export function setActiveRelevanceCheck(check: RelevanceCheck): void {
+  activeRelevanceCheck = check;
+}
+
+// ---------------------------------------------------------------------------
 // Factory: create document node (one per evaluation session)
 // ---------------------------------------------------------------------------
 
@@ -141,6 +161,10 @@ function syntheticTextChild(
  * leaf string-values (XPath string-value rule).
  */
 function getElementStringValue(el: InstanceElementNode): string {
+  // Non-relevant elements contribute '' (checked via active relevance slot)
+  if (activeRelevanceCheck !== null && !activeRelevanceCheck(el)) {
+    return '';
+  }
   const realChildren = el.node.children.filter(
     (c) => c.multiplicity !== INDEX_TEMPLATE,
   );
@@ -291,6 +315,13 @@ export const instanceNodeXPathAdapter: XPathDOMAdapter<InstanceXPathNode> = {
   // -------------------------------------------------------------------------
 
   getNodeValue(node: InstanceXPathNode): string {
+    // If a relevance check is active, non-relevant nodes return '' (JavaRosa semantics:
+    // non-relevant node effective value is null/'', stored value is preserved).
+    if (activeRelevanceCheck !== null && node.kind === 'element') {
+      if (!activeRelevanceCheck(node)) {
+        return '';
+      }
+    }
     switch (node.kind) {
       case 'document': {
         // String-value of document = string-value of root element
