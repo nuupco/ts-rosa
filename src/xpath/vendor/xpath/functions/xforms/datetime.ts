@@ -187,7 +187,12 @@ export const formatDate = new StringFunction(
 			return '';
 		}
 
-		return dateFormatter(format, dateTime);
+		// PATCH: JavaRosa's format-date() also supports time format specifiers
+		// (%H, %M, %S, etc.) when the input is a datetime string. The upstream
+		// implementation used dateFormatter (date-only formatters). Switching to
+		// dateTimeFormatter covers both date and time components.
+		// See src/xpath/vendor/PATCHES.md — xforms-format-date-time-formatters.
+		return dateTimeFormatter(format, dateTime);
 	}
 );
 
@@ -260,7 +265,10 @@ export const date = new FunctionImplementation(
 
 		switch (results.type) {
 			case 'BOOLEAN':
-				return new StringEvaluation(context, '');
+				// PATCH: JavaRosa throws XPathTypeMismatchException for boolean input.
+				// Upstream silently returns empty string instead of throwing.
+				// See src/xpath/vendor/PATCHES.md — xforms-date-boolean-throws.
+				throw new Error('date() does not accept a boolean argument');
 
 			case 'NODE':
 			case 'STRING': {
@@ -274,7 +282,10 @@ export const date = new FunctionImplementation(
 					const unpaddedMatches = UNPADDED_MONTH_DAY_PATTERN.exec(string);
 
 					if (unpaddedMatches == null) {
-						return new DateTimeLikeEvaluation(context, null);
+						// PATCH: JavaRosa throws XPathTypeMismatchException for invalid date strings.
+						// Upstream silently returns a null DateTimeLikeEvaluation.
+						// See src/xpath/vendor/PATCHES.md — xforms-date-invalid-throws.
+						throw new Error(`date() received invalid date string: '${string}'`);
 					}
 
 					const [, year, month, day, rest = ''] = unpaddedMatches;
@@ -293,6 +304,14 @@ export const date = new FunctionImplementation(
 		}
 
 		const dateTime = evaluateDateTime(context, results);
+
+		// PATCH: JavaRosa throws XPathTypeMismatchException when a valid-looking date
+		// string resolves to an invalid Temporal date (e.g. 1983-09-31 — Sep has 30 days).
+		// Upstream silently returns a null DateTimeLikeEvaluation.
+		// See src/xpath/vendor/PATCHES.md — xforms-date-invalid-throws.
+		if (dateTime == null && results.type !== 'NUMBER') {
+			throw new Error(`date() received invalid date string: '${results.toString()}'`);
+		}
 
 		return new DateTimeLikeEvaluation(context, dateTime);
 	}

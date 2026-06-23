@@ -4,7 +4,11 @@ import { NumberEvaluation } from '../../evaluations/NumberEvaluation.ts';
 import { FunctionImplementation } from '../../evaluator/functions/FunctionImplementation.ts';
 import { NumberFunction } from '../../evaluator/functions/NumberFunction.ts';
 import { dateTimeFromString } from '../../lib/datetime/coercion.ts';
-import { XFormsXPathEvaluator } from '../../xforms/XFormsXPathEvaluator.ts';
+// PATCH: changed to `import type` — this import was only used in a JSDoc
+// {@link} reference. The value import created a circular module dependency:
+// xforms/number.ts → XFormsXPathEvaluator.ts → xforms/index.ts → number.ts.
+// See src/xpath/vendor/PATCHES.md — xforms-number-circular-import.
+import type { XFormsXPathEvaluator } from '../../xforms/XFormsXPathEvaluator.ts';
 import { math2Alias, mathAlias, mathNAlias } from '../_shared/number.ts';
 
 export const abs = mathAlias('abs');
@@ -100,6 +104,14 @@ export const round = new NumberFunction(
 
 		if (Number.isNaN(decimals)) {
 			return NaN;
+		}
+
+		// PATCH: for decimals=0 (1-arg case), delegate to Math.round directly.
+		// The unsigned+sign approach gives Math.round(0.5)*-1 = -1 for input -0.5,
+		// but JavaRosa / XPath 1.0 expects round(-0.5) = -0 (matching Math.round).
+		// See src/xpath/vendor/PATCHES.md — xforms-round-zero-decimals.
+		if (decimals === 0) {
+			return Math.round(value);
 		}
 
 		const sign = value < 0 ? -1 : 1;

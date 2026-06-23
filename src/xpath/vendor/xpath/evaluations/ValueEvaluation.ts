@@ -79,7 +79,15 @@ export abstract class ValueEvaluation<
 		}
 
 		if (this.type === 'NUMBER' || operand.type === 'NUMBER') {
-			return this.toNumber() === operand.toNumber();
+			const a = this.toNumber();
+			const b = operand.toNumber();
+			// JavaRosa uses a 1e-12 absolute tolerance for float equality to match
+			// JVM double arithmetic (e.g. 6.1 - 7.8 = -1.7 must be true).
+			// PATCH: see src/xpath/vendor/PATCHES.md — ValueEvaluation float-eq-tolerance
+			if (Number.isNaN(a) || Number.isNaN(b)) {
+				return false;
+			}
+			return Math.abs(a - b) <= 1e-12;
 		}
 
 		return this.toString() === operand.toString();
