@@ -129,8 +129,7 @@ describe("TriggerableDag — DAG ordering", () => {
 // ---------------------------------------------------------------------------
 
 describe("TriggerableDag — Cycle detection", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: parsing_forms_with_cycles_by_self_reference_in_calculate_should_fail
     "parsing a form with self-reference cycle in calculate should fail",
     () => {
@@ -144,8 +143,7 @@ describe("TriggerableDag — Cycle detection", () => {
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: parsing_forms_with_cycles_in_calculate_should_fail
     "parsing a form with a three-node cycle in calculate should fail",
     () => {
@@ -161,8 +159,7 @@ describe("TriggerableDag — Cycle detection", () => {
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: parsing_forms_with_cycles_by_self_reference_in_relevance_should_fail
     "parsing a form with self-reference cycle in relevant should fail",
     () => {
@@ -176,8 +173,7 @@ describe("TriggerableDag — Cycle detection", () => {
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when engine is ready
+  it(
     // Java: parsing_forms_with_cycles_by_self_reference_in_required_condition_should_fail
     "parsing a form with self-reference cycle in required should fail",
     () => {

@@ -66,8 +66,7 @@ function buildFormForDagCyclesCheck(
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — DAG cycle detection: multi-node calculate cycles", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 DAG cycle detection is implemented
+  it(
     // Source: TriggerableDagTest.java#parsing_forms_with_cycles_in_calculate_should_fail
     // NOTE: The 3-node cycle is already in tests/dag/triggerable-dag.test.ts.
     //       This is a 2-node mutual cycle (different shape).
@@ -84,8 +83,7 @@ describe("Equivalence — DAG cycle detection: multi-node calculate cycles", () 
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 DAG cycle detection is implemented
+  it(
     // Source: TriggerableDagTest.java — chain of 4 nodes forming a cycle
     "parsing a form with a four-node cycle in calculate should fail",
     () => {
