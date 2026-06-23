@@ -8,6 +8,8 @@
  *
  * Firewall: ZERO XPath imports. Relevance routing goes exclusively through
  * FormEvaluator.isEffectivelyRelevant. The XPathSeam is NOT imported here.
+ * indexOf() parsing is isolated to a single parseAbsoluteRef call; no XPath
+ * engine internals cross this module boundary.
  */
 
 import type { FormDefinition } from '../model/def/FormDefinition.ts';
@@ -30,7 +32,13 @@ import {
   type FormEntryEvent,
   FORM_ENTRY_EVENT,
 } from './FormEntryEvent.ts';
-import { extendRef, parseAbsoluteRef } from '../model/instance/TreeReference.ts';
+import {
+  extendRef,
+  parseAbsoluteRef,
+  genericize,
+  refEquals,
+} from '../model/instance/TreeReference.ts';
+import { resolveReference, countRepeatInstances } from '../model/instance/InstanceTree.ts';
 
 
 // ---------------------------------------------------------------------------
@@ -44,6 +52,15 @@ interface ResolvedPath {
   parentChain: readonly FormElement[];
   /** The concrete TreeReference built while walking the path. */
   ref: TreeReference;
+}
+
+// ---------------------------------------------------------------------------
+// Internal: mutable level (used during walk algorithms)
+// ---------------------------------------------------------------------------
+
+interface MutableLevel {
+  elementIndex: number;
+  multiplicity: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,9 +146,13 @@ export class FormNavigator {
     if (element.kind === 'group') {
       return { kind: 'group', code: FORM_ENTRY_EVENT.GROUP, index: idx as AtFormIndex };
     }
-    // repeat — classification (REPEAT vs PROMPT_NEW_REPEAT) deferred to 4.4
-    // For 4.1 skeleton: classify as group (placeholder — overridden in 4.4)
-    return { kind: 'group', code: FORM_ENTRY_EVENT.GROUP, index: idx as AtFormIndex };
+    // repeat — classify based on whether the instance at this multiplicity exists.
+    // LINEAR mode: if instance does not exist → prompt-new-repeat; else → repeat.
+    const instanceExists = resolveReference(this.tree, (idx as AtFormIndex).ref) !== null;
+    if (instanceExists) {
+      return { kind: 'repeat', code: FORM_ENTRY_EVENT.REPEAT, index: idx as AtFormIndex };
+    }
+    return { kind: 'prompt-new-repeat', code: FORM_ENTRY_EVENT.PROMPT_NEW_REPEAT, index: idx as AtFormIndex };
   }
 
   /**
@@ -141,6 +162,164 @@ export class FormNavigator {
    */
   getEvent(idx?: FormIndex): FormEntryEvent {
     return this.eventAt(idx ?? this.currentIndex);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Raw walk — relevance-blind (Slice 4.2)
+  // Ported line-by-line from FormEntryModel.incrementHelper / decrementHelper
+  // (LINEAR mode only; NON_LINEAR / INDEX_REPEAT_JUNCTURE branches omitted).
+  // ---------------------------------------------------------------------------
+
+  /**
+   * @experimental
+   * Returns the next FormIndex after `idx`, descending into containers when
+   * `descend` is true (default). Relevance-blind — use stepToNextEvent() for
+   * the relevance-skipping stepping API.
+   *
+   * Ported from FormEntryModel.incrementIndex(FormIndex, boolean) + incrementHelper.
+   */
+  incrementIndex(idx: FormIndex, descend = true): FormIndex {
+    if (isEof(idx)) return idx; // terminal
+
+    const body = this.definition.body;
+    const levels: MutableLevel[] = [];
+
+    if (isBof(idx)) {
+      if (body.length === 0) return endOfForm;
+      // levels stays empty → i = -1, will descend into body[0]
+    } else {
+      // Copy path to mutable array
+      for (const lvl of (idx as AtFormIndex).path) {
+        levels.push({ elementIndex: lvl.elementIndex, multiplicity: lvl.multiplicity });
+      }
+    }
+
+    this.incrementHelper(levels, descend);
+
+    return this.buildFormIndex(levels);
+  }
+
+  /**
+   * @experimental
+   * Returns the previous FormIndex before `idx`. Relevance-blind.
+   *
+   * Ported from FormEntryModel.decrementIndex(FormIndex) + decrementHelper.
+   */
+  decrementIndex(idx: FormIndex): FormIndex {
+    if (isBof(idx)) return idx; // terminal
+
+    const body = this.definition.body;
+    const levels: MutableLevel[] = [];
+
+    if (isEof(idx)) {
+      if (body.length === 0) return beginningOfForm;
+      // levels stays empty → decrementHelper descends from root tail
+    } else {
+      for (const lvl of (idx as AtFormIndex).path) {
+        levels.push({ elementIndex: lvl.elementIndex, multiplicity: lvl.multiplicity });
+      }
+    }
+
+    this.decrementHelper(levels);
+
+    if (levels.length === 0) return beginningOfForm;
+    return this.buildFormIndex(levels);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Stepping (Slice 4.2 base — no relevance skip; that lands in 4.3)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * @experimental
+   * Advance cursor by one raw step (no relevance filter yet — 4.3 adds the loop).
+   * Sets currentIndex and returns the event at the new position.
+   */
+  stepToNextEvent(): FormEntryEvent {
+    const next = this.incrementIndex(this.currentIndex);
+    this.currentIndex = next;
+    return this.eventAt(next);
+  }
+
+  /**
+   * @experimental
+   * Retreat cursor by one raw step (no relevance filter yet).
+   */
+  stepToPreviousEvent(): FormEntryEvent {
+    const prev = this.decrementIndex(this.currentIndex);
+    this.currentIndex = prev;
+    return this.eventAt(prev);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Jumps (Slice 4.2)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * @experimental
+   * Set cursor to `idx` and return the event at that position.
+   */
+  jumpToIndex(idx: FormIndex): FormEntryEvent {
+    this.currentIndex = idx;
+    return this.eventAt(idx);
+  }
+
+  /**
+   * @experimental
+   * Reset cursor to BOF.
+   */
+  jumpToBeginningOfForm(): FormEntryEvent {
+    this.currentIndex = beginningOfForm;
+    return this.eventAt(beginningOfForm);
+  }
+
+  // ---------------------------------------------------------------------------
+  // indexOf (Slice 4.2 / 4.6)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * @experimental
+   * Walk the form from BOF (relevance-blind) and return the first AtFormIndex
+   * whose ref matches `xPath`. Returns endOfForm if not found.
+   *
+   * Positional xPath (e.g. /data/repeat[1]/q): compared with concrete ref
+   * (includes multiplicity). Generic xPath (no predicates): compared with
+   * genericized ref (ignores multiplicity).
+   *
+   * XPath firewall: only parseAbsoluteRef() crosses this boundary — no XPath
+   * engine internals are imported.
+   */
+  indexOf(xPath: string): FormIndex {
+    const target = parseAbsoluteRef(xPath);
+
+    let walker: FormIndex = this.incrementIndex(beginningOfForm);
+    while (isAt(walker)) {
+      if (this.refMatchesTarget(walker.ref, target)) return walker;
+      walker = this.incrementIndex(walker);
+    }
+    return endOfForm;
+  }
+
+  /**
+   * Compare a walker ref against the parsed target ref.
+   *
+   * Per-level rule (mirrors JavaRosa FormEntryModel.getIndexByReference):
+   *   - If the target level has a concrete multiplicity (>= 0): exact match required.
+   *   - If the target level has INDEX_UNBOUND (-1): name match only (any multiplicity).
+   *
+   * This handles mixed refs like /data/repeat[1]/inner1 where repeat[1] is
+   * positional but inner1 has no predicate.
+   */
+  private refMatchesTarget(walkerRef: TreeReference, target: TreeReference): boolean {
+    if (walkerRef.levels.length !== target.levels.length) return false;
+    for (let i = 0; i < target.levels.length; i++) {
+      const w = walkerRef.levels[i]!;
+      const t = target.levels[i]!;
+      if (w.name !== t.name) return false;
+      // Only enforce multiplicity when target has a concrete predicate
+      if (t.multiplicity >= 0 && w.multiplicity !== t.multiplicity) return false;
+    }
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -191,7 +370,7 @@ export class FormNavigator {
   }
 
   // ---------------------------------------------------------------------------
-  // Internal: elementLeafName
+  // Internal helpers
   // ---------------------------------------------------------------------------
 
   /**
@@ -202,5 +381,202 @@ export class FormNavigator {
     const levels = element.ref.levels;
     if (levels.length === 0) return 'unknown';
     return levels[levels.length - 1]!.name;
+  }
+
+  /**
+   * Get the element at the given mutable levels array (leaf element).
+   * Returns null if path is invalid.
+   */
+  private elementAt(levels: readonly MutableLevel[]): FormElement | null {
+    if (levels.length === 0) return null;
+    const resolved = this.resolvePath(levels.map((l) => ({ elementIndex: l.elementIndex, multiplicity: l.multiplicity })));
+    return resolved?.element ?? null;
+  }
+
+  /**
+   * Get the children array for the element at `levels`, or body if levels is empty.
+   */
+  private childrenOf(levels: readonly MutableLevel[]): readonly FormElement[] {
+    if (levels.length === 0) return this.definition.body;
+    const el = this.elementAt(levels);
+    if (el === null) return [];
+    if (el.kind === 'group' || el.kind === 'repeat') return el.children;
+    return [];
+  }
+
+  /**
+   * Build the concrete ref for the element at the given mutable levels array.
+   *
+   * Multiplicity is applied ONLY for repeat elements (concrete instance
+   * position). For questions and groups the multiplicity in the path is
+   * always 0 (by algorithm), so we use INDEX_UNBOUND there — keeping the
+   * ref in the same form as the binding key (refToString generic) that
+   * FormEvaluator uses for constraint / relevance lookups.
+   *
+   * For repeat elements the concrete multiplicity IS carried (needed for
+   * resolveReference instance-existence checks and per-instance relevance).
+   */
+  private buildRef(levels: readonly MutableLevel[]): TreeReference {
+    const rootName = this.definition.mainInstance.root.name;
+    let ref: TreeReference = parseAbsoluteRef(`/${rootName}`);
+    let siblings: readonly FormElement[] = this.definition.body;
+    for (const lvl of levels) {
+      const el = siblings[lvl.elementIndex];
+      if (el === undefined) break;
+      const name = this.elementLeafName(el);
+      // Use concrete multiplicity for repeats; INDEX_UNBOUND for questions/groups.
+      const mult = el.kind === 'repeat' ? lvl.multiplicity : undefined;
+      ref = extendRef(ref, name, mult);
+      if (el.kind === 'group' || el.kind === 'repeat') {
+        siblings = el.children;
+      }
+    }
+    return ref;
+  }
+
+  /**
+   * Convert mutable levels array to an immutable AtFormIndex.
+   */
+  private buildFormIndex(levels: MutableLevel[]): FormIndex {
+    if (levels.length === 0) return endOfForm;
+    const ref = this.buildRef(levels);
+    return atIndex(
+      levels.map((l) => ({ elementIndex: l.elementIndex, multiplicity: l.multiplicity })),
+      ref,
+    );
+  }
+
+  /**
+   * Ported from FormEntryModel.incrementHelper (LINEAR mode, java:548-642).
+   * Mutates `levels` in place to advance to the next position.
+   */
+  private incrementHelper(levels: MutableLevel[], descend: boolean): void {
+    let i = levels.length - 1;
+    let exitRepeat = false;
+
+    // --- Descend branch ---
+    // Entered when: at root (i === -1) OR current leaf is a group/repeat container
+    const leafEl = i >= 0 ? this.elementAt(levels) : null;
+    if (i === -1 || (leafEl !== null && (leafEl.kind === 'group' || leafEl.kind === 'repeat'))) {
+      if (i >= 0 && leafEl !== null && leafEl.kind === 'repeat') {
+        // LINEAR: check if the current repeat instance exists
+        const currentRef = this.buildRef(levels);
+        if (resolveReference(this.tree, currentRef) === null) {
+          // Instance does not exist — do not descend (yields PROMPT_NEW_REPEAT on classification)
+          descend = false;
+          exitRepeat = true;
+        }
+      }
+
+      if (descend) {
+        const container = this.childrenOf(levels);
+        if (i === -1 || container.length > 0) {
+          // Descend into first child
+          levels.push({ elementIndex: 0, multiplicity: 0 });
+          return;
+        }
+        // Empty group: container.length === 0 — fall through to sibling loop
+      }
+    }
+
+    // --- Sibling / ascend loop ---
+    while (i >= 0) {
+      const el = this.elementAt(levels.slice(0, i + 1));
+      if (!exitRepeat && el !== null && el.kind === 'repeat') {
+        // LINEAR: move to next repeat instance (multiplicity += 1)
+        levels[i]!.multiplicity += 1;
+        return;
+      }
+
+      // Determine parent's children array
+      const parentSiblings = i === 0
+        ? this.definition.body
+        : this.childrenOf(levels.slice(0, i));
+      const curElementIndex = levels[i]!.elementIndex;
+
+      if (curElementIndex + 1 >= parentSiblings.length) {
+        // End of this level — ascend
+        levels.pop();
+        i--;
+        exitRepeat = false;
+      } else {
+        // Next sibling
+        levels[i]!.elementIndex = curElementIndex + 1;
+        levels[i]!.multiplicity = 0;
+        return;
+      }
+    }
+    // levels is now empty → caller will return endOfForm
+  }
+
+  /**
+   * Ported from FormEntryModel.decrementHelper (LINEAR mode, java:672-719).
+   * Mutates `levels` in place to retreat to the previous position.
+   */
+  private decrementHelper(levels: MutableLevel[]): void {
+    let i = levels.length - 1;
+
+    if (i !== -1) {
+      const curIndex = levels[i]!.elementIndex;
+      const curMult = levels[i]!.multiplicity;
+      const curEl = this.elementAt(levels);
+
+      // LINEAR: if current leaf is a repeat with multiplicity > 0, go to previous instance
+      if (curEl !== null && curEl.kind === 'repeat' && curMult > 0) {
+        levels[i]!.multiplicity = curMult - 1;
+        // Fall through to descend-to-leaf tail
+      } else if (curIndex > 0) {
+        // Set to previous sibling
+        levels[i]!.elementIndex = curIndex - 1;
+        levels[i]!.multiplicity = 0;
+        // Apply setRepeatNextMultiplicity — if new leaf is a repeat with instances, set to last
+        if (this.setRepeatNextMultiplicity(levels)) return;
+        // Fall through to descend-to-leaf tail
+      } else {
+        // At start of level — ascend to parent
+        levels.pop();
+        return;
+      }
+    }
+
+    // --- Descend-to-leaf tail (java:703-718) ---
+    // Walk down into the last child until we reach a question (or group with no children)
+    let el = i < 0 ? null : this.elementAt(levels);
+    while (el === null || el.kind !== 'question') {
+      const children = this.childrenOf(levels);
+      if (children.length === 0) {
+        // No children — stop on the group/repeat itself
+        return;
+      }
+      const subIndex = children.length - 1;
+      levels.push({ elementIndex: subIndex, multiplicity: 0 });
+      if (this.setRepeatNextMultiplicity(levels)) return;
+      el = this.elementAt(levels);
+    }
+  }
+
+  /**
+   * Ported from FormEntryModel.setRepeatNextMultiplicity (LINEAR mode, java:721-742).
+   *
+   * If the leaf element in `levels` is a repeat, count existing instances and
+   * set multiplicity to `count - 1` (last instance) if instances exist, or 0
+   * (which will yield PROMPT_NEW_REPEAT) if none.
+   *
+   * Returns true if the leaf is a repeat (multiplicity was set), false otherwise.
+   */
+  private setRepeatNextMultiplicity(levels: MutableLevel[]): boolean {
+    const leafEl = this.elementAt(levels);
+    if (leafEl === null || leafEl.kind !== 'repeat') return false;
+
+    // It's a repeat — count existing instances
+    const leafRef = this.buildRef(levels);
+    const genericRef = genericize(leafRef);
+    const count = countRepeatInstances(this.tree, genericRef);
+    if (count > 0) {
+      levels[levels.length - 1]!.multiplicity = count - 1; // point at last instance
+    } else {
+      levels[levels.length - 1]!.multiplicity = 0; // no instances; multiplicity=0 → PROMPT_NEW_REPEAT
+    }
+    return true;
   }
 }
