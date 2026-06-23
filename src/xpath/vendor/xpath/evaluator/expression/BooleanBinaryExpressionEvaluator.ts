@@ -61,11 +61,12 @@ export class BooleanBinaryExpressionEvaluator<
 		const { lhs, rhs } = this;
 		const lhsResult = lhs.evaluate(context);
 
-		if (lhsResult.toBoolean()) {
-			return rhs.evaluate(context);
+		if (!lhsResult.toBoolean()) {
+			return new BooleanEvaluation(context.currentContext(), false);
 		}
 
-		return lhsResult;
+		const rhsResult = rhs.evaluate(context);
+		return new BooleanEvaluation(context.currentContext(), rhsResult.toBoolean());
 	}
 
 	protected or<T extends XPathNode>(context: EvaluationContext<T>): Evaluation<T> {
@@ -74,10 +75,11 @@ export class BooleanBinaryExpressionEvaluator<
 		const lhsResult = lhs.evaluate(context);
 
 		if (lhsResult.toBoolean()) {
-			return lhsResult;
+			return new BooleanEvaluation(context.currentContext(), true);
 		}
 
-		return rhs.evaluate(context);
+		const rhsResult = rhs.evaluate(context);
+		return new BooleanEvaluation(context.currentContext(), rhsResult.toBoolean());
 	}
 
 	protected compare<T extends XPathNode>(

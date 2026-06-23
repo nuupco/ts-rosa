@@ -18,6 +18,9 @@ export class NumberEvaluation<T extends XPathNode> extends ValueEvaluation<T, 'N
 
 		this.booleanValue = value !== 0 && !Number.isNaN(value);
 		this.numberValue = value;
-		this.stringValue = Number.isNaN(value) ? '' : String(value);
+		// XPath 1.0 §4.2 / JavaRosa: string(NaN) = 'NaN', string(Infinity) = 'Infinity',
+		// string(-Infinity) = '-Infinity'. The upstream vendor erroneously returned ''
+		// for NaN; we correct that here.
+		this.stringValue = Number.isNaN(value) ? 'NaN' : String(value);
 	}
 }

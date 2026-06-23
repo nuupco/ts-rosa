@@ -28,16 +28,44 @@ export interface ParsedTree {
 }
 
 /**
+ * Internal concrete type that extends ASyntaxNode with source-range metadata.
+ * The `_startOffset` and `_endOffset` fields track the node's byte range within
+ * the original expression string. They are used by computeBinaryText() to
+ * compute parent node text without relying on indexOf() (which is ambiguous
+ * when the same substring appears multiple times, e.g. "1 + 1").
+ *
+ * These fields are NOT part of the public ASyntaxNode interface so consumers
+ * (the vendored evaluators) never see them.
+ */
+export interface SyntaxNodeWithOffsets extends ASyntaxNode {
+	readonly _startOffset: number;
+	readonly _endOffset: number;
+}
+
+export function hasSyntaxOffsets(node: ASyntaxNode): node is SyntaxNodeWithOffsets {
+	return '_startOffset' in node;
+}
+
+/**
  * Create a frozen, immutable SyntaxNode.
  * The `type` parameter accepts `AnySyntaxType | '//'` because `//` is the
  * unnamed literal emitted as a sibling in `abbreviated_absolute_location_path`.
+ *
+ * `startOffset` and `endOffset` are the byte indices of this node within the
+ * original source expression. When provided they enable O(1) parent-text
+ * computation; when omitted the node falls back to text-based heuristics.
  */
 export function makeSyntaxNode(
 	type: AnySyntaxType | '//',
 	text: string,
-	children: readonly ASyntaxNode[]
+	children: readonly ASyntaxNode[],
+	startOffset?: number,
+	endOffset?: number
 ): ASyntaxNode {
-	const node: ASyntaxNode = Object.freeze({
+	const hasOffsets =
+		startOffset !== undefined && endOffset !== undefined;
+
+	const base = {
 		type,
 		text,
 		childCount: children.length,
@@ -45,7 +73,11 @@ export function makeSyntaxNode(
 		child(index: number): ASyntaxNode | null {
 			return children[index] ?? null;
 		},
-	});
+	};
+
+	const node = hasOffsets
+		? Object.freeze({ ...base, _startOffset: startOffset, _endOffset: endOffset })
+		: Object.freeze(base);
 
 	return node;
 }

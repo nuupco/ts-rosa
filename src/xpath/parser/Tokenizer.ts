@@ -201,7 +201,13 @@ export function tokenize(expression: string): Token[] {
 			case ',': push(TokenKind.COMMA, ',', pos++); continue;
 			case '@': push(TokenKind.AT, '@', pos++); continue;
 			case '$': push(TokenKind.DOLLAR, '$', pos++); continue;
-			case '.': push(TokenKind.DOT, '.', pos++); continue;
+			case '.': {
+				// If followed by a digit, this is a leading-dot number literal (.NNN).
+				// Fall through to the NUMBER check below instead of emitting DOT.
+				if (expression[pos + 1] !== undefined && /[0-9]/.test(expression[pos + 1]!)) break;
+				push(TokenKind.DOT, '.', pos++);
+				continue;
+			}
 		}
 
 		// Multiply / wildcard disambiguation (§3.7)

@@ -23,7 +23,7 @@
  */
 
 import { type ParseOptions } from '../vendor/xpath/static/grammar/ExpressionParser.ts';
-import { type ASyntaxNode, makeSyntaxNode, type ParsedTree } from './SyntaxNode.ts';
+import { type ASyntaxNode, makeSyntaxNode, hasSyntaxOffsets, type ParsedTree } from './SyntaxNode.ts';
 import { tokenize, type Token, TokenKind } from './Tokenizer.ts';
 
 // ---------------------------------------------------------------------------
@@ -158,8 +158,7 @@ class Parser {
 		while (this.peekKind() === TokenKind.OR) {
 			this.advance();
 			const right = this.parseAndExpr();
-			const text = this.src.slice(left.text === this.src ? 0 : this.src.indexOf(left.text), this.src.indexOf(right.text) + right.text.length);
-			left = makeSyntaxNode('or_expr', computeBinaryText(this.src, left, right), [left, right]);
+			left = makeBinaryNode('or_expr', this.src, left, right);
 		}
 
 		return left;
@@ -171,7 +170,7 @@ class Parser {
 		while (this.peekKind() === TokenKind.AND) {
 			this.advance();
 			const right = this.parseEqualityExpr();
-			left = makeSyntaxNode('and_expr', computeBinaryText(this.src, left, right), [left, right]);
+			left = makeBinaryNode('and_expr', this.src, left, right);
 		}
 
 		return left;
@@ -185,11 +184,11 @@ class Parser {
 			if (k === TokenKind.EQ) {
 				this.advance();
 				const right = this.parseRelationalExpr();
-				left = makeSyntaxNode('eq_expr', computeBinaryText(this.src, left, right), [left, right]);
+				left = makeBinaryNode('eq_expr', this.src, left, right);
 			} else if (k === TokenKind.NEQ) {
 				this.advance();
 				const right = this.parseRelationalExpr();
-				left = makeSyntaxNode('ne_expr', computeBinaryText(this.src, left, right), [left, right]);
+				left = makeBinaryNode('ne_expr', this.src, left, right);
 			} else {
 				break;
 			}
@@ -206,19 +205,19 @@ class Parser {
 			if (k === TokenKind.LT) {
 				this.advance();
 				const right = this.parseAdditiveExpr();
-				left = makeSyntaxNode('lt_expr', computeBinaryText(this.src, left, right), [left, right]);
+				left = makeBinaryNode('lt_expr', this.src, left, right);
 			} else if (k === TokenKind.LTE) {
 				this.advance();
 				const right = this.parseAdditiveExpr();
-				left = makeSyntaxNode('lte_expr', computeBinaryText(this.src, left, right), [left, right]);
+				left = makeBinaryNode('lte_expr', this.src, left, right);
 			} else if (k === TokenKind.GT) {
 				this.advance();
 				const right = this.parseAdditiveExpr();
-				left = makeSyntaxNode('gt_expr', computeBinaryText(this.src, left, right), [left, right]);
+				left = makeBinaryNode('gt_expr', this.src, left, right);
 			} else if (k === TokenKind.GTE) {
 				this.advance();
 				const right = this.parseAdditiveExpr();
-				left = makeSyntaxNode('gte_expr', computeBinaryText(this.src, left, right), [left, right]);
+				left = makeBinaryNode('gte_expr', this.src, left, right);
 			} else {
 				break;
 			}
@@ -235,11 +234,11 @@ class Parser {
 			if (k === TokenKind.PLUS) {
 				this.advance();
 				const right = this.parseMultiplicativeExpr();
-				left = makeSyntaxNode('addition_expr', computeBinaryText(this.src, left, right), [left, right]);
+				left = makeBinaryNode('addition_expr', this.src, left, right);
 			} else if (k === TokenKind.MINUS) {
 				this.advance();
 				const right = this.parseMultiplicativeExpr();
-				left = makeSyntaxNode('subtraction_expr', computeBinaryText(this.src, left, right), [left, right]);
+				left = makeBinaryNode('subtraction_expr', this.src, left, right);
 			} else {
 				break;
 			}
@@ -256,15 +255,15 @@ class Parser {
 			if (k === TokenKind.MULTIPLY) {
 				this.advance();
 				const right = this.parseUnaryExpr();
-				left = makeSyntaxNode('multiplication_expr', computeBinaryText(this.src, left, right), [left, right]);
+				left = makeBinaryNode('multiplication_expr', this.src, left, right);
 			} else if (k === TokenKind.DIV) {
 				this.advance();
 				const right = this.parseUnaryExpr();
-				left = makeSyntaxNode('division_expr', computeBinaryText(this.src, left, right), [left, right]);
+				left = makeBinaryNode('division_expr', this.src, left, right);
 			} else if (k === TokenKind.MOD) {
 				this.advance();
 				const right = this.parseUnaryExpr();
-				left = makeSyntaxNode('modulo_expr', computeBinaryText(this.src, left, right), [left, right]);
+				left = makeBinaryNode('modulo_expr', this.src, left, right);
 			} else {
 				break;
 			}
@@ -296,7 +295,7 @@ class Parser {
 		while (this.peekKind() === TokenKind.PIPE) {
 			this.advance();
 			const right = this.parsePathExpr();
-			left = makeSyntaxNode('union_expr', computeBinaryText(this.src, left, right), [left, right]);
+			left = makeBinaryNode('union_expr', this.src, left, right);
 		}
 
 		return left;
@@ -690,13 +689,13 @@ class Parser {
 		// String literal
 		if (k === TokenKind.STRING) {
 			const tok = this.advance();
-			return makeSyntaxNode('string_literal', tok.text, []);
+			return makeSyntaxNode('string_literal', tok.text, [], tok.start, tok.start + tok.text.length);
 		}
 
 		// Number
 		if (k === TokenKind.NUMBER) {
 			const tok = this.advance();
-			return makeSyntaxNode('number', tok.text, []);
+			return makeSyntaxNode('number', tok.text, [], tok.start, tok.start + tok.text.length);
 		}
 
 		// Function call
@@ -795,11 +794,36 @@ function wrapInFilterPathExpr(inner: ASyntaxNode): ASyntaxNode {
  * Compute the source text spanned by a binary expression from left to right.
  * Uses .text on both operands; assumes they appear in source order.
  */
-function computeBinaryText(src: string, left: ASyntaxNode, right: ASyntaxNode): string {
+interface BinaryNodeData {
+	text: string;
+	startOffset: number;
+	endOffset: number;
+}
+
+function computeBinaryNodeData(src: string, left: ASyntaxNode, right: ASyntaxNode): BinaryNodeData {
+	// Use precise source offsets when available (avoids indexOf ambiguity with
+	// repeated substrings like "1 + 1" where both children have text "1").
+	if (hasSyntaxOffsets(left) && hasSyntaxOffsets(right)) {
+		const start = left._startOffset;
+		const end = right._endOffset;
+		return { text: src.slice(start, end), startOffset: start, endOffset: end };
+	}
+
+	// Fallback: indexOf-based — may be inaccurate for repeated literals.
 	const l = src.indexOf(left.text);
 	const rEnd = src.indexOf(right.text, l) + right.text.length;
-	if (l >= 0 && rEnd > l) return src.slice(l, rEnd);
-	return `${left.text} ${right.text}`;
+	const text = (l >= 0 && rEnd > l) ? src.slice(l, rEnd) : `${left.text} ${right.text}`;
+	return { text, startOffset: l >= 0 ? l : 0, endOffset: rEnd };
+}
+
+function makeBinaryNode(
+	type: Parameters<typeof makeSyntaxNode>[0],
+	src: string,
+	left: ASyntaxNode,
+	right: ASyntaxNode
+): ASyntaxNode {
+	const { text, startOffset, endOffset } = computeBinaryNodeData(src, left, right);
+	return makeSyntaxNode(type, text, [left, right], startOffset, endOffset);
 }
 
 function findNodeStart(node: ASyntaxNode, src: string): number {
