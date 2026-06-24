@@ -268,7 +268,17 @@ export function tokenize(expression: string): Token[] {
 					// A QName that looks like an axis name followed by `::` was already
 					// handled (the `::` check above ran before reaching here); so here
 					// a colon that is not `::` means it is a namespace prefix separator.
-					push(TokenKind.NAME, qname, start);
+					//
+					// Look ahead past whitespace to check for `(` — a prefixed QName
+					// followed by `(` is a namespace-qualified function call (e.g. jr:itext())
+					// and must be emitted as FUNCTION_NAME so parseFunctionCall() handles it.
+					let qla = pos;
+					while (qla < expression.length && /\s/.test(expression[qla]!)) qla++;
+					if (expression[qla] === '(') {
+						push(TokenKind.FUNCTION_NAME, qname, start);
+					} else {
+						push(TokenKind.NAME, qname, start);
+					}
 					continue;
 				}
 				// Rewind: the colon was not part of a QName

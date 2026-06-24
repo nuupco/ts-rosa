@@ -18,6 +18,7 @@
 import { XPathNodeKindKey } from '../../vendor/xpath/adapter/interface/XPathNode.ts';
 import type { InstanceNode } from '../../../model/instance/InstanceNode.ts';
 import type { InstanceTree } from '../../../model/instance/InstanceTree.ts';
+import type { ItextResolver } from '../../../model/def/Itext.ts';
 
 // ---------------------------------------------------------------------------
 // Document node — synthetic root wrapping the InstanceTree
@@ -27,12 +28,30 @@ import type { InstanceTree } from '../../../model/instance/InstanceTree.ts';
  * There is exactly ONE document node per evaluation. Its single child element
  * is the wrapper for tree.root. `node` is null because the document node has
  * no backing InstanceNode.
+ *
+ * Optional per-form fields (populated by FormEvaluator via
+ * makeInstanceDocumentNode opts):
+ * - secondaryInstances: named secondary instance roots for instance() fn.
+ * - itext: active-language resolver for jr:itext() fn.
  */
 export interface InstanceDocumentNode {
   readonly [XPathNodeKindKey]: 'document';
   readonly kind: 'document';
   readonly tree: InstanceTree;
   readonly node: null;
+  /** Named secondary instance roots, keyed by id. Read by native instance() fn. */
+  readonly secondaryInstances?: ReadonlyMap<string, InstanceXPathNode>;
+  /** Active-language itext resolver. Read by native itext() fn. */
+  readonly itext?: ItextResolver | null;
+}
+
+/**
+ * Options for makeInstanceDocumentNode — carry per-form state that native
+ * XPath functions (instance, itext) read from the context document node.
+ */
+export interface InstanceDocumentNodeOptions {
+  readonly secondaryInstances?: ReadonlyMap<string, InstanceXPathNode>;
+  readonly itext?: ItextResolver | null;
 }
 
 // ---------------------------------------------------------------------------

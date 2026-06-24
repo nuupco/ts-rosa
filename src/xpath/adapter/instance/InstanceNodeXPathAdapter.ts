@@ -38,6 +38,7 @@ import type { InstanceTree } from '../../../model/instance/InstanceTree.ts';
 import {
   type InstanceXPathNode,
   type InstanceDocumentNode,
+  type InstanceDocumentNodeOptions,
   type InstanceElementNode,
   type InstanceAttributeNode,
   type InstanceTextNode,
@@ -79,13 +80,19 @@ const documentCaches = new WeakMap<InstanceDocumentNode, InstanceNodeWrapperCach
  *
  * Each call returns a NEW document node (callers should cache this at the
  * FormEvaluator / session level for a stable session root).
+ *
+ * @param opts - Optional per-form state to attach to the document node.
+ *   `secondaryInstances` — read by the native instance() XPath function.
+ *   `itext` — read by the native jr:itext() XPath function.
  */
-export function makeInstanceDocumentNode(tree: InstanceTree): InstanceDocumentNode {
+export function makeInstanceDocumentNode(tree: InstanceTree, opts?: InstanceDocumentNodeOptions): InstanceDocumentNode {
   const doc: InstanceDocumentNode = {
     [XPathNodeKindKey]: 'document',
     kind: 'document',
     tree,
     node: null,
+    ...(opts?.secondaryInstances !== undefined && { secondaryInstances: opts.secondaryInstances }),
+    ...(opts?.itext !== undefined && { itext: opts.itext }),
   };
   documentCaches.set(doc, makeWrapperCache());
   return doc;

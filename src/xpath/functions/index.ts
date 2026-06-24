@@ -8,15 +8,21 @@
  *
  * EXCLUDED sub-modules (circular dependency on XFormsXPathEvaluator):
  *
- *   javarosa/node-set.ts  — `itext`: requires XFormsItextTranslations
- *     infrastructure not available in ts-rosa's xmldom evaluator.
- *   xforms/node-set.ts    — `instance`, `count-non-empty`, `randomize`, etc.:
- *     DOM-traversal functions requiring Slice 4 nodeset support.
+ *   javarosa/node-set.ts  — vendored `itext`: REPLACED by native itext-fn.ts.
+ *     The vendored version calls XFormsXPathEvaluator.getTranslationValues(),
+ *     a static method unavailable in ts-rosa's InstanceEvaluator.
+ *   xforms/node-set.ts    — vendored `instance` and others: REPLACED for
+ *     `instance` by native instance-fn.ts. Remaining functions (count-non-empty,
+ *     randomize, etc.) still excluded (DOM-traversal, not yet needed).
  *
  * Both excluded modules import XFormsXPathEvaluator.ts which in turn imports
  * the jr/xf index files, creating a circular module graph that makes the
  * FunctionLibrary constructors receive undefined values. Building the libraries
  * manually from individual sub-modules breaks the cycle.
+ *
+ * Native shims (instance-fn.ts, itext-fn.ts) read per-form state from the
+ * evaluation context's document node (InstanceDocumentNode.secondaryInstances /
+ * .itext), never from a global evaluator. No cycle exists in these shims.
  *
  * This is documented in src/xpath/vendor/PATCHES.md.
  *
@@ -40,13 +46,16 @@ import * as xfNumber from '../vendor/xpath/functions/xforms/number.ts';
 import * as xfSelect from '../vendor/xpath/functions/xforms/select.ts';
 import * as xfString from '../vendor/xpath/functions/xforms/string.ts';
 import { indexedRepeat } from './xforms-indexed-repeat.ts';
+import { instance } from './instance-fn.ts';
+import { itext } from './itext-fn.ts';
 
 /**
- * JavaRosa function library — select functions only (choice-name, selected,
- * count-selected, selected-at). Excludes itext (node-set.ts) — see above.
+ * JavaRosa function library — select functions + native itext shim.
+ * Excludes vendored javarosa/node-set.ts (circular dep) — see above.
  */
 const jr = new FunctionLibrary(JAVAROSA_NAMESPACE_URI, [
 	...Object.values(javarosaSelect),
+	itext,
 ]);
 
 /**
@@ -64,6 +73,7 @@ const xf = new FunctionLibrary(XFORMS_NAMESPACE_URI, [
 	...Object.values(xfSelect),
 	...Object.values(xfString),
 	indexedRepeat,
+	instance,
 ]);
 
 // Unprefixed function calls (e.g. date(), if(), selected(), boolean-from-string())
