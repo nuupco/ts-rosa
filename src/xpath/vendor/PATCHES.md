@@ -156,6 +156,62 @@ set. JavaRosa test: `testEval("format-date('2018-01-02T10:20:30.123', \"%Y-%m-%e
 Both were deferred until Phase 5 PREREQ. They are NOT removed from the vendor — only
 excluded from the manual `FunctionLibrary` construction in `src/xpath/functions/index.ts`.
 
+## Patch 9 — Step.ts: filter_expr + filter_path_expr cases
+
+**File**: `src/xpath/vendor/xpath/evaluator/step/Step.ts`
+**Applied in**: Slice 5b (commit 1361c42)
+
+**Change**: Added two switch cases in the step factory (or equivalent dispatch):
+- `filter_expr` → returns `FilterExprContextNodeStep`
+- `filter_path_expr` → returns `FilterExprContextNodeStep`
+
+**Reason**: Without these cases, multi-step filter path expressions rooted at a
+secondary instance call (e.g. `instance('towns')/towndata/data_set`) were
+unrouted and would throw or silently evaluate to an empty node-set. The grammar
+nodes `filter_expr` and `filter_path_expr` are only produced when an XPath
+expression begins with a filter expression (such as `instance(...)`), so this
+change is additive and does not affect standard location path evaluation.
+
+---
+
+## Patch 10 — FilterPathExpressionEvaluator.ts: nested filter_path_expr detection
+
+**File**: `src/xpath/vendor/xpath/evaluator/expression/FilterPathExpressionEvaluator.ts`
+**Applied in**: Slice 5b (commit 1361c42)
+
+**Change**: Added nested `filter_path_expr` detection in the constructor
+(handling the case where a `FilterPathExprNode`'s first child is itself another
+`FilterPathExprNode`). The original else branch (handling a `FilterExprNode`
+first child) is unchanged.
+
+**Reason**: When an instance path has more than one step after the filter root
+(e.g. `instance('id')/root/child`), the AST may nest `filter_path_expr` nodes.
+Without this branch the inner node would be mishandled and evaluation would fail.
+The fix is additive: the new branch fires only when the first child grammar type
+is `filter_path_expr`; all other cases fall through to the original logic.
+
+---
+
+## Patch 11 — factory.ts: filter_expr passthrough + filter_path_expr fast-path
+
+**File**: `src/xpath/vendor/xpath/evaluator/expression/factory.ts`
+**Applied in**: Slice 5b (commit 1361c42)
+
+**Change**:
+- Added `filter_expr` as a transparent passthrough case (unwraps to child
+  expression) in the expression factory switch.
+- Added a `filter_path_expr` single-child fast-path (line 78–85 area): when the
+  node has exactly one child it is forwarded directly rather than constructing a
+  full `FilterPathExpressionEvaluator`.
+
+**Reason**: The expression factory was not handling these grammar node types,
+causing evaluation to fall through to an error or no-op branch. Both additions
+are additive switch cases that fire only on AST nodes produced by
+secondary-instance / nested-filter XPath expressions. All existing case routing
+is unchanged.
+
+---
+
 ## Native shims (Phase 5 PREREQ — commit b1cebc4)
 
 **Files**: `src/xpath/functions/instance-fn.ts`, `src/xpath/functions/itext-fn.ts`

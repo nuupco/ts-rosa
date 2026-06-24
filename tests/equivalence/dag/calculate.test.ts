@@ -7,11 +7,10 @@
  *   - reference/web-forms: calculate.test.ts (TriggerableDagTest.java,
  *     MultiplePredicateTest.java sections)
  *
- * ALL tests are `it.fails` because the reactive DAG engine (Phase 3) does not
- * exist yet.  Scenario.answer() does not trigger recalculation.
- *
- * ACTIVATION (Phase 3): remove `.fails` from each test as its slice is
- * implemented.  Each test cites its source method so the regression can be
+ * Tests were promoted from `it.fails` to plain `it()` and are GREEN as of
+ * Phase 5 slice 5b (commit 1361c42), which implemented the reactive DAG engine
+ * for secondary instance calculate expressions via instance() XPath function.
+ * Each test cites its source method so the regression can be
  * traced back.
  *
  * Backlog — NOT ported here (see README at bottom of file):

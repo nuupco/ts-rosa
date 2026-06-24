@@ -6,11 +6,9 @@
  *   - reference/web-forms: secondary-instances.test.ts (inline DSL variants),
  *                          calculate.test.ts MultiplePredicateTest.java section
  *
- * ALL tests are `it.fails` — secondary instance XPath bridge (instance()
- * function) and calculate DAG are not implemented yet.
- *
- * ACTIVATION (Phase 3+): remove `.fails` once instance() XPath function and
- * secondary instance loading are implemented.
+ * All tests were promoted from `it.fails` to plain `it()` and are GREEN as of
+ * Phase 5 slice 5b (commit 1361c42), which implemented the instance() XPath
+ * function and secondary instance loading.
  *
  * NOTE: Tests using external XML fixture files (two-secondary-instances.xml,
  * repeat-secondary-instance.xml) are NOT ported here because the file-loading
