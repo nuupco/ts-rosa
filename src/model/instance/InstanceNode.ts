@@ -61,12 +61,19 @@ export function cloneNode(source: InstanceNode): InstanceNode {
     parent: null,
   };
   for (const child of source.children) {
-    if (child.multiplicity === INDEX_TEMPLATE) continue; // skip nested templates
     const childClone = cloneNode(child);
     childClone.parent = clone;
-    // Assign multiplicity = count of same-name siblings already in clone
-    const sameNameCount = clone.children.filter((c) => c.name === childClone.name).length;
-    childClone.multiplicity = sameNameCount;
+    if (child.multiplicity === INDEX_TEMPLATE) {
+      // Preserve nested repeat template nodes so that addRepeatInstance can
+      // find a template when creating instances of inner repeats later.
+      childClone.multiplicity = INDEX_TEMPLATE;
+    } else {
+      // Assign multiplicity = count of same-name non-template siblings already in clone
+      const sameNameCount = clone.children.filter(
+        (c) => c.name === childClone.name && c.multiplicity !== INDEX_TEMPLATE,
+      ).length;
+      childClone.multiplicity = sameNameCount;
+    }
     clone.children.push(childClone);
   }
   return clone;

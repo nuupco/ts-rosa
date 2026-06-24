@@ -681,7 +681,7 @@ describe('Equivalence — navigation: repeat navigation (Slice 4.4)', () => {
     },
   );
 
-  it.fails(
+  it(
     // Ported from FormEntryControllerTest#jumpToNewRepeatPrompt_whenInInnerOfNestedRepeat_jumpsToInnerRepeatPrompt
     // Source: org.javarosa.form.api.FormEntryControllerTest#jumpToNewRepeatPrompt_whenInInnerOfNestedRepeat_jumpsToInnerRepeatPrompt
     //
