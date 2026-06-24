@@ -351,6 +351,92 @@ export class FormNavigator {
   }
 
   // ---------------------------------------------------------------------------
+  // Repeat navigation (Slice 4.4)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * @experimental
+   * Jump to the PROMPT_NEW_REPEAT position for the innermost repeat that
+   * contains the current cursor. Sets currentIndex and returns the event.
+   *
+   * If the cursor is not inside any repeat, this is a no-op (cursor unchanged,
+   * returns the current event). Mirrors JavaRosa FormEntryController.jumpToNewRepeatPrompt().
+   *
+   * Algorithm:
+   *   1. Walk the current index's path from leaf to root to find the innermost
+   *      level whose element is a repeat.
+   *   2. Set the path to that repeat level, with multiplicity incremented by 1
+   *      (the next instance slot, which has no instance → PROMPT_NEW_REPEAT).
+   *   3. If no repeat ancestor is found, do nothing.
+   */
+  jumpToNewRepeatPrompt(): FormEntryEvent {
+    if (!isAt(this.currentIndex)) return this.eventAt(this.currentIndex);
+
+    const path = this.currentIndex.path;
+    // Find the deepest (innermost) repeat level in the current path
+    let repeatLevel = -1;
+    for (let i = path.length - 1; i >= 0; i--) {
+      const el = this.elementAt(
+        path.slice(0, i + 1).map((l) => ({ elementIndex: l.elementIndex, multiplicity: l.multiplicity })),
+      );
+      if (el !== null && el.kind === 'repeat') {
+        repeatLevel = i;
+        break;
+      }
+    }
+
+    if (repeatLevel === -1) {
+      // Not inside any repeat — no-op
+      return this.eventAt(this.currentIndex);
+    }
+
+    // Build new path: everything up to (and including) the repeat level,
+    // with the repeat's multiplicity incremented by 1 (next instance slot).
+    const newLevels: MutableLevel[] = [];
+    for (let i = 0; i <= repeatLevel; i++) {
+      newLevels.push({ elementIndex: path[i]!.elementIndex, multiplicity: path[i]!.multiplicity });
+    }
+    newLevels[repeatLevel]!.multiplicity += 1;
+
+    const newIndex = this.buildFormIndex(newLevels);
+    this.currentIndex = newIndex;
+    return this.eventAt(newIndex);
+  }
+
+  /**
+   * @experimental
+   * Enter the nth repeat instance (0-indexed) for the repeat at the current
+   * cursor position. Sets currentIndex to the repeat node at multiplicity n
+   * and returns the event (REPEAT if instance exists, PROMPT_NEW_REPEAT otherwise).
+   *
+   * The cursor must already be positioned at or within a repeat node.
+   * Mirrors JavaRosa FormEntryController.descendIntoRepeat(int n).
+   */
+  descendIntoRepeat(n: number): FormEntryEvent {
+    if (!isAt(this.currentIndex)) return this.eventAt(this.currentIndex);
+
+    // Find the outermost repeat level (top of path that is a repeat)
+    const path = this.currentIndex.path;
+    for (let i = 0; i < path.length; i++) {
+      const el = this.elementAt(
+        path.slice(0, i + 1).map((l) => ({ elementIndex: l.elementIndex, multiplicity: l.multiplicity })),
+      );
+      if (el !== null && el.kind === 'repeat') {
+        const newLevels: MutableLevel[] = path
+          .slice(0, i + 1)
+          .map((l) => ({ elementIndex: l.elementIndex, multiplicity: l.multiplicity }));
+        newLevels[i]!.multiplicity = n;
+        const newIndex = this.buildFormIndex(newLevels);
+        this.currentIndex = newIndex;
+        return this.eventAt(newIndex);
+      }
+    }
+
+    // Not at a repeat — no-op
+    return this.eventAt(this.currentIndex);
+  }
+
+  // ---------------------------------------------------------------------------
   // Internal: resolvePath — O(depth) walk of FormDefinition.body
   // ---------------------------------------------------------------------------
 

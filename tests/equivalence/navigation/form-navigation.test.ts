@@ -516,7 +516,7 @@ function simpleRepeatForm() {
     head(
       title('Simple Repeat'),
       model(
-        mainInstance(t('data id="simple-repeat"', t('repeat', t('question1'), t('question2')))),
+        mainInstance(t('data id="simple-repeat"', t('repeat jr:template=""', t('question1'), t('question2')))),
         bind('/data/repeat/question1').type('int'),
         bind('/data/repeat/question2').type('int'),
       ),
@@ -539,7 +539,7 @@ function repeatThenSiblingForm() {
     head(
       title('Repeat Then Sibling'),
       model(
-        mainInstance(t('data id="repeat-sibling"', t('before'), t('repeat', t('q')), t('after'))),
+        mainInstance(t('data id="repeat-sibling"', t('before'), t('repeat jr:template=""', t('q')), t('after'))),
         bind('/data/before').type('string'),
         bind('/data/repeat/q').type('string'),
         bind('/data/after').type('string'),
@@ -565,10 +565,10 @@ function nestedRepeatForm() {
       title('Nested Repeat'),
       model(
         mainInstance(t('data id="nested-repeat"',
-          t('repeat1',
+          t('repeat1 jr:template=""',
             t('question1'),
             t('question2'),
-            t('repeat2', t('question3')),
+            t('repeat2 jr:template=""', t('question3')),
           ),
         )),
         bind('/data/repeat1/question1').type('int'),
@@ -589,7 +589,7 @@ function nestedRepeatForm() {
 }
 
 describe('Equivalence — navigation: repeat navigation (Slice 4.4)', () => {
-  it.fails(
+  it(
     // S4.4-A: next() from BOF on repeat form with no instances emits PROMPT_NEW_REPEAT.
     // original ts-rosa behavioral test (no direct JavaRosa counterpart)
     'next_repeatWithNoInstances_emitsPromptNewRepeat',
@@ -600,7 +600,7 @@ describe('Equivalence — navigation: repeat navigation (Slice 4.4)', () => {
     },
   );
 
-  it.fails(
+  it(
     // S4.4-B: repeat with one instance → next() emits REPEAT → Q → Q → PROMPT_NEW_REPEAT → EOF
     // original ts-rosa behavioral test (no direct JavaRosa counterpart)
     'next_repeatWithOneInstance_descendsAndIteratesQuestions',
@@ -617,7 +617,7 @@ describe('Equivalence — navigation: repeat navigation (Slice 4.4)', () => {
     },
   );
 
-  it.fails(
+  it(
     // S4.4-C / Ported from FormEntryControllerTest#jumpToNewRepeatPrompt_whenInRepeat_jumpsToRepeatPrompt
     // Source: org.javarosa.form.api.FormEntryControllerTest#jumpToNewRepeatPrompt_whenInRepeat_jumpsToRepeatPrompt
     //
@@ -641,7 +641,7 @@ describe('Equivalence — navigation: repeat navigation (Slice 4.4)', () => {
     },
   );
 
-  it.fails(
+  it(
     // S4.4-D: After repeat with one instance, navigation reaches /data/after then EOF
     // original ts-rosa behavioral test (no direct JavaRosa counterpart)
     'next_afterRepeat_continuesWithNextBodyElement',
@@ -658,7 +658,7 @@ describe('Equivalence — navigation: repeat navigation (Slice 4.4)', () => {
     },
   );
 
-  it.fails(
+  it(
     // Ported from FormEntryControllerTest#jumpToNewRepeatPrompt_whenInOuterOfNestedRepeat_jumpsToOuterRepeatPrompt
     // Source: org.javarosa.form.api.FormEntryControllerTest#jumpToNewRepeatPrompt_whenInOuterOfNestedRepeat_jumpsToOuterRepeatPrompt
     //
@@ -710,7 +710,7 @@ describe('Equivalence — navigation: repeat navigation (Slice 4.4)', () => {
     },
   );
 
-  it.fails(
+  it(
     // Ported from FormEntryControllerTest#jumpToNewRepeatPrompt_whenNotInRepeat_doesNothing
     // Source: org.javarosa.form.api.FormEntryControllerTest#jumpToNewRepeatPrompt_whenNotInRepeat_doesNothing
     //

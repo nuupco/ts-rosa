@@ -382,10 +382,10 @@ export class Scenario {
   /**
    * @experimental Slice 4.4
    * Delegates to navigator.jumpToNewRepeatPrompt().
-   * Returns the FormEntryEvent code.
+   * Returns the FormEntryEvent code (mirrors JavaRosa int event code).
    */
   jumpToNewRepeatPrompt(): number {
-    return notImplemented("jumpToNewRepeatPrompt");
+    return this.session.navigator.jumpToNewRepeatPrompt().code;
   }
 
   // -------------------------------------------------------------------------
