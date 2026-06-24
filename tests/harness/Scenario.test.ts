@@ -155,12 +155,16 @@ describe("Scenario instance method stubs", () => {
     expect(initializedScenario.atQuestion()).toBe(false);
   });
 
-  it("refAtIndex() throws not implemented: refAtIndex", () => {
-    expectNotImplemented(() => scenario.refAtIndex(), "refAtIndex");
+  it("refAtIndex() returns null at BOF (before any navigation)", () => {
+    // refAtIndex is now implemented; at BOF it returns null (no ref)
+    const initializedScenario = Scenario.init(minimalForm);
+    expect(initializedScenario.refAtIndex()).toBeNull();
   });
 
-  it("getQuestionAtIndex() throws not implemented: getQuestionAtIndex", () => {
-    expectNotImplemented(() => scenario.getQuestionAtIndex(), "getQuestionAtIndex");
+  it("getQuestionAtIndex() returns null at BOF (before any navigation)", () => {
+    // getQuestionAtIndex is now implemented; at BOF it returns null (not at a question)
+    const initializedScenario = Scenario.init(minimalForm);
+    expect(initializedScenario.getQuestionAtIndex()).toBeNull();
   });
 
   // getAnswerNode() is now implemented (Slice 3.5); on uninitialized Scenario it throws node not found

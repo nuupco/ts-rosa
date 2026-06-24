@@ -396,16 +396,27 @@ export class Scenario {
     return this.session.navigator.atTheEndOfForm();
   }
 
-  refAtIndex(): TreeReferenceStub {
-    return notImplemented("refAtIndex");
+  /**
+   * @experimental Slice 4.5
+   * Delegates to navigator.refAtIndex(). Returns the ref at the current cursor.
+   * Returns null when the cursor is at BOF or EOF.
+   */
+  refAtIndex(): TreeReferenceStub | null {
+    return this.session.navigator.refAtIndex() as unknown as TreeReferenceStub | null;
   }
 
   atQuestion(): boolean {
     return this.session.navigator.atQuestion();
   }
 
-  getQuestionAtIndex(): QuestionDefStub {
-    return notImplemented("getQuestionAtIndex");
+  /**
+   * @experimental Slice 4.5
+   * Returns a question wrapper for the element at the current cursor.
+   * Exposes getLabelInnerText() and getControlType().
+   * Returns null when not at a question position.
+   */
+  getQuestionAtIndex(): { getLabelInnerText(): string | null; getControlType(): string } | null {
+    return this.session.navigator.getQuestionAtIndex();
   }
 
   // -------------------------------------------------------------------------

@@ -103,6 +103,7 @@ describe('FormElement discriminated union', () => {
       controlType: 'input',
       binding: null,
       labelText: 'Your name',
+      labelInnerText: 'Your name',
       choices: [],
     };
     expect(q.kind).toBe('question');
@@ -142,6 +143,7 @@ describe('FormDefinition and walkControls', () => {
       controlType: 'input',
       binding: null,
       labelText: 'Name',
+      labelInnerText: 'Name',
       choices: [],
     };
     const q2: FormElement = {
@@ -150,6 +152,7 @@ describe('FormDefinition and walkControls', () => {
       controlType: 'input',
       binding: null,
       labelText: 'Age',
+      labelInnerText: 'Age',
       choices: [],
     };
     const group: FormElement = {
@@ -206,6 +209,7 @@ describe('FormDefinition and walkControls', () => {
       controlType: 'select1',
       binding: null,
       labelText: 'Color',
+      labelInnerText: 'Color',
       choices: [
         { value: 'red', labelText: 'Red' },
         { value: 'blue', labelText: 'Blue' },

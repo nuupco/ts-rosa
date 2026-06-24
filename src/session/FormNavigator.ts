@@ -351,6 +351,38 @@ export class FormNavigator {
   }
 
   // ---------------------------------------------------------------------------
+  // Prompt API (Slice 4.5)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * @experimental
+   * Returns a question wrapper for the element at the given index (defaults to
+   * current cursor). Returns null when not at a question position.
+   *
+   * The returned object exposes:
+   *   - getLabelInnerText(): label text with <output> replaced by ${n} placeholders
+   *   - getControlType(): the control type string (e.g. 'input', 'select1')
+   *
+   * R4.5.2: walks FormDefinition.body via resolvePath — O(depth). No XPath eval.
+   * R4.5.8: does NOT trigger XPath evaluation or modify InstanceTree.
+   */
+  getQuestionAtIndex(idx?: FormIndex): { getLabelInnerText(): string | null; getControlType(): string } | null {
+    const target = idx ?? this.currentIndex;
+    if (!isAt(target)) return null;
+    const resolved = this.resolvePath(target.path);
+    if (resolved === null || resolved.element.kind !== 'question') return null;
+    const element = resolved.element;
+    return {
+      getLabelInnerText(): string | null {
+        return element.labelInnerText;
+      },
+      getControlType(): string {
+        return element.controlType;
+      },
+    };
+  }
+
+  // ---------------------------------------------------------------------------
   // Repeat navigation (Slice 4.4)
   // ---------------------------------------------------------------------------
 

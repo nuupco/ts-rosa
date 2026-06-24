@@ -24,6 +24,13 @@ export type FormElement =
       readonly controlType: ControlType;
       readonly binding: DataBinding | null;
       readonly labelText: string | null;
+      /**
+       * Label inner text with <output> elements replaced by ${index} placeholders,
+       * preserving surrounding whitespace (including non-breaking spaces).
+       * Mirrors JavaRosa QuestionDef.getLabelInnerText().
+       * Null when no label is present.
+       */
+      readonly labelInnerText: string | null;
       readonly choices: readonly ChoiceItem[];
     }
   | {

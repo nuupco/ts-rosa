@@ -10,7 +10,7 @@ import type { FormElement, ChoiceItem } from '../model/def/FormElement.ts';
 import type { DataBinding } from '../model/def/DataBinding.ts';
 import { controlTypeFromTag } from '../model/def/controlType.ts';
 import { parseAbsoluteRef } from '../model/instance/TreeReference.ts';
-import { childElementsByLocalName, firstByLocalName, textContent } from './domHelpers.ts';
+import { childElementsByLocalName, firstByLocalName, textContent, labelInnerText } from './domHelpers.ts';
 
 /** Build context passed to each handler */
 export type BuildCtx = {
@@ -62,10 +62,12 @@ function questionHandler(el: Element, ctx: BuildCtx): FormElement {
   const ref = parseAbsoluteRef(refAttr);
   const controlType = controlTypeFromTag(el.localName ?? '');
   const binding = ctx.bindings.get(refAttr) ?? null;
-  const labelText = getLabelText(el);
+  const labelEl = firstByLocalName(el, 'label');
+  const labelText = labelEl ? textContent(labelEl) : null;
+  const innerText = labelEl ? labelInnerText(labelEl) : null;
   const choices = getChoices(el);
 
-  return { kind: 'question', ref, controlType, binding, labelText, choices };
+  return { kind: 'question', ref, controlType, binding, labelText, labelInnerText: innerText, choices };
 }
 
 // ---------------------------------------------------------------------------
