@@ -241,8 +241,31 @@ describe("JR equivalence: XFormParserTest — Phase 2+ (it.fails)", () => {
     },
   );
 
-  it.fails("parsesSecondaryInstanceForm — secondary instance support (Phase 2+)", () => {
-    throw new Error("Phase 2+: secondary instances not implemented");
+  // Promoted from it.fails in Phase 5 slice 5b (commit 1361c42).
+  // JR: XFormParserTest#parsesSecondaryInstanceForm — only checks title.
+  // Fixture inlined from reference/javarosa/src/test/resources/org/javarosa/xform/parse/secondary-instance.xml
+  it("parsesSecondaryInstanceForm — parses form with internal secondary instance", () => {
+    const secondaryInstanceXml = `<h:html xmlns="http://www.w3.org/2002/xforms" xmlns:h="http://www.w3.org/1999/xhtml">
+    <h:head>
+        <h:title>Form with secondary instance</h:title>
+        <model>
+            <instance>
+                <data id="a">
+                    <data_set_used/>
+                </data>
+            </instance>
+            <instance id="towns">
+                <towndata z="1">
+                    <data_set>us_east</data_set>
+                </towndata>
+            </instance>
+            <bind nodeset="/data/data_set_used" calculate="instance('towns')/towndata/data_set"/>
+        </model>
+    </h:head>
+    <h:body></h:body>
+</h:html>`;
+    const form = parseForm(secondaryInstanceXml);
+    expect(form.title).toBe("Form with secondary instance");
   });
 
   it.fails("parsesLastSavedInstanceWithNullSrc — jr:// reference manager (Phase 2+)", () => {
