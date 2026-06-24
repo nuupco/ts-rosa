@@ -16,6 +16,8 @@
  */
 
 import type { InstanceTree } from '../model/instance/InstanceTree.ts';
+import type { ItextTranslations } from '../model/def/Itext.ts';
+import { makeItextResolver, type ItextResolver } from '../model/def/Itext.ts';
 import type { InstanceNode } from '../model/instance/InstanceNode.ts';
 import {
   makeInstanceDocumentNode,
@@ -60,9 +62,15 @@ export interface ValidateOutcome {
   readonly status: AnswerResult.REQUIRED_BUT_EMPTY | AnswerResult.CONSTRAINT_VIOLATED;
 }
 
+/** Options bag for FormEvaluator constructor (all optional for backward compat). */
+export interface FormEvaluatorOptions {
+  readonly factory?: OpaqueReactiveObjectFactory;
+  readonly itext?: ItextTranslations | null;
+}
+
 export class FormEvaluator {
   private readonly tree: InstanceTree;
-  private readonly docNode: InstanceDocumentNode;
+  private docNode: InstanceDocumentNode;
   /** Reactive DAG — set by initializeInstance; null until a form with bindings is loaded. */
   private dag: TriggerableDag | null = null;
 
@@ -78,10 +86,72 @@ export class FormEvaluator {
    */
   private constraintBindings: ReadonlyMap<string, CompiledBinding> = new Map();
 
-  constructor(tree: InstanceTree, factory?: OpaqueReactiveObjectFactory) {
+  /** Itext resolver for the active session. Null when form has no itext. */
+  private readonly itextResolver: ItextResolver | null;
+
+  constructor(tree: InstanceTree, opts?: OpaqueReactiveObjectFactory | FormEvaluatorOptions) {
     this.tree = tree;
-    this.docNode = makeInstanceDocumentNode(tree);
+
+    // Support both legacy `new FormEvaluator(tree, factory)` and new opts bag
+    let factory: OpaqueReactiveObjectFactory | undefined;
+    let itextTranslations: ItextTranslations | null = null;
+
+    if (opts === undefined) {
+      factory = undefined;
+    } else if (typeof opts === 'function') {
+      // Legacy: second arg is the factory function directly
+      factory = opts;
+    } else {
+      factory = opts.factory;
+      itextTranslations = opts.itext ?? null;
+    }
+
     this.factory = factory ?? identityReactiveFactory;
+    this.itextResolver = itextTranslations !== null ? makeItextResolver(itextTranslations) : null;
+    this.docNode = makeInstanceDocumentNode(tree, { itext: this.itextResolver });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Slice 5a — language management
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Switch the active language for itext resolution.
+   * Throws when `lang` is not in the form's translation list (REQ-5A-4).
+   * Passing null resets to the default language.
+   * No-op when the form has no itext block.
+   */
+  setLanguage(lang: string | null): string | null {
+    if (this.itextResolver === null) {
+      // Form has no itext — nothing to do (no error; graceful no-op)
+      return null;
+    }
+    return this.itextResolver.setActiveLanguage(lang);
+  }
+
+  /**
+   * Return the list of available languages (in declaration order).
+   * Returns empty array when form has no itext.
+   */
+  getLanguages(): readonly string[] {
+    return this.itextResolver?.getLanguages() ?? [];
+  }
+
+  /**
+   * Return the currently active language.
+   * Returns null when form has no itext.
+   */
+  getActiveLanguage(): string | null {
+    return this.itextResolver?.getActiveLanguage() ?? null;
+  }
+
+  /**
+   * Resolve an itext id to its string value in the active language.
+   * Returns null when the id is absent in all languages.
+   * Returns null when form has no itext.
+   */
+  resolveItext(id: string): string | null {
+    return this.itextResolver?.resolve(id) ?? null;
   }
 
   // ---------------------------------------------------------------------------

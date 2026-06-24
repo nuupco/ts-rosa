@@ -169,6 +169,7 @@ describe('FormDefinition and walkControls', () => {
       body: [q1, group],
       dag: null,
       constraintBindings: new Map(),
+      itext: null,
     };
   }
 

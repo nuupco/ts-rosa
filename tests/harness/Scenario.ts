@@ -224,8 +224,24 @@ export class Scenario {
     return notImplemented("newInstance");
   }
 
-  setLanguage(_language: string): void {
-    return notImplemented("setLanguage");
+  setLanguage(language: string): void {
+    this.session.evaluator.setLanguage(language);
+  }
+
+  getLanguages(): readonly string[] {
+    return this.session.evaluator.getLanguages();
+  }
+
+  getActiveLanguage(): string | null {
+    return this.session.evaluator.getActiveLanguage();
+  }
+
+  /**
+   * Resolve an itext id to its text in the active language.
+   * Convenience method for tests; mirrors jr:itext() XPath function semantics.
+   */
+  resolveItext(id: string): string | null {
+    return this.session.evaluator.resolveItext(id);
   }
 
   // -------------------------------------------------------------------------

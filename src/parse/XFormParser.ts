@@ -25,6 +25,7 @@ import type { TriggerableDag } from '../eval/TriggerableDag.ts';
 import type { CompiledBinding } from './bindProcessor.ts';
 import { bodyHandlers } from './handlers.ts';
 import { childElementsByLocalName, firstByLocalName, directTextContent, textContent } from './domHelpers.ts';
+import { parseItext } from './itextParser.ts';
 
 // ---------------------------------------------------------------------------
 // Step 1: Build InstanceTree from <instance> element
@@ -266,7 +267,7 @@ function buildReactiveDag(
 export function parseDocument(doc: Document): FormDefinition {
   const root = doc.documentElement;
   if (!root) {
-    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [], dag: null, constraintBindings: new Map() };
+    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [], dag: null, constraintBindings: new Map(), itext: null };
   }
 
   // Find model (under h:head/head)
@@ -299,7 +300,10 @@ export function parseDocument(doc: Document): FormDefinition {
   // Title
   const title = extractTitle(doc);
 
-  return { title, mainInstance, bindings, body, dag, constraintBindings };
+  // Step 5: Parse itext translations (slice 5a)
+  const itext = parseItext(modelEl);
+
+  return { title, mainInstance, bindings, body, dag, constraintBindings, itext };
 }
 
 /**

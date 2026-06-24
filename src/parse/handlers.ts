@@ -28,10 +28,31 @@ function getLabelText(el: Element): string | null {
   return labelEl ? textContent(labelEl) : null;
 }
 
+/** Pattern to detect jr:itext('id') or jr:itext("id") in label ref attributes. */
+const ITEXT_REF_RE = /jr:itext\(\s*['"]([^'"]+)['"]\s*\)/;
+
 function getChoices(el: Element): readonly ChoiceItem[] {
   return childElementsByLocalName(el, 'item').map((itemEl) => {
     const valueEl = firstByLocalName(itemEl, 'value');
     const labelEl = firstByLocalName(itemEl, 'label');
+
+    if (labelEl !== null) {
+      const refAttr = labelEl.getAttribute('ref');
+      if (refAttr !== null) {
+        // <label ref="jr:itext('id')"/> — itext-driven label
+        const match = ITEXT_REF_RE.exec(refAttr);
+        if (match !== null) {
+          return {
+            value: valueEl ? (textContent(valueEl) ?? '') : '',
+            labelText: null,
+            labelIsItext: true,
+            labelItextId: match[1] ?? null,
+          };
+        }
+        // Other ref expressions — not yet supported for static items; fall through
+      }
+    }
+
     return {
       value: valueEl ? (textContent(valueEl) ?? '') : '',
       labelText: labelEl ? textContent(labelEl) : null,

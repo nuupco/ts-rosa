@@ -153,5 +153,23 @@ set. JavaRosa test: `testEval("format-date('2018-01-02T10:20:30.123', \"%Y-%m-%e
   circular dependency via `XFormsXPathEvaluator.ts`. DOM-traversal functions require
   Slice 4 nodeset support.
 
-Both are deferred to Slice 4 or Phase 3. They are NOT removed from the vendor — only
+Both were deferred until Phase 5 PREREQ. They are NOT removed from the vendor — only
 excluded from the manual `FunctionLibrary` construction in `src/xpath/functions/index.ts`.
+
+## Native shims (Phase 5 PREREQ — commit b1cebc4)
+
+**Files**: `src/xpath/functions/instance-fn.ts`, `src/xpath/functions/itext-fn.ts`
+
+Instead of adapting the vendored circular-dependency modules, ts-rosa registers two native
+shim functions that read per-form state directly from the evaluation context's document node
+(`context.contextDocument`), which is an `InstanceDocumentNode` carrying `secondaryInstances`
+and `itext` fields set per-session. This is the same pattern used by `xforms-indexed-repeat.ts`.
+
+The shims are registered in `src/xpath/functions/index.ts`:
+- `instance` → xf (XForms) library
+- `itext` → jr (JavaRosa) library
+
+Per-session itext state is wired in Slice 5a: `FormEvaluator` builds an `ItextResolver` from
+`ItextTranslations` (parsed by `itextParser.ts`) and attaches it to the document node. Language
+switching (`setLanguage`) mutates the resolver's active-language cursor — no DAG cascade needed
+since labels are read-derived, not instance values.

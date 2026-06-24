@@ -104,8 +104,27 @@ describe("Scenario instance method stubs", () => {
     expect(scenario.getValidationOutcome()).toBeNull();
   });
 
-  it("setLanguage(lang) throws not implemented: setLanguage", () => {
-    expectNotImplemented(() => scenario.setLanguage("en"), "setLanguage");
+  it("setLanguage(lang) does not throw (slice 5a)", () => {
+    // The form in this test has no <itext> block, so languages = [].
+    // setLanguage on a form with no itext should be a no-op (or throw for unknown lang).
+    // We verify it does NOT throw "not implemented".
+    // When the form has no itext, setLanguage with any string may throw for unknown language —
+    // but it must NOT throw the notImplemented stub error.
+    let threw = false;
+    let threwNotImplemented = false;
+    try {
+      scenario.setLanguage("en");
+    } catch (e) {
+      threw = true;
+      if (e instanceof Error && e.message.includes("not implemented")) {
+        threwNotImplemented = true;
+      }
+    }
+    // If it threw, it must not be the "not implemented" stub error
+    if (threw) {
+      expect(threwNotImplemented).toBe(false);
+    }
+    // If no throw, the implementation silently handled it — also fine
   });
 
   it("serializeAndDeserializeForm() throws not implemented: serializeAndDeserializeForm", () => {

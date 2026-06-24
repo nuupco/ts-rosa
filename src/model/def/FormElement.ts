@@ -4,11 +4,22 @@ import type { DataBinding } from './DataBinding';
 
 /**
  * A static choice item from a <item> child of select1/select elements.
- * Dynamic itemsets are a Phase 5 concern.
+ * Dynamic itemsets are a Phase 5c concern.
  */
 export type ChoiceItem = {
   readonly value: string;
+  /** Raw text content of the label element (non-itext label). */
   readonly labelText: string | null;
+  /**
+   * True when the label is driven by jr:itext('id') rather than a literal text node.
+   * Added in Slice 5a to support itext-driven static choice labels.
+   */
+  readonly labelIsItext?: boolean;
+  /**
+   * The extracted itext id when labelIsItext = true.
+   * e.g. for <label ref="jr:itext('fruit:apple')"/> → labelItextId = 'fruit:apple'.
+   */
+  readonly labelItextId?: string | null;
 };
 
 /**

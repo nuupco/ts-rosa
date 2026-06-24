@@ -3,6 +3,7 @@ import type { DataBinding } from './DataBinding';
 import type { FormElement } from './FormElement';
 import type { TriggerableDag } from '../../eval/TriggerableDag';
 import type { CompiledBinding } from '../../parse/bindProcessor';
+import type { ItextTranslations } from './Itext';
 
 /**
  * FormDefinition — pure definition record for a parsed XForms form.
@@ -23,6 +24,11 @@ export type FormDefinition = {
    * during answerQuestion and validate().
    */
   readonly constraintBindings: ReadonlyMap<string, CompiledBinding>;
+  /**
+   * Parsed itext translations from the <itext> block inside <model>.
+   * Null when the form has no <itext> element (no i18n).
+   */
+  readonly itext: ItextTranslations | null;
 };
 
 /**
