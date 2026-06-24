@@ -742,3 +742,128 @@ describe('Equivalence — navigation: repeat navigation (Slice 4.4)', () => {
     },
   );
 });
+
+// ---------------------------------------------------------------------------
+// Slice 4.5 — Prompt API: getQuestionAtIndex + getLabelInnerText + jumpToBeginningOfForm
+// ---------------------------------------------------------------------------
+
+/**
+ * Form fixture for spacesBetweenOutputs.
+ * Mirrors org.javarosa.xform.parse.XFormParserTest#spacesBetweenOutputs_areRespected.
+ *
+ * Label contains adjacent <output> elements separated by a non-breaking space ( ).
+ * Expected getLabelInnerText(): "Full name: ${0} ${1}"
+ */
+function spacesBetweenOutputsForm() {
+  // Build via raw XML string (the DSL does not expose <output> elements).
+  return `<?xml version="1.0"?>
+<h:html xmlns="http://www.w3.org/2002/xforms"
+        xmlns:h="http://www.w3.org/1999/xhtml">
+  <h:head>
+    <h:title>Spaces Between Outputs</h:title>
+    <model>
+      <instance>
+        <data id="spaces-outputs">
+          <first_name/>
+          <last_name/>
+          <question/>
+        </data>
+      </instance>
+      <bind nodeset="/data/question" type="string"/>
+    </model>
+  </h:head>
+  <h:body>
+    <input ref="/data/question">
+      <label>Full name: <output value=" ../first_name "/> <output value=" ../last_name "/></label>
+    </input>
+  </h:body>
+</h:html>`;
+}
+
+describe('Equivalence — navigation: prompt API (Slice 4.5)', () => {
+  it.fails(
+    // S4.5-A: xform-parser.test.ts:203 spacesBetweenOutputs_areRespected
+    // Ported from org.javarosa.xform.parse.XFormParserTest#spacesBetweenOutputs_areRespected
+    // Source: org.javarosa.xform.parse.XFormParserTest#spacesBetweenOutputs_areRespected
+    'spacesBetweenOutputs_areRespected',
+    () => {
+      const scenario = Scenario.init(spacesBetweenOutputsForm());
+      scenario.next(); // navigate to /data/question
+      const question = scenario.getQuestionAtIndex();
+      const nbsp = ' ';
+      const expected = `Full name: \${0}${nbsp}\${1}`;
+      expect(question.getLabelInnerText()).toBe(expected);
+    },
+  );
+
+  it.fails(
+    // S4.5-B: refAtIndex returns the ref at the cursor
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'refAtIndex_atQuestion_returnsRef',
+    () => {
+      const scenario = Scenario.init(
+        html(
+          head(
+            title('Single Question'),
+            model(
+              mainInstance(t('data id="ref-test"', t('name'))),
+              bind('/data/name').type('string'),
+            ),
+          ),
+          body(input('/data/name')),
+        ),
+      );
+      scenario.next(); // navigate to /data/name
+      const ref = scenario.refAtIndex();
+      // The returned ref should be truthy and not null
+      expect(ref).not.toBeNull();
+    },
+  );
+
+  it(
+    // S4.5-C: jumpToBeginningOfForm resets cursor to BOF
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'jumpToBeginningOfForm_resetsCursorToBof',
+    () => {
+      const scenario = Scenario.init(
+        html(
+          head(
+            title('Single Question'),
+            model(
+              mainInstance(t('data id="bof-test"', t('q'))),
+              bind('/data/q').type('string'),
+            ),
+          ),
+          body(input('/data/q')),
+        ),
+      );
+      scenario.next(); // advance to first question
+      scenario.jumpToBeginningOfForm();
+      const idx = scenario.getCurrentIndex();
+      expect((idx as unknown as { kind: string }).kind).toBe('bof');
+    },
+  );
+
+  it.fails(
+    // S4.5-D: getQuestionAtIndex returns a question with getControlType()
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'getQuestionAtIndex_returnsQuestionWithControlType',
+    () => {
+      const scenario = Scenario.init(
+        html(
+          head(
+            title('Single Question'),
+            model(
+              mainInstance(t('data id="ctrl-type-test"', t('q'))),
+              bind('/data/q').type('string'),
+            ),
+          ),
+          body(input('/data/q')),
+        ),
+      );
+      scenario.next();
+      const question = scenario.getQuestionAtIndex();
+      expect(question.getControlType()).toBe('input');
+    },
+  );
+});
