@@ -66,6 +66,7 @@ export interface ValidateOutcome {
 export interface FormEvaluatorOptions {
   readonly factory?: OpaqueReactiveObjectFactory;
   readonly itext?: ItextTranslations | null;
+  readonly secondaryInstances?: ReadonlyMap<string, InstanceTree>;
 }
 
 export class FormEvaluator {
@@ -89,12 +90,16 @@ export class FormEvaluator {
   /** Itext resolver for the active session. Null when form has no itext. */
   private readonly itextResolver: ItextResolver | null;
 
+  /** Wrapped secondary instance roots, keyed by id. Read by native instance() fn via docNode. */
+  private readonly secondaryDocs: ReadonlyMap<string, InstanceXPathNode>;
+
   constructor(tree: InstanceTree, opts?: OpaqueReactiveObjectFactory | FormEvaluatorOptions) {
     this.tree = tree;
 
     // Support both legacy `new FormEvaluator(tree, factory)` and new opts bag
     let factory: OpaqueReactiveObjectFactory | undefined;
     let itextTranslations: ItextTranslations | null = null;
+    let secondaryInstances: ReadonlyMap<string, InstanceTree> | undefined;
 
     if (opts === undefined) {
       factory = undefined;
@@ -104,11 +109,30 @@ export class FormEvaluator {
     } else {
       factory = opts.factory;
       itextTranslations = opts.itext ?? null;
+      secondaryInstances = opts.secondaryInstances;
     }
 
     this.factory = factory ?? identityReactiveFactory;
     this.itextResolver = itextTranslations !== null ? makeItextResolver(itextTranslations) : null;
-    this.docNode = makeInstanceDocumentNode(tree, { itext: this.itextResolver });
+
+    // Build per-session secondary instance document nodes.
+    // instance() returns the document node so that `instance('id')/root/item`
+    // navigates: document → root element → item children (JavaRosa semantics).
+    if (secondaryInstances !== undefined && secondaryInstances.size > 0) {
+      const docs = new Map<string, InstanceXPathNode>();
+      for (const [id, secTree] of secondaryInstances) {
+        const secDoc = makeInstanceDocumentNode(secTree);
+        docs.set(id, secDoc);
+      }
+      this.secondaryDocs = docs;
+    } else {
+      this.secondaryDocs = new Map();
+    }
+
+    const docNodeOpts = this.secondaryDocs.size > 0
+      ? { itext: this.itextResolver, secondaryInstances: this.secondaryDocs }
+      : { itext: this.itextResolver };
+    this.docNode = makeInstanceDocumentNode(tree, docNodeOpts);
   }
 
   // ---------------------------------------------------------------------------

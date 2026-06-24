@@ -170,6 +170,7 @@ describe('FormDefinition and walkControls', () => {
       dag: null,
       constraintBindings: new Map(),
       itext: null,
+      secondaryInstances: new Map(),
     };
   }
 

@@ -3,6 +3,7 @@ import type {
 	AnyExprNode,
 	ArgumentNode,
 	ExprNode,
+	FilterExprNode,
 	XPathNode,
 } from '../../static/grammar/SyntaxNode.ts';
 import { AbsoluteLocationPathExpressionEvaluator } from './AbsoluteLocationPathExpressionEvaluator.ts';
@@ -17,7 +18,9 @@ import { StringLiteralExpressionEvaluator } from './StringLiteralExpressionEvalu
 import { UnaryExpressionEvaluator } from './UnaryExpressionEvaluator.ts';
 import { UnionExpressionEvaluator } from './UnionExpressionEvaluator.ts';
 
-type EvaluableExprNode = AnyExprNode | ArgumentNode | ExprNode | XPathNode;
+// FilterExprNode can appear as a runtime child where the grammar type says ExprNode
+// (tree-sitter grammar wrapping); it is handled as a transparent passthrough.
+type EvaluableExprNode = AnyExprNode | ArgumentNode | ExprNode | FilterExprNode | XPathNode;
 
 export const createExpression = (syntaxNode: EvaluableExprNode): ExpressionEvaluator => {
 	switch (syntaxNode.type) {
@@ -28,7 +31,11 @@ export const createExpression = (syntaxNode: EvaluableExprNode): ExpressionEvalu
 			return createExpression(evaluableNode);
 		}
 
-		case 'expr': {
+		case 'expr':
+		// filter_expr is a grammar wrapper node — unwrap to its single child.
+		// This handles cases where FilterPathExprNode.filterExprNode.children[0]
+		// is itself a filter_expr (nested wrapping in the tree-sitter grammar).
+		case 'filter_expr': {
 			const [evaluableNode] = syntaxNode.children;
 
 			return createExpression(evaluableNode);

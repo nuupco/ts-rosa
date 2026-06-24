@@ -267,18 +267,35 @@ function buildReactiveDag(
 export function parseDocument(doc: Document): FormDefinition {
   const root = doc.documentElement;
   if (!root) {
-    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [], dag: null, constraintBindings: new Map(), itext: null };
+    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [], dag: null, constraintBindings: new Map(), itext: null, secondaryInstances: new Map() };
   }
 
   // Find model (under h:head/head)
   const headEl = findByLocalNameDeep(root, 'head');
   const modelEl = headEl ? findByLocalNameDeep(headEl, 'model') : null;
 
-  // Step 1: Find primary <instance> (first instance child of model)
-  const instanceEl = modelEl ? firstByLocalName(modelEl, 'instance') : null;
-  const mainInstance: InstanceTree = instanceEl
-    ? buildInstanceTree(instanceEl)
+  // Step 1: Find primary <instance> (first without id) + collect secondary instances
+  const instanceEls = modelEl
+    ? (childElementsByLocalName(modelEl, 'instance') as Element[])
+    : [];
+  // Main instance: first <instance> without an id attribute (fallback: first overall)
+  const mainInstanceEl =
+    instanceEls.find((e) => !e.hasAttribute('id')) ?? instanceEls[0] ?? null;
+  const mainInstance: InstanceTree = mainInstanceEl
+    ? buildInstanceTree(mainInstanceEl)
     : { root: newNode('data'), name: null };
+
+  // Secondary instances: all id-bearing <instance id="..."> elements.
+  // Apply string-value conversion (empty bindings → all nodes become 'string' AnswerValue).
+  const secondaryInstances = new Map<string, InstanceTree>();
+  for (const el of instanceEls) {
+    const id = el.getAttribute('id');
+    if (id !== null && id !== '') {
+      const secTree = buildInstanceTree(el);
+      applyBindings(secTree, new Map());
+      secondaryInstances.set(id, secTree);
+    }
+  }
 
   // Step 2: bindProcessor — find all <bind> children of model
   const bindEls = modelEl
@@ -303,7 +320,7 @@ export function parseDocument(doc: Document): FormDefinition {
   // Step 5: Parse itext translations (slice 5a)
   const itext = parseItext(modelEl);
 
-  return { title, mainInstance, bindings, body, dag, constraintBindings, itext };
+  return { title, mainInstance, bindings, body, dag, constraintBindings, itext, secondaryInstances };
 }
 
 /**

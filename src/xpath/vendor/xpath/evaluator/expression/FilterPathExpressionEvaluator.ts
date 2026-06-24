@@ -1,7 +1,7 @@
 import type { XPathNode } from '../../adapter/interface/XPathNode.ts';
 import type { EvaluationContext } from '../../context/EvaluationContext.ts';
 import { LocationPathEvaluation } from '../../evaluations/LocationPathEvaluation.ts';
-import type { FilterPathExprNode } from '../../static/grammar/SyntaxNode.ts';
+import type { FilterExprNode, FilterPathExprNode } from '../../static/grammar/SyntaxNode.ts';
 import type { ExpressionEvaluator } from './ExpressionEvaluator.ts';
 import { LocationPathEvaluator } from './LocationPathEvaluator.ts';
 import type { LocationPathExpressionEvaluator } from './LocationPathExpressionEvaluator.ts';
@@ -26,9 +26,24 @@ export class FilterPathExpressionEvaluator
 
 		this.hasSteps = rest.length > 0;
 
-		const [exprNode] = filterExprNode.children;
-		// TODO: possibly an unsafe cast!
-		this.filterExpression = createExpression(exprNode) as LocationPathExpressionEvaluator;
+		// When the first child is itself a filter_path_expr (nested case, e.g.
+		// `instance('id')/a/b[p]` as the base of a further path), use the whole
+		// inner expression as the filter expression. Otherwise, unwrap the single
+		// filter_expr child to obtain the actual evaluable expression node.
+		//
+		// NOTE: the TypeScript type declares the first child as FilterExprNode, but
+		// the runtime tree-sitter grammar can produce FilterPathExprNode as the first
+		// child when the base expression itself has path steps (e.g. multi-segment
+		// instance paths). The `as unknown` cast bridges this gap safely.
+		const firstChildNode = filterExprNode as unknown as FilterExprNode | FilterPathExprNode;
+		if (firstChildNode.type === 'filter_path_expr') {
+			// TODO: possibly an unsafe cast!
+			this.filterExpression = createExpression(firstChildNode) as LocationPathExpressionEvaluator;
+		} else {
+			const [exprNode] = (firstChildNode as FilterExprNode).children;
+			// TODO: possibly an unsafe cast!
+			this.filterExpression = createExpression(exprNode) as LocationPathExpressionEvaluator;
+		}
 	}
 
 	override evaluateNodes<T extends XPathNode>(context: EvaluationContext<T>): ReadonlySet<T> {

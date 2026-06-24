@@ -29,6 +29,11 @@ export type FormDefinition = {
    * Null when the form has no <itext> element (no i18n).
    */
   readonly itext: ItextTranslations | null;
+  /**
+   * Named secondary instances parsed from <instance id="..."> children of <model>.
+   * Empty map when the form has no secondary instances.
+   */
+  readonly secondaryInstances: ReadonlyMap<string, InstanceTree>;
 };
 
 /**

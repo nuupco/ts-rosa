@@ -41,8 +41,7 @@ import "../../harness/matchers.ts";
 // ---------------------------------------------------------------------------
 
 describe("Equivalence — secondary instances: multiple predicates in calculate", () => {
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 instance() XPath + secondary instance is implemented
+  it(
     // Source: web-forms/calculate.test.ts MultiplePredicateTest.java
     //   "support multiple predicates in one part of path"
     "calculate with two predicates on single path segment returns the matching item id",
@@ -85,8 +84,7 @@ describe("Equivalence — secondary instances: multiple predicates in calculate"
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 instance() XPath + secondary instance is implemented
+  it(
     // Source: web-forms/calculate.test.ts MultiplePredicateTest.java
     //   "support multiple predicates in multiple parts of path"
     "calculate with predicates on multiple path segments returns the correct count",

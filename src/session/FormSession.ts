@@ -33,7 +33,10 @@ export interface FormSession {
  * evaluated in topological order before the first user interaction.
  */
 export function createFormSession(definition: FormDefinition): FormSession {
-  const evaluator = new FormEvaluator(definition.mainInstance, { itext: definition.itext ?? null });
+  const evaluator = new FormEvaluator(definition.mainInstance, {
+    itext: definition.itext ?? null,
+    secondaryInstances: definition.secondaryInstances,
+  });
 
   // Slice 3.4: evaluate all Recalculates in DAG order (initial steady state)
   // Slice 3.6: also pass constraint bindings for validation

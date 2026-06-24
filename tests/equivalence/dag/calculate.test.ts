@@ -119,8 +119,7 @@ describe("Equivalence — DAG calculate cascade", () => {
     },
   );
 
-  it.fails(
-    // ACTIVATE: remove .fails when Phase 3 calculate + secondary instances implemented
+  it(
     // Source: web-forms/calculate.test.ts MultiplePredicateTest.java
     //   "support multiple predicates in one part of path"
     "calculate with multiple predicates on secondary instance returns correct value",

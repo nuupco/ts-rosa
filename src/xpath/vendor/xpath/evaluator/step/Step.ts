@@ -349,6 +349,7 @@ type PathExprContextNode =
 	| AbbreviatedAbsoluteLocationPathNode
 	| AbsoluteRootLocationPathNode
 	| FilterExprNode
+	| FilterPathExprNode
 	| StepNode;
 
 const pathExprContextStep = (syntaxNode: PathExprContextNode): PathExprContextStep => {
@@ -358,6 +359,11 @@ const pathExprContextStep = (syntaxNode: PathExprContextNode): PathExprContextSt
 			return new RootContextStep();
 
 		case 'filter_expr':
+		// A nested FilterPathExpr (e.g. instance('id')/a/b[p]) as the left-hand
+		// operand of an outer FilterPathExpr (e.g. .../c[q]). The inner expression
+		// is already evaluated by FilterPathExpressionEvaluator and its result is
+		// passed as the evaluation context, so a self-axis context step is correct.
+		case 'filter_path_expr':
 			return new FilterExprContextNodeStep();
 
 		case 'step':

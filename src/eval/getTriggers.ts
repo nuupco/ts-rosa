@@ -103,9 +103,13 @@ export function getTriggers(
         for (const child of node.children) {
           if (child.type === 'filter_expr') {
             walk(child);
+          } else if (child.type === 'filter_path_expr') {
+            // Nested filter_path_expr (e.g. instance('id')/a/b[p] as the
+            // left-hand base of an outer filter_path_expr). Recurse fully.
+            walk(child);
           } else if (child.type === 'step') {
             // A step following a filter — walk its predicates for nested triggers
-            walkStepPredicates(child, contextRef, originalContextRef);
+            walkStepPredicates(child, contextRef, originalContextRef, walk);
           }
           // '//' literals are skipped
         }
@@ -435,18 +439,13 @@ function walkStepPredicates(
   step: ASyntaxNode,
   contextRef: TreeReference,
   originalContextRef: TreeReference,
+  walker: (node: ASyntaxNode) => void,
 ): void {
   // Predicates are children of type 'predicate'
   for (const child of step.children) {
     if (child.type === 'predicate') {
-      // Predicate contains an 'expr' child
       for (const inner of child.children) {
-        // Re-use getTriggers recursively with the same context
-        const sub = getTriggers(inner, contextRef, originalContextRef);
-        // These are already added via the top-level walk; this function is
-        // called to ensure we handle predicates within absolute paths too.
-        // The results are discarded here because the parent walk already
-        // handles them via the default recursion through 'predicate' nodes.
+        walker(inner);
       }
     }
   }
