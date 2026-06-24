@@ -497,3 +497,248 @@ describe('Equivalence — navigation: relevance skip during step (Slice 4.3)', (
     },
   );
 });
+
+// ---------------------------------------------------------------------------
+// Slice 4.4 — Repeat navigation (PROMPT_NEW_REPEAT + REPEAT)
+//             + jumpToNewRepeatPrompt + descendIntoRepeat
+// ---------------------------------------------------------------------------
+
+/**
+ * Form with a simple repeat containing two questions.
+ * Uses repeat() directly in body (ts-rosa convention; no group wrapper).
+ *
+ * Note: JavaRosa fixtures use body(group + repeat) because in JavaRosa both
+ * map to a single GroupDef. In ts-rosa, group and repeat are distinct element
+ * kinds, so we use repeat() directly to avoid an extra GROUP stop.
+ */
+function simpleRepeatForm() {
+  return html(
+    head(
+      title('Simple Repeat'),
+      model(
+        mainInstance(t('data id="simple-repeat"', t('repeat', t('question1'), t('question2')))),
+        bind('/data/repeat/question1').type('int'),
+        bind('/data/repeat/question2').type('int'),
+      ),
+    ),
+    body(
+      repeat('/data/repeat',
+        input('/data/repeat/question1'),
+        input('/data/repeat/question2'),
+      ),
+    ),
+  );
+}
+
+/**
+ * Form with a repeat then a sibling question after it.
+ * Used for S4.4-D (navigation continues past repeat to next body element).
+ */
+function repeatThenSiblingForm() {
+  return html(
+    head(
+      title('Repeat Then Sibling'),
+      model(
+        mainInstance(t('data id="repeat-sibling"', t('before'), t('repeat', t('q')), t('after'))),
+        bind('/data/before').type('string'),
+        bind('/data/repeat/q').type('string'),
+        bind('/data/after').type('string'),
+      ),
+    ),
+    body(
+      input('/data/before'),
+      repeat('/data/repeat',
+        input('/data/repeat/q'),
+      ),
+      input('/data/after'),
+    ),
+  );
+}
+
+/**
+ * Form with a nested repeat.
+ * Uses repeat() directly in body (no group wrappers).
+ */
+function nestedRepeatForm() {
+  return html(
+    head(
+      title('Nested Repeat'),
+      model(
+        mainInstance(t('data id="nested-repeat"',
+          t('repeat1',
+            t('question1'),
+            t('question2'),
+            t('repeat2', t('question3')),
+          ),
+        )),
+        bind('/data/repeat1/question1').type('int'),
+        bind('/data/repeat1/question2').type('int'),
+        bind('/data/repeat1/repeat2/question3').type('int'),
+      ),
+    ),
+    body(
+      repeat('/data/repeat1',
+        input('/data/repeat1/question1'),
+        input('/data/repeat1/question2'),
+        repeat('/data/repeat1/repeat2',
+          input('/data/repeat1/repeat2/question3'),
+        ),
+      ),
+    ),
+  );
+}
+
+describe('Equivalence — navigation: repeat navigation (Slice 4.4)', () => {
+  it.fails(
+    // S4.4-A: next() from BOF on repeat form with no instances emits PROMPT_NEW_REPEAT.
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'next_repeatWithNoInstances_emitsPromptNewRepeat',
+    () => {
+      const scenario = Scenario.init(simpleRepeatForm());
+      // Body: repeat(no instances) → first next() reaches the repeat at mult=0 → PROMPT_NEW_REPEAT
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.PROMPT_NEW_REPEAT);
+    },
+  );
+
+  it.fails(
+    // S4.4-B: repeat with one instance → next() emits REPEAT → Q → Q → PROMPT_NEW_REPEAT → EOF
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'next_repeatWithOneInstance_descendsAndIteratesQuestions',
+    () => {
+      const scenario = Scenario.init(simpleRepeatForm());
+      scenario.createNewRepeat('/data/repeat');
+      // BOF → REPEAT(entering instance[1]) → question1(Q) → question2(Q)
+      //    → repeat[2](no instance) → PROMPT_NEW_REPEAT → EOF
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.REPEAT);
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION); // question1
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION); // question2
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.PROMPT_NEW_REPEAT);
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.END_OF_FORM);
+    },
+  );
+
+  it.fails(
+    // S4.4-C / Ported from FormEntryControllerTest#jumpToNewRepeatPrompt_whenInRepeat_jumpsToRepeatPrompt
+    // Source: org.javarosa.form.api.FormEntryControllerTest#jumpToNewRepeatPrompt_whenInRepeat_jumpsToRepeatPrompt
+    //
+    // JavaRosa: stepToNextEvent() → REPEAT; stepToNextEvent() → QUESTION (question1);
+    // jumpToNewRepeatPrompt() → cursor at /data/repeat[2].
+    // ts-rosa: REPEAT → question1; jumpToNewRepeatPrompt → PROMPT_NEW_REPEAT for instance[2].
+    'jumpToNewRepeatPrompt_whenInRepeat_jumpsToRepeatPrompt',
+    () => {
+      const scenario = Scenario.init(simpleRepeatForm());
+      scenario.createNewRepeat('/data/repeat');
+      // Navigate: REPEAT(instance[1]) → question1
+      scenario.next(); // REPEAT
+      scenario.next(); // QUESTION (question1)
+      // Now jumpToNewRepeatPrompt — should move to the prompt for instance[2]
+      const promptCode = scenario.jumpToNewRepeatPrompt();
+      expect(promptCode).toBe(FORM_ENTRY_EVENT.PROMPT_NEW_REPEAT);
+      // Cursor path: repeat at multiplicity 1 (second instance slot, 0-indexed)
+      const idx = scenario.getCurrentIndex() as unknown as { kind: string; path: Array<{ multiplicity: number }> };
+      expect(idx.kind).toBe('at');
+      expect(idx.path[idx.path.length - 1]!.multiplicity).toBe(1);
+    },
+  );
+
+  it.fails(
+    // S4.4-D: After repeat with one instance, navigation reaches /data/after then EOF
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'next_afterRepeat_continuesWithNextBodyElement',
+    () => {
+      const scenario = Scenario.init(repeatThenSiblingForm());
+      scenario.createNewRepeat('/data/repeat');
+      // BOF → before(Q) → REPEAT(r[1]) → q(Q) → PROMPT_NEW_REPEAT → after(Q) → EOF
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION);  // before
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.REPEAT);    // entering repeat instance[1]
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION);  // /data/repeat/q
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.PROMPT_NEW_REPEAT); // prompt for instance[2]
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.QUESTION);  // /data/after
+      expect(scenario.next()).toBe(FORM_ENTRY_EVENT.END_OF_FORM);
+    },
+  );
+
+  it.fails(
+    // Ported from FormEntryControllerTest#jumpToNewRepeatPrompt_whenInOuterOfNestedRepeat_jumpsToOuterRepeatPrompt
+    // Source: org.javarosa.form.api.FormEntryControllerTest#jumpToNewRepeatPrompt_whenInOuterOfNestedRepeat_jumpsToOuterRepeatPrompt
+    //
+    // JavaRosa: from repeat1[1]/question1, jumpToNewRepeatPrompt() → repeat1[2].
+    // ts-rosa: REPEAT(repeat1[1]) → question1; jumpToNewRepeatPrompt → repeat1[2] (PROMPT_NEW_REPEAT).
+    'jumpToNewRepeatPrompt_whenInOuterOfNestedRepeat_jumpsToOuterRepeatPrompt',
+    () => {
+      const scenario = Scenario.init(nestedRepeatForm());
+      scenario.createNewRepeat('/data/repeat1');
+      // Navigate: REPEAT(repeat1[1]) → question1
+      scenario.next(); // REPEAT (entering repeat1[1])
+      scenario.next(); // question1
+      // jumpToNewRepeatPrompt → repeat1[2] (outer repeat at mult=1)
+      const promptCode = scenario.jumpToNewRepeatPrompt();
+      expect(promptCode).toBe(FORM_ENTRY_EVENT.PROMPT_NEW_REPEAT);
+      const idx = scenario.getCurrentIndex() as unknown as { kind: string; path: Array<{ multiplicity: number }> };
+      expect(idx.kind).toBe('at');
+      // The repeat1 level should be at multiplicity 1 (second instance slot, 0-indexed)
+      expect(idx.path[0]!.multiplicity).toBe(1);
+    },
+  );
+
+  it.fails(
+    // Ported from FormEntryControllerTest#jumpToNewRepeatPrompt_whenInInnerOfNestedRepeat_jumpsToInnerRepeatPrompt
+    // Source: org.javarosa.form.api.FormEntryControllerTest#jumpToNewRepeatPrompt_whenInInnerOfNestedRepeat_jumpsToInnerRepeatPrompt
+    //
+    // JavaRosa: from repeat1[1]/repeat2[1]/question3, jumpToNewRepeatPrompt() → repeat1[1]/repeat2[2].
+    // ts-rosa: navigate to question3 inside inner repeat, then jumpToNewRepeatPrompt → repeat2[2].
+    'jumpToNewRepeatPrompt_whenInInnerOfNestedRepeat_jumpsToInnerRepeatPrompt',
+    () => {
+      const scenario = Scenario.init(nestedRepeatForm());
+      scenario.createNewRepeat('/data/repeat1');
+      scenario.createNewRepeat('/data/repeat1[1]/repeat2');
+      // Navigate: REPEAT(repeat1[1]) → question1 → question2 → REPEAT(repeat2[1]) → question3
+      scenario.next(); // REPEAT (repeat1[1])
+      scenario.next(); // question1
+      scenario.next(); // question2
+      scenario.next(); // REPEAT (repeat2[1])
+      scenario.next(); // question3
+      // jumpToNewRepeatPrompt → repeat1[1]/repeat2[2] (inner repeat at mult=1)
+      const promptCode = scenario.jumpToNewRepeatPrompt();
+      expect(promptCode).toBe(FORM_ENTRY_EVENT.PROMPT_NEW_REPEAT);
+      const idx = scenario.getCurrentIndex() as unknown as { kind: string; path: Array<{ multiplicity: number }> };
+      expect(idx.kind).toBe('at');
+      // Path: repeat1[0] (outer, mult=0) → repeat2[1] (inner, mult=1)
+      expect(idx.path).toHaveLength(2);
+      expect(idx.path[0]!.multiplicity).toBe(0); // still in repeat1[1] (0-indexed)
+      expect(idx.path[1]!.multiplicity).toBe(1); // repeat2[2] (0-indexed)
+    },
+  );
+
+  it.fails(
+    // Ported from FormEntryControllerTest#jumpToNewRepeatPrompt_whenNotInRepeat_doesNothing
+    // Source: org.javarosa.form.api.FormEntryControllerTest#jumpToNewRepeatPrompt_whenNotInRepeat_doesNothing
+    //
+    // JavaRosa: when cursor is at a question outside any repeat, jumpToNewRepeatPrompt() is a no-op.
+    'jumpToNewRepeatPrompt_whenNotInRepeat_doesNothing',
+    () => {
+      const noRepeatScenario = Scenario.init(
+        html(
+          head(
+            title('No Repeat'),
+            model(
+              mainInstance(t('data id="no-repeat"', t('question1'), t('question2'))),
+              bind('/data/question1').type('int'),
+              bind('/data/question2').type('int'),
+            ),
+          ),
+          body(
+            input('/data/question1'),
+            input('/data/question2'),
+          ),
+        ),
+      );
+      noRepeatScenario.next(); // → question1
+      const idxBefore = noRepeatScenario.getCurrentIndex();
+      noRepeatScenario.jumpToNewRepeatPrompt();
+      const idxAfter = noRepeatScenario.getCurrentIndex();
+      // cursor should not have moved
+      expect(idxAfter).toEqual(idxBefore);
+    },
+  );
+});

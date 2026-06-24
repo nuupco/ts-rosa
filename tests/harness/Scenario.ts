@@ -379,6 +379,15 @@ export class Scenario {
     this.session.navigator.jumpToBeginningOfForm();
   }
 
+  /**
+   * @experimental Slice 4.4
+   * Delegates to navigator.jumpToNewRepeatPrompt().
+   * Returns the FormEntryEvent code.
+   */
+  jumpToNewRepeatPrompt(): number {
+    return notImplemented("jumpToNewRepeatPrompt");
+  }
+
   // -------------------------------------------------------------------------
   // Inspect the form index
   // -------------------------------------------------------------------------
