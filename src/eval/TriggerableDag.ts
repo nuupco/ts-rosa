@@ -2,7 +2,7 @@
  * TriggerableDag — Slice 3.3
  *
  * Builds a topologically sorted DAG of Triggerable vertices from the
- * compiled bindings produced by bindProcessor2.
+ * compiled bindings produced by compileBindings.
  *
  * Mirrors JavaRosa TriggerableDag.java:
  *   - finalizeTriggerables → finalizeDag
@@ -80,7 +80,7 @@ export interface TriggerableDag {
  * Finalize the DAG for the given set of triggerables and their trigger index.
  *
  * @param allTriggerables  Insertion-ordered Set of unique Triggerable instances
- *                         (after dedup via addTriggerable in bindProcessor2).
+ *                         (after dedup via addTriggerable in compileBindings).
  * @param triggerablesPerTrigger  Map keyed by refToString(genericize(triggerRef)).
  * @param tree             Optional InstanceTree; used for getChildrenOfReference
  *                         when computing cascading-to-children edges (relevant).
@@ -122,7 +122,7 @@ export function finalizeDag(
  * Equivalence test: same CompiledInstanceExpression object reference
  * (parse-once semantics) AND trigger set equality by refToString.
  *
- * NOTE: This is called by bindProcessor2 callers that build allTriggerables
+ * NOTE: This is called by compileBindings callers that build allTriggerables
  * before calling finalizeDag. The function is exported for use there.
  */
 export function addTriggerable(

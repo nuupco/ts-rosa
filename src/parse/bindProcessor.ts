@@ -9,10 +9,6 @@
  *   - Compiles each DataBinding expression to a CompiledInstanceExpression via
  *     compileInstanceXPath and extracts trigger TreeReferences via getTriggers.
  *   - Produces CompiledBinding records consumed by TriggerableDag (Slice 3.3).
- *
- * Consolidated from bindProcessor.ts (Phase 1) + bindProcessor2.ts (Phase 3).
- * The name bindProcessor2 / function bindProcessor2 are aliases for backward
- * compat — any remaining internal consumers are updated at consolidation time.
  */
 
 import type { DataBinding } from '../model/def/DataBinding.ts';
@@ -159,18 +155,15 @@ export interface ProcessedBinding {
 const sharedParser = new PureJSExpressionParser();
 
 // ---------------------------------------------------------------------------
-// Phase 3 — bindProcessor2 (Phase 3 compiled bindings, renamed alias retained)
+// Phase 3 — compileBindings (compile expressions + extract triggers)
 // ---------------------------------------------------------------------------
 
 /**
  * Process an array of <bind> Elements and return a Map keyed by the nodeset
  * attribute value. Each entry is a ProcessedBinding with compiled expressions
  * and extracted triggers.
- *
- * @deprecated Use `bindProcessor2` name only for backward compat during
- * consolidation. New callers reference this file directly.
  */
-export function bindProcessor2(binds: readonly Element[]): Map<string, ProcessedBinding> {
+export function compileBindings(binds: readonly Element[]): Map<string, ProcessedBinding> {
   const result = new Map<string, ProcessedBinding>();
 
   for (const el of binds) {

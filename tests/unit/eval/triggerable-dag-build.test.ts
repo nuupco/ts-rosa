@@ -80,7 +80,7 @@ function makeConstraint(targetPath: string, triggerPaths: string[]): Triggerable
     ctxRef,
     ctxRef,
     // Using 'required' as a non-cascading condition placeholder for the constraint
-    // exclusion test — constraints are filtered out at bindProcessor2 level when
+    // exclusion test — constraints are filtered out at compileBindings level when
     // building allTriggerables; here we test that the cycle exclusion path works.
     'required',
   );
@@ -270,7 +270,7 @@ describe('TriggerableDag — cycle detection: multi-node cycles', () => {
 //  contribute self-edges — this is handled in finalizeDag by excluding
 //  constraint-action triggerables from cycle detection.
 //  However in Slice 3.3, constraints are kept out of allTriggerables by
-//  bindProcessor2 filtering, so this test verifies a 'required' triggerable
+//  compileBindings filtering, so this test verifies a 'required' triggerable
 //  (non-cascading) does NOT throw for a non-self trigger.)
 // ---------------------------------------------------------------------------
 

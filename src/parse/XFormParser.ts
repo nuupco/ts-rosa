@@ -17,7 +17,7 @@ import { resolveReference } from '../model/instance/InstanceTree.ts';
 import { INDEX_TEMPLATE } from '../model/instance/multiplicity.ts';
 import { cast } from '../model/data/codecs.ts';
 import { getXmlParser } from '../platform/XmlParser.ts';
-import { bindProcessor, bindProcessor2 } from './bindProcessor.ts';
+import { bindProcessor, compileBindings } from './bindProcessor.ts';
 import { finalizeDag, addTriggerable } from '../eval/TriggerableDag.ts';
 import { makeRecalculate, makeCondition, type Triggerable } from '../eval/Triggerable.ts';
 import { genericize, refToString } from '../model/instance/TreeReference.ts';
@@ -185,13 +185,13 @@ function findByLocalNameDeep(el: Element, localName: string): Element | null {
 }
 
 // ---------------------------------------------------------------------------
-// Step 2b: Build reactive DAG from bindProcessor2 compiled bindings
+// Step 2b: Build reactive DAG from compiled bindings
 // ---------------------------------------------------------------------------
 
 /**
  * Builds the TriggerableDag from compiled bindings.
  *
- * 1. Runs bindProcessor2 to get CompiledBindings per nodeset.
+ * 1. Runs compileBindings to get CompiledBindings per nodeset.
  * 2. For each non-constraint CompiledBinding, creates a Triggerable and adds
  *    it via addTriggerable (dedup via context intersection).
  * 3. Calls finalizeDag (Kahn topo sort + cycle detection).
@@ -211,7 +211,7 @@ function buildReactiveDag(
   const triggerablesPerTrigger = new Map<string, Set<Triggerable>>();
   const constraintBindings = new Map<string, CompiledBinding>();
 
-  const processedBindings = bindProcessor2(bindEls);
+  const processedBindings = compileBindings(bindEls);
 
   for (const processed of processedBindings.values()) {
     for (const cb of processed.compiledBindings) {
@@ -285,7 +285,7 @@ export function parseDocument(doc: Document): FormDefinition {
     : [];
   const bindings = bindProcessor(bindEls);
 
-  // Step 2b: bindProcessor2 — compile expressions + extract triggers (Phase 3)
+  // Step 2b: compileBindings — compile expressions + extract triggers (Phase 3)
   // Then finalizeDag — throws on cycle detection (Slice 3.3)
   const { dag, constraintBindings } = buildReactiveDag(bindEls, mainInstance);
 
