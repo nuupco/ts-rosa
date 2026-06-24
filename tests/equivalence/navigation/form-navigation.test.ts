@@ -781,7 +781,7 @@ function spacesBetweenOutputsForm() {
 }
 
 describe('Equivalence — navigation: prompt API (Slice 4.5)', () => {
-  it.fails(
+  it(
     // S4.5-A: xform-parser.test.ts:203 spacesBetweenOutputs_areRespected
     // Ported from org.javarosa.xform.parse.XFormParserTest#spacesBetweenOutputs_areRespected
     // Source: org.javarosa.xform.parse.XFormParserTest#spacesBetweenOutputs_areRespected
@@ -792,11 +792,11 @@ describe('Equivalence — navigation: prompt API (Slice 4.5)', () => {
       const question = scenario.getQuestionAtIndex();
       const nbsp = ' ';
       const expected = `Full name: \${0}${nbsp}\${1}`;
-      expect(question.getLabelInnerText()).toBe(expected);
+      expect(question!.getLabelInnerText()).toBe(expected);
     },
   );
 
-  it.fails(
+  it(
     // S4.5-B: refAtIndex returns the ref at the cursor
     // original ts-rosa behavioral test (no direct JavaRosa counterpart)
     'refAtIndex_atQuestion_returnsRef',
@@ -844,7 +844,7 @@ describe('Equivalence — navigation: prompt API (Slice 4.5)', () => {
     },
   );
 
-  it.fails(
+  it(
     // S4.5-D: getQuestionAtIndex returns a question with getControlType()
     // original ts-rosa behavioral test (no direct JavaRosa counterpart)
     'getQuestionAtIndex_returnsQuestionWithControlType',
@@ -863,7 +863,7 @@ describe('Equivalence — navigation: prompt API (Slice 4.5)', () => {
       );
       scenario.next();
       const question = scenario.getQuestionAtIndex();
-      expect(question.getControlType()).toBe('input');
+      expect(question!.getControlType()).toBe('input');
     },
   );
 });

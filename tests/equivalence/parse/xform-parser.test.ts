@@ -200,11 +200,46 @@ describe("JR equivalence: Scenario.init + answerOf (inline form)", () => {
 // ---------------------------------------------------------------------------
 
 describe("JR equivalence: XFormParserTest — Phase 2+ (it.fails)", () => {
-  it.fails("spacesBetweenOutputs_areRespected — requires form navigation/getLabelInnerText (Phase 2)", () => {
+  it(
+    // Ported from org.javarosa.xform.parse.XFormParserTest#spacesBetweenOutputs_areRespected
+    // Source: org.javarosa.xform.parse.XFormParserTest#spacesBetweenOutputs_areRespected
+    //
     // JR: scenario.next(); scenario.getQuestionAtIndex().getLabelInnerText()
-    // Needs form index navigation which is not implemented in Phase 1.
-    throw new Error("Phase 2: form index navigation not implemented");
-  });
+    // Returns "Full name: ${0}<nbsp>${1}" where <output> elements become ${index} placeholders.
+    "spacesBetweenOutputs_areRespected",
+    () => {
+      // Raw XML mirrors the JavaRosa fixture: label with adjacent <output> elements
+      // separated by a non-breaking space ( ).
+      const formXml = `<?xml version="1.0"?>
+<h:html xmlns="http://www.w3.org/2002/xforms"
+        xmlns:h="http://www.w3.org/1999/xhtml">
+  <h:head>
+    <h:title>Spaces Between Outputs</h:title>
+    <model>
+      <instance>
+        <data id="spaces-outputs">
+          <first_name/>
+          <last_name/>
+          <question/>
+        </data>
+      </instance>
+      <bind nodeset="/data/question" type="string"/>
+    </model>
+  </h:head>
+  <h:body>
+    <input ref="/data/question">
+      <label>Full name: <output value=" ../first_name "/> <output value=" ../last_name "/></label>
+    </input>
+  </h:body>
+</h:html>`;
+      const scenario = Scenario.init(formXml);
+      scenario.next();
+      const question = scenario.getQuestionAtIndex();
+      const nbsp = " ";
+      const expected = `Full name: \${0}${nbsp}\${1}`;
+      expect(question!.getLabelInnerText()).toBe(expected);
+    },
+  );
 
   it.fails("parsesSecondaryInstanceForm — secondary instance support (Phase 2+)", () => {
     throw new Error("Phase 2+: secondary instances not implemented");
