@@ -45,6 +45,9 @@ import {
   identityReactiveFactory,
 } from '../platform/ReactiveObjectFactory.ts';
 import type { CompiledBinding } from '../parse/bindProcessor.ts';
+import type { FormElement, ItemsetDef } from '../model/def/FormElement.ts';
+import { PureJSExpressionParser } from '../xpath/parser/PureJSExpressionParser.ts';
+import { getTriggers } from '../eval/getTriggers.ts';
 import { AnswerResult } from './AnswerResult.ts';
 
 // ---------------------------------------------------------------------------
@@ -62,11 +65,21 @@ export interface ValidateOutcome {
   readonly status: AnswerResult.REQUIRED_BUT_EMPTY | AnswerResult.CONSTRAINT_VIOLATED;
 }
 
+/** A resolved dynamic choice item returned by getChoices(). */
+export interface SelectChoice {
+  /** The value string (from <value ref="..."/> evaluation). */
+  readonly value: string;
+  /** The label string (from <label ref="..."/> or itext resolution). Null if unresolvable. */
+  readonly label: string | null;
+}
+
 /** Options bag for FormEvaluator constructor (all optional for backward compat). */
 export interface FormEvaluatorOptions {
   readonly factory?: OpaqueReactiveObjectFactory;
   readonly itext?: ItextTranslations | null;
   readonly secondaryInstances?: ReadonlyMap<string, InstanceTree>;
+  /** Body element tree — needed by getChoices() to find ItemsetDef by ref. */
+  readonly body?: readonly FormElement[];
 }
 
 export class FormEvaluator {
@@ -93,6 +106,16 @@ export class FormEvaluator {
   /** Wrapped secondary instance roots, keyed by id. Read by native instance() fn via docNode. */
   private readonly secondaryDocs: ReadonlyMap<string, InstanceXPathNode>;
 
+  /** Body element tree — used to find ItemsetDef by ref in getChoices(). */
+  private readonly body: readonly FormElement[] = [];
+
+  /**
+   * Cache for dynamic choice results, keyed by question ref string.
+   * Each entry stores the trigger-signature computed when choices were last
+   * evaluated; a changed signature triggers recomputation.
+   */
+  private readonly choiceCache: Map<string, { triggerSig: string; choices: readonly SelectChoice[] }> = new Map();
+
   constructor(tree: InstanceTree, opts?: OpaqueReactiveObjectFactory | FormEvaluatorOptions) {
     this.tree = tree;
 
@@ -110,6 +133,7 @@ export class FormEvaluator {
       factory = opts.factory;
       itextTranslations = opts.itext ?? null;
       secondaryInstances = opts.secondaryInstances;
+      this.body = opts.body ?? [];
     }
 
     this.factory = factory ?? identityReactiveFactory;
@@ -176,6 +200,192 @@ export class FormEvaluator {
    */
   resolveItext(id: string): string | null {
     return this.itextResolver?.resolve(id) ?? null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Slice 5c — dynamic choice resolution
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Get the dynamic choices for the question at `ref`.
+   *
+   * Algorithm (JavaRosa-style on-demand):
+   *  1. Find the question's ItemsetDef via the body tree.
+   *  2. If no itemset → return static choices (mapped to SelectChoice, resolving itext labels).
+   *  3. Compute trigger-signature: string-values of form-field triggers in nodesetExpr predicates.
+   *  4. Cache hit (same sig) → return cached.
+   *  5. Cache miss → evaluate nodesetExpr as nodeset, map each result node to SelectChoice.
+   *
+   * Choices reflect instance state AT CALL TIME (REQ-5C-4 stale-choice contract).
+   */
+  getChoices(ref: TreeReference): readonly SelectChoice[] {
+    const refKey = refToString(ref);
+
+    // Find the question element in the body tree
+    const questionEl = this.findQuestionByRef(ref);
+
+    // No body element or no itemset → return static choices
+    if (questionEl === null || questionEl.itemset === null) {
+      // Static choices — resolve itext labels if needed
+      return (questionEl?.choices ?? []).map((c) => ({
+        value: c.value,
+        label: c.labelIsItext === true && c.labelItextId != null
+          ? (this.itextResolver?.resolve(c.labelItextId) ?? c.labelText)
+          : c.labelText,
+      }));
+    }
+
+    const itemset = questionEl.itemset;
+
+    // Compute trigger signature.
+    // When labels are itext-driven, append the active language so a language
+    // switch correctly invalidates the cache.
+    const triggerSig = this.computeTriggerSig(itemset.nodesetExpr, ref, itemset.labelIsItext);
+
+    // Cache check
+    const cached = this.choiceCache.get(refKey);
+    if (cached !== undefined && cached.triggerSig === triggerSig) {
+      return cached.choices;
+    }
+
+    // Evaluate the nodeset — use the question's context node so current()
+    // and relative predicates resolve against the answered main instance
+    const contextNode = resolveReference(this.tree, ref);
+    const ctx = this.makeContext(contextNode);
+
+    // Evaluate nodesetExpr as ANY_TYPE (nodeset)
+    const result = evaluateInstanceExpr(
+      itemset.nodesetExpr,
+      ctx.contextNode,
+      XPATH_EVALUATION_RESULT.ANY_TYPE,
+    );
+
+    // Collect result nodes
+    const choices: SelectChoice[] = [];
+    let node = result.iterateNext();
+    while (node !== null) {
+      if (node.kind === 'element') {
+        const value = this.evaluateRelativeOnNode(itemset.valueExpr, node);
+        const label = this.resolveChoiceLabel(itemset, node);
+        choices.push({ value, label });
+      }
+      node = result.iterateNext();
+    }
+
+    // Store and return
+    const frozen = Object.freeze(choices);
+    this.choiceCache.set(refKey, { triggerSig, choices: frozen });
+    return frozen;
+  }
+
+  /**
+   * Resolve a choice label for one itemset result node.
+   *
+   * This is the single coordination point between 5a (itext) and 5c (itemset).
+   * - labelIsItext = false → evaluate labelExpr as XPath string against the node.
+   * - labelIsItext = true, labelItextId non-null → static itext id, resolve directly.
+   * - labelIsItext = true, labelItextId null → evaluate labelExpr as XPath to get
+   *   the runtime itext id, then resolve that id.
+   */
+  private resolveChoiceLabel(itemset: ItemsetDef, node: InstanceXPathNode): string | null {
+    if (!itemset.labelIsItext) {
+      return this.evaluateRelativeOnNode(itemset.labelExpr, node) || null;
+    }
+    // itext label
+    let itextId: string;
+    if (itemset.labelItextId !== null) {
+      // Static itext id: jr:itext('fruit:apple')
+      itextId = itemset.labelItextId;
+    } else {
+      // Dynamic itext id: jr:itext(labelid) — evaluate labelExpr as XPath to get the id,
+      // BUT the labelExpr itself is like "jr:itext(labelid)" — we need the inner XPath.
+      // Extract the inner expression: jr:itext(<inner>)
+      const innerMatch = /jr:itext\(\s*(.+?)\s*\)/s.exec(itemset.labelExpr);
+      if (innerMatch === null) {
+        // Fallback: use labelExpr directly as itext id
+        itextId = itemset.labelExpr;
+      } else {
+        const innerExpr = innerMatch[1]!;
+        // Evaluate the inner expression against the node to get the itext id
+        itextId = this.evaluateRelativeOnNode(innerExpr, node);
+      }
+    }
+    return this.itextResolver?.resolve(itextId) ?? null;
+  }
+
+  /**
+   * Evaluate a relative XPath expression against an InstanceXPathNode.
+   * Returns the string result (or empty string on error/empty nodeset).
+   */
+  private evaluateRelativeOnNode(expr: string, node: InstanceXPathNode): string {
+    const result = evaluateInstanceExpr(expr, node, XPATH_EVALUATION_RESULT.ANY_TYPE);
+    switch (result.resultType) {
+      case XPATH_EVALUATION_RESULT.STRING_TYPE:
+        return result.stringValue;
+      case XPATH_EVALUATION_RESULT.NUMBER_TYPE:
+        return String(result.numberValue);
+      case XPATH_EVALUATION_RESULT.BOOLEAN_TYPE:
+        return result.booleanValue ? 'true' : 'false';
+      default: {
+        // Nodeset: get string value of first node
+        const first = result.iterateNext();
+        if (first === null) return '';
+        return evaluateInstanceExpr('string(.)', first, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
+      }
+    }
+  }
+
+  /**
+   * Compute a trigger signature for the given nodesetExpr.
+   *
+   * Extracts trigger references from predicates in nodesetExpr using getTriggers,
+   * evaluates their current string values, and concatenates them with a separator.
+   * A changed signature means the filtered result set may differ → cache invalidated.
+   *
+   * When no triggers are found (e.g. unfiltered secondary instance), returns a
+   * constant string → permanent cache hit (correct: secondary instances are immutable).
+   */
+  private computeTriggerSig(nodesetExpr: string, questionRef: TreeReference, labelIsItext = false): string {
+    try {
+      const parser = new PureJSExpressionParser();
+      const parsed = parser.parse(nodesetExpr);
+      const triggers = getTriggers(parsed.rootNode, questionRef, questionRef);
+      const triggerPart = triggers.length === 0
+        ? '__no_triggers__'
+        : triggers.map((t) => String(this.evaluateOnInstance(refToString(t)))).join('\x01');
+      // Append active language when labels are itext-driven so language
+      // switches invalidate the cache correctly.
+      const langPart = labelIsItext ? `\x02${this.itextResolver?.getActiveLanguage() ?? ''}` : '';
+      return triggerPart + langPart;
+    } catch {
+      // On parse error, return a unique sig to force recomputation every call
+      return String(Date.now());
+    }
+  }
+
+  /**
+   * Find the question FormElement for the given ref by walking the body tree.
+   * Returns null if not found or if the body is empty.
+   */
+  private findQuestionByRef(ref: TreeReference): (FormElement & { kind: 'question' }) | null {
+    const refKey = refToString(ref);
+    let found: (FormElement & { kind: 'question' }) | null = null;
+
+    function walk(elements: readonly FormElement[]): void {
+      for (const el of elements) {
+        if (el.kind === 'question') {
+          if (refToString(el.ref) === refKey) {
+            found = el;
+            return;
+          }
+        } else {
+          walk(el.children);
+        }
+      }
+    }
+
+    walk(this.body);
+    return found;
   }
 
   // ---------------------------------------------------------------------------

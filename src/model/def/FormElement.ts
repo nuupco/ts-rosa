@@ -23,6 +23,29 @@ export type ChoiceItem = {
 };
 
 /**
+ * ItemsetDef — describes a dynamic <itemset> inside a select/select1 question.
+ * Added in Slice 5c. When present, choices are computed on-demand via
+ * FormEvaluator.getChoices() rather than stored statically.
+ */
+export interface ItemsetDef {
+  /** The nodeset XPath expression, e.g. instance('cities')/root/item[state=/data/state] */
+  readonly nodesetExpr: string;
+  /** Relative XPath for the value of each node, e.g. "name" */
+  readonly valueExpr: string;
+  /** Relative XPath for the label of each node, OR jr:itext(...) expression */
+  readonly labelExpr: string;
+  /** True when labelExpr is a jr:itext(...) reference */
+  readonly labelIsItext: boolean;
+  /**
+   * The literal itext id extracted from a static jr:itext('id') label expression.
+   * Null when labelIsItext is false, or when the id is dynamic (an XPath expr).
+   * When non-null, used as a static itext key; otherwise labelExpr is evaluated
+   * as XPath per node to get the runtime itext id.
+   */
+  readonly labelItextId: string | null;
+}
+
+/**
  * FormElement — discriminated union for the body/control tree.
  *
  * 'repeat' is present structurally; navigation/instantiation is deferred to Phase 4.
@@ -43,6 +66,12 @@ export type FormElement =
        */
       readonly labelInnerText: string | null;
       readonly choices: readonly ChoiceItem[];
+      /**
+       * Dynamic itemset definition (Slice 5c).
+       * Null for questions with only static <item> children.
+       * Mutually exclusive with a non-empty choices array.
+       */
+      readonly itemset: ItemsetDef | null;
     }
   | {
       readonly kind: 'group';

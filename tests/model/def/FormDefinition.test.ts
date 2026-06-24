@@ -105,10 +105,13 @@ describe('FormElement discriminated union', () => {
       labelText: 'Your name',
       labelInnerText: 'Your name',
       choices: [],
+      itemset: null,
     };
     expect(q.kind).toBe('question');
-    expect(q.controlType).toBe('input');
-    expect(q.labelText).toBe('Your name');
+    if (q.kind === 'question') {
+      expect(q.controlType).toBe('input');
+      expect(q.labelText).toBe('Your name');
+    }
   });
 
   it('kind=group has children and no controlType', () => {
@@ -145,6 +148,7 @@ describe('FormDefinition and walkControls', () => {
       labelText: 'Name',
       labelInnerText: 'Name',
       choices: [],
+      itemset: null,
     };
     const q2: FormElement = {
       kind: 'question',
@@ -154,6 +158,7 @@ describe('FormDefinition and walkControls', () => {
       labelText: 'Age',
       labelInnerText: 'Age',
       choices: [],
+      itemset: null,
     };
     const group: FormElement = {
       kind: 'group',
@@ -216,8 +221,11 @@ describe('FormDefinition and walkControls', () => {
         { value: 'red', labelText: 'Red' },
         { value: 'blue', labelText: 'Blue' },
       ],
+      itemset: null,
     };
-    expect(q.choices).toHaveLength(2);
-    expect(q.choices[0]!.value).toBe('red');
+    if (q.kind === 'question') {
+      expect(q.choices).toHaveLength(2);
+      expect(q.choices[0]!.value).toBe('red');
+    }
   });
 });

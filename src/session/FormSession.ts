@@ -36,6 +36,7 @@ export function createFormSession(definition: FormDefinition): FormSession {
   const evaluator = new FormEvaluator(definition.mainInstance, {
     itext: definition.itext ?? null,
     secondaryInstances: definition.secondaryInstances,
+    body: definition.body,
   });
 
   // Slice 3.4: evaluate all Recalculates in DAG order (initial steady state)

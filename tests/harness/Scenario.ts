@@ -61,9 +61,11 @@ export interface QuestionDefStub {
   readonly __type: "QuestionDef";
 }
 
-/** Stub for org.javarosa.core.model.SelectChoice */
+/** Mirrors org.javarosa.core.model.SelectChoice */
 export interface SelectChoiceStub {
   readonly __type: "SelectChoice";
+  getValue(): string;
+  getDisplayText(): string | null;
 }
 
 /** Stub for org.javarosa.core.model.ValidateOutcome */
@@ -341,8 +343,14 @@ export class Scenario {
     return countRepeatInstances(this.def.mainInstance, ref);
   }
 
-  choicesOf(_xPath: string): SelectChoiceStub[] {
-    return notImplemented("choicesOf");
+  choicesOf(xPath: string): SelectChoiceStub[] {
+    const ref = parseAbsoluteRef(xPath);
+    const raw = this.session.evaluator.getChoices(ref);
+    return raw.map((c) => ({
+      __type: 'SelectChoice' as const,
+      getValue: () => c.value,
+      getDisplayText: () => c.label,
+    }));
   }
 
   getAnswerNode(xPath: string): TreeElementStub {

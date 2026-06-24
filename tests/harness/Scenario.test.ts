@@ -90,8 +90,19 @@ describe("Scenario instance method stubs", () => {
     expect(() => scenario.removeRepeat("/data/repeat[0]")).toThrow();
   });
 
-  it("choicesOf(xpath) throws not implemented: choicesOf", () => {
-    expectNotImplemented(() => scenario.choicesOf("/data/select"), "choicesOf");
+  it("choicesOf(xpath) is implemented (no longer a stub)", () => {
+    // 5c: choicesOf must NOT throw "not implemented".
+    // On an uninitialized Scenario (no def/session) it will throw a different error
+    // (TypeError from accessing this.def), but NOT the notImplemented sentinel.
+    let threwNotImplemented = false;
+    try {
+      scenario.choicesOf("/data/select");
+    } catch (e) {
+      if (e instanceof Error && e.message.includes("not implemented")) {
+        threwNotImplemented = true;
+      }
+    }
+    expect(threwNotImplemented).toBe(false);
   });
 
   it("countRepeatInstancesOf(xpath) is implemented (no longer a stub)", () => {

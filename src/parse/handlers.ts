@@ -6,7 +6,7 @@
  * namespace-prefixed documents correctly.
  */
 
-import type { FormElement, ChoiceItem } from '../model/def/FormElement.ts';
+import type { FormElement, ChoiceItem, ItemsetDef } from '../model/def/FormElement.ts';
 import type { DataBinding } from '../model/def/DataBinding.ts';
 import { controlTypeFromTag } from '../model/def/controlType.ts';
 import { parseAbsoluteRef } from '../model/instance/TreeReference.ts';
@@ -60,6 +60,46 @@ function getChoices(el: Element): readonly ChoiceItem[] {
   });
 }
 
+/**
+ * Parse an <itemset nodeset="..."> child of a select/select1 element.
+ * Returns an ItemsetDef, or null if no <itemset> child is present.
+ *
+ * <itemset nodeset="expr">
+ *   <value ref="..."/>
+ *   <label ref="..."/>     (or <label ref="jr:itext(...)"/>)
+ * </itemset>
+ */
+function getItemset(el: Element): ItemsetDef | null {
+  const itemsetEl = firstByLocalName(el, 'itemset');
+  if (itemsetEl === null) return null;
+
+  const nodesetExpr = itemsetEl.getAttribute('nodeset') ?? '';
+  if (nodesetExpr === '') {
+    // Malformed itemset — warn but do not throw (per task spec)
+    return null;
+  }
+
+  const valueEl = firstByLocalName(itemsetEl, 'value');
+  const labelEl = firstByLocalName(itemsetEl, 'label');
+
+  const valueExpr = valueEl?.getAttribute('ref') ?? '';
+  const rawLabelRef = labelEl?.getAttribute('ref') ?? '';
+
+  // Detect jr:itext() label reference
+  const itextMatch = ITEXT_REF_RE.exec(rawLabelRef);
+  const labelIsItext = itextMatch !== null || /jr:itext\(/.test(rawLabelRef);
+
+  // For dynamic itext (id is an XPath expr, not a string literal): labelItextId = null
+  // For static itext: labelItextId = the extracted id string
+  const labelItextId = itextMatch !== null ? (itextMatch[1] ?? null) : null;
+
+  // labelExpr: for itext labels, keep the full ref for runtime resolution;
+  // for plain labels, it is the relative XPath to evaluate per node.
+  const labelExpr = rawLabelRef !== '' ? rawLabelRef : 'label';
+
+  return { nodesetExpr, valueExpr, labelExpr, labelIsItext, labelItextId };
+}
+
 function buildChildren(el: Element, ctx: BuildCtx): readonly FormElement[] {
   const children: FormElement[] = [];
   const childEls = childElementsByLocalName(el, '*');
@@ -86,9 +126,11 @@ function questionHandler(el: Element, ctx: BuildCtx): FormElement {
   const labelEl = firstByLocalName(el, 'label');
   const labelText = labelEl ? textContent(labelEl) : null;
   const innerText = labelEl ? labelInnerText(labelEl) : null;
-  const choices = getChoices(el);
+  const itemset = getItemset(el);
+  // When itemset is present, choices = [] (itemset takes precedence)
+  const choices = itemset !== null ? [] : getChoices(el);
 
-  return { kind: 'question', ref, controlType, binding, labelText, labelInnerText: innerText, choices };
+  return { kind: 'question', ref, controlType, binding, labelText, labelInnerText: innerText, choices, itemset };
 }
 
 // ---------------------------------------------------------------------------

@@ -161,7 +161,7 @@ describe('Scenario A5 — fallback to first language with id', () => {
 // Depends on choicesOf() (Scenario.ts stub) which is implemented in 5c.
 // Mark it.fails until 5c lands.
 
-it.fails('A6: static <item> with jr:itext label resolves through active language', () => {
+it('A6: static <item> with jr:itext label resolves through active language (5c)', () => {
   const xml = formWithItext(
     `<translation lang="en">
        <text id="fruit:apple"><value>Apple</value></text>
@@ -180,6 +180,76 @@ it.fails('A6: static <item> with jr:itext label resolves through active language
   const scenario = Scenario.init(xml);
   scenario.setLanguage('es');
   const choices = scenario.choicesOf('/data/fruit');
-  // choices is SelectChoiceStub[] — shape TBD in 5c; for now just check labels
   expect(choices).toHaveLength(2);
+  const labels = choices.map((c) => c.getDisplayText());
+  expect(labels).toContain('Manzana');
+  expect(labels).toContain('Plátano');
+});
+
+// ---------------------------------------------------------------------------
+// Scenario C7 — itext label in itemset (REQ-5C-5)
+// ---------------------------------------------------------------------------
+// Depends on 5c (choicesOf + itemset parsing with labelIsItext=true).
+// Mark it.fails until 5c lands and resolveChoiceLabel handles itext.
+
+it('C7: itemset with jr:itext labels resolves through active language (5c)', () => {
+  // Form with secondary instance and itext-driven itemset labels
+  const xml = `<?xml version="1.0"?>
+<h:html xmlns="http://www.w3.org/2002/xforms"
+        xmlns:h="http://www.w3.org/1999/xhtml"
+        xmlns:jr="http://openrosa.org/javarosa">
+  <h:head>
+    <h:title>C7 itext itemset</h:title>
+    <model>
+      <instance>
+        <data id="c7">
+          <fruit/>
+        </data>
+      </instance>
+      <instance id="fruits">
+        <root>
+          <item><name>apple</name><labelid>fruit:apple</labelid></item>
+          <item><name>banana</name><labelid>fruit:banana</labelid></item>
+        </root>
+      </instance>
+      <itext>
+        <translation lang="en">
+          <text id="fruit:apple"><value>Apple</value></text>
+          <text id="fruit:banana"><value>Banana</value></text>
+        </translation>
+        <translation lang="es">
+          <text id="fruit:apple"><value>Manzana</value></text>
+          <text id="fruit:banana"><value>Plátano</value></text>
+        </translation>
+      </itext>
+      <bind nodeset="/data/fruit" type="string"/>
+    </model>
+  </h:head>
+  <h:body>
+    <select1 ref="/data/fruit">
+      <itemset nodeset="instance('fruits')/root/item">
+        <value ref="name"/>
+        <label ref="jr:itext(labelid)"/>
+      </itemset>
+    </select1>
+  </h:body>
+</h:html>`;
+
+  const scenario = Scenario.init(xml);
+
+  // Spanish
+  scenario.setLanguage('es');
+  const esChoices = scenario.choicesOf('/data/fruit');
+  expect(esChoices).toHaveLength(2);
+  const esLabels = esChoices.map((c) => (c as unknown as { getDisplayText(): string }).getDisplayText());
+  expect(esLabels).toContain('Manzana');
+  expect(esLabels).toContain('Plátano');
+
+  // English
+  scenario.setLanguage('en');
+  const enChoices = scenario.choicesOf('/data/fruit');
+  expect(enChoices).toHaveLength(2);
+  const enLabels = enChoices.map((c) => (c as unknown as { getDisplayText(): string }).getDisplayText());
+  expect(enLabels).toContain('Apple');
+  expect(enLabels).toContain('Banana');
 });
