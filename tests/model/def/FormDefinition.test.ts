@@ -54,6 +54,8 @@ describe('DataBinding', () => {
       calculate: '../age + 1',
       constraint: null,
       constraintMsg: null,
+      preload: null,
+      preloadParams: null,
     };
     expect(binding.relevant).toBe('true()');
     expect(binding.calculate).toBe('../age + 1');
@@ -70,6 +72,8 @@ describe('DataBinding', () => {
       calculate: null,
       constraint: null,
       constraintMsg: null,
+      preload: null,
+      preloadParams: null,
     };
     expect(binding.relevant).toBeNull();
     expect(binding.calculate).toBeNull();
@@ -87,6 +91,8 @@ describe('DataBinding', () => {
       calculate: null,
       constraint: 'string-length(.) < 5',
       constraintMsg: 'Too long',
+      preload: null,
+      preloadParams: null,
     };
     expect(b.constraint).toBe('string-length(.) < 5');
     expect(b.constraintMsg).toBe('Too long');

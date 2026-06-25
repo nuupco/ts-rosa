@@ -103,6 +103,9 @@ function applyBindingsToNode(node: InstanceNode, bindings: ReadonlyMap<string, D
   const binding = bindings.get(currentPath);
   if (binding) {
     node.dataType = binding.dataType;
+    // Stamp preload metadata onto the node (Phase 7, Slice 7-INFRA-A — T-INFRA-A-6)
+    node.preload = binding.preload;
+    node.preloadParams = binding.preloadParams;
     // Cast raw text to typed AnswerValue
     const rawText = node.attributes.get(RAW_TEXT_ATTR);
     if (rawText !== undefined) {

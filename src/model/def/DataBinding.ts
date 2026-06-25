@@ -19,4 +19,7 @@ export type DataBinding = {
   readonly calculate: string | null;
   readonly constraint: string | null;
   readonly constraintMsg: string | null;
+  // ---- PRELOAD METADATA (Phase 7, Slice 7-INFRA-A) ----
+  readonly preload: string | null;
+  readonly preloadParams: string | null;
 };

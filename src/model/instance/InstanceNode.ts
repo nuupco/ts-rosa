@@ -10,6 +10,9 @@ export type InstanceNode = {
   readonly attributes: Map<string, string>;
   dataType: DataType;
   parent: InstanceNode | null;
+  // ---- PRELOAD METADATA (Phase 7, Slice 7-INFRA-A) ----
+  preload?: string | null;
+  preloadParams?: string | null;
 };
 
 export interface NewNodeOptions {

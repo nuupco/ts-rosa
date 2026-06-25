@@ -88,6 +88,16 @@ export function bindProcessor(binds: readonly Element[]): Map<string, DataBindin
         el.getAttribute('jr:constraintMsg') ??
         el.getAttribute('constraintMsg') ??
         null,
+      // T-VAL-1: Read jr:preload first; fall back to bare 'preload' (localName)
+      // in case a DOMParser strips the namespace prefix.
+      preload:
+        el.getAttribute('jr:preload') ??
+        el.getAttribute('preload') ??
+        null,
+      preloadParams:
+        el.getAttribute('jr:preloadParams') ??
+        el.getAttribute('preloadParams') ??
+        null,
     };
 
     result.set(nodeset, binding);

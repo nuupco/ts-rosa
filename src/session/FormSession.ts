@@ -12,6 +12,9 @@ import type { FormDefinition } from '../model/def/FormDefinition.ts';
 import { FormEvaluator } from './FormEvaluator.ts';
 import { FormNavigator } from './FormNavigator.ts';
 import { serializeInstance } from '../model/instance/InstanceSerializer.ts';
+import type { PreloadProvider } from './PreloadProvider.ts';
+import { defaultPreloadProvider } from './PreloadProvider.ts';
+import { applyPreloads } from './preload/applyPreloads.ts';
 
 export interface FormSession {
   /** The full form definition (immutable defs + compiled bindings + DAG). */
@@ -39,18 +42,35 @@ export interface FormSession {
   readonly serializeToXml: () => string;
 }
 
+/** Options for createFormSession (Phase 7, Slice 7-INFRA-A). */
+export interface CreateFormSessionOpts {
+  /** Injectable preload provider. Defaults to defaultPreloadProvider (live wall-clock). */
+  preloadProvider?: PreloadProvider;
+}
+
 /**
  * Create a FormSession from a FormDefinition.
  *
  * Runs initializeInstance on the DAG so all calculate expressions are
  * evaluated in topological order before the first user interaction.
+ *
+ * Phase 7: applyPreloads runs BEFORE initializeInstance so preloaded
+ * dates/uids are visible to calculate expressions (T-VAL-2 ordering).
  */
-export function createFormSession(definition: FormDefinition): FormSession {
+export function createFormSession(
+  definition: FormDefinition,
+  opts?: CreateFormSessionOpts,
+): FormSession {
+  const provider = opts?.preloadProvider ?? defaultPreloadProvider;
+
   const evaluator = new FormEvaluator(definition.mainInstance, {
     itext: definition.itext ?? null,
     secondaryInstances: definition.secondaryInstances,
     body: definition.body,
   });
+
+  // Phase 7: apply preloads BEFORE cascade so calculates can reference them
+  applyPreloads(definition.mainInstance, provider);
 
   // Slice 3.4: evaluate all Recalculates in DAG order (initial steady state)
   // Slice 3.6: also pass constraint bindings for validation
