@@ -179,8 +179,12 @@ describe("XPath functions — regex()", () => {
     expect(evaluateXPath("regex('abc','[0-9]+')")).toBe(false);
   });
 
-  it("regex('hello world','\\\\w+') → true", () => {
-    expect(evaluateXPath("regex('hello world','\\w+')")).toBe(true);
+  it("regex('hello world','\\\\w+') → false (full match: \\w+ does not match spaces)", () => {
+    // Under JavaRosa full-match semantics (Matcher.matches()), \w+ does not cover
+    // the space in 'hello world', so the full match fails → false.
+    // The previous assertion of `true` reflected the vendor partial-match behavior
+    // which this native shim (Slice 6d) intentionally corrects.
+    expect(evaluateXPath("regex('hello world','\\w+')")).toBe(false);
   });
 });
 

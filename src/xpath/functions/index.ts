@@ -51,6 +51,7 @@ import { instance } from './instance-fn.ts';
 import { itext } from './itext-fn.ts';
 import { once } from './xforms-once.ts';
 import { randomize } from './xforms-randomize.ts';
+import { regex } from './xforms-regex.ts';
 import { uuid } from './xforms-uuid.ts';
 
 /**
@@ -76,10 +77,14 @@ const jr = new FunctionLibrary(JAVAROSA_NAMESPACE_URI, [
  *   The native shim uses Math.random (pure-JS, Hermes-safe) and supports an
  *   injectable generator for deterministic testing.
  *
+ *   xfString.regex is EXCLUDED from the spread below and replaced by the
+ *   native `regex` shim (xforms-regex.ts). The vendor implementation does a
+ *   partial (substring) match via RegExp.test(); ODK/JavaRosa semantics require
+ *   full match (Matcher.matches()). The native shim anchors the pattern with
+ *   `^(?:<raw>)$` — the non-capturing group protects alternation binding.
+ *
  *   FunctionLibrary uses Map.set(localName, ...) so duplicate names silently
  *   last-win. Explicit exclusion here is safer and self-documenting.
- *
- *   Slice 6d will extend this exclusion list to also cover xfString.regex.
  *
  * `once` and `randomize` are also native shims (xforms-once.ts,
  * xforms-randomize.ts). They come from vendor xforms/node-set.ts which imports
@@ -87,7 +92,8 @@ const jr = new FunctionLibrary(JAVAROSA_NAMESPACE_URI, [
  * import only from vendor sort.ts and function infrastructure; no cycle exists.
  */
 const {
-  uuid: _vendorUuid, // excluded — replaced by native Hermes-safe shim
+  uuid: _vendorUuid,   // excluded — replaced by native Hermes-safe shim (6c)
+  regex: _vendorRegex, // excluded — replaced by native full-match shim (6d)
   ...xfStringWithoutExcluded
 } = xfString;
 
@@ -102,6 +108,7 @@ const xf = new FunctionLibrary(XFORMS_NAMESPACE_URI, [
 	instance,
 	once,     // native shim — vendor node-set.ts excluded (circular dep, 6b)
 	randomize, // native shim — vendor node-set.ts excluded (circular dep, 6b)
+	regex,    // native full-match shim — vendor partial-match replaced (6d)
 	uuid, // native Hermes-safe pure-JS v4 replacement for xfString.uuid (6c)
 ]);
 

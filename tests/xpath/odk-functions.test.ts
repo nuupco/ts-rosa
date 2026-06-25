@@ -4,6 +4,7 @@
  * Slice 6c: uuid() — Hermes-safe, pure-JS v4, injectable generator seam.
  * Slice 6b: once() — preserves non-empty; evaluates when empty.
  *           randomize() — permutation, deterministic with seed.
+ * Slice 6d: regex() — full match (anchored), not partial.
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -159,6 +160,15 @@ describe('uuid() — Hermes-safe native shim', () => {
   });
 });
 
+function evaluateBoolean(expr: string): boolean {
+  const tree = makeMinimalTree();
+  const doc = makeInstanceDocumentNode(tree);
+  const contextNode = wrapInstanceNode(tree.root, doc);
+  return instanceEvaluator
+    .evaluate(expr, contextNode, null, XPATH_EVALUATION_RESULT.BOOLEAN_TYPE)
+    .booleanValue;
+}
+
 // ---------------------------------------------------------------------------
 // Slice 6b — once() and randomize()
 // ---------------------------------------------------------------------------
@@ -217,5 +227,57 @@ describe('randomize() — permutation and determinism', () => {
   // REQ-6B-6: randomize() is registered and callable.
   it('randomize() is registered in the function library (no unknown-function error)', () => {
     expect(() => evaluateNodesetValues('randomize(item)', ITEMS)).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Slice 6d — regex() full match
+// ---------------------------------------------------------------------------
+
+describe('regex() — full match (ODK/JavaRosa semantics)', () => {
+  // REQ-6D-1: partial match must return false — this is the core correctness guard.
+  // Java Matcher.matches() requires the pattern to cover the ENTIRE input.
+  it('regex("abc", "b") returns false (partial match is not a full match)', () => {
+    expect(evaluateBoolean("regex('abc', 'b')")).toBe(false);
+  });
+
+  // REQ-6D-1: a pattern spanning the full value must return true.
+  it('regex("abc", "a.c") returns true (full-value pattern)', () => {
+    expect(evaluateBoolean("regex('abc', 'a.c')")).toBe(true);
+  });
+
+  // REQ-6D-2: alternation grouping guard — `^(?:a|b)$` NOT `^a|b$`.
+  // Without (?:...) wrapping, `^a|b$` would mean `^a` OR `b$`,
+  // so regex('xb', 'a|b') would be true (matches `b$`). Must be false.
+  it('regex("b", "a|b") returns true (alternation: full match against either branch)', () => {
+    expect(evaluateBoolean("regex('b', 'a|b')")).toBe(true);
+  });
+
+  it('regex("xb", "a|b") returns false (alternation: guards (?:) grouping — xb is not a|b in full match)', () => {
+    expect(evaluateBoolean("regex('xb', 'a|b')")).toBe(false);
+  });
+
+  // REQ-6D-3: already-anchored pattern must NOT break (unconditional wrap is safe).
+  // ^(?:^a$)$ is semantically equivalent to ^a$ — redundant anchors are harmless.
+  it('regex("a", "^a$") returns true (pre-anchored pattern still works)', () => {
+    expect(evaluateBoolean("regex('a', '^a$')")).toBe(true);
+  });
+
+  it('regex("ab", "^a$") returns false (pre-anchored pattern, no double-anchor breakage)', () => {
+    expect(evaluateBoolean("regex('ab', '^a$')")).toBe(false);
+  });
+
+  // REQ-6D-4: empty pattern matches only the empty string.
+  it('regex("", "") returns true (empty pattern full-matches empty string)', () => {
+    expect(evaluateBoolean("regex('', '')")).toBe(true);
+  });
+
+  it('regex("a", "") returns false (empty pattern does not full-match non-empty string)', () => {
+    expect(evaluateBoolean("regex('a', '')")).toBe(false);
+  });
+
+  // REQ-6D-5: regex() is registered and callable.
+  it('regex() is registered in the function library (no unknown-function error)', () => {
+    expect(() => evaluateBoolean("regex('test', 'test')")).not.toThrow();
   });
 });
