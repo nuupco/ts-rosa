@@ -48,6 +48,7 @@ import * as xfString from '../vendor/xpath/functions/xforms/string.ts';
 import { indexedRepeat } from './xforms-indexed-repeat.ts';
 import { instance } from './instance-fn.ts';
 import { itext } from './itext-fn.ts';
+import { uuid } from './xforms-uuid.ts';
 
 /**
  * JavaRosa function library — select functions + native itext shim.
@@ -64,16 +65,34 @@ const jr = new FunctionLibrary(JAVAROSA_NAMESPACE_URI, [
  * (date, format-date, …), geo (stub errors only), number (abs, pow, sqrt,
  * pi, round/2, …), select (count-selected, selected, selected-at), string
  * (coalesce, ends-with, regex, substr, …).
+ *
+ * NATIVE SHIM EXCLUSIONS (R1 — vendor-exclusion):
+ *   xfString.uuid is EXCLUDED from the spread below and replaced by the
+ *   native `uuid` shim (xforms-uuid.ts). The vendor implementation calls
+ *   globalThis.crypto.randomUUID() which is unavailable on Hermes (React Native).
+ *   The native shim uses Math.random (pure-JS, Hermes-safe) and supports an
+ *   injectable generator for deterministic testing.
+ *
+ *   FunctionLibrary uses Map.set(localName, ...) so duplicate names silently
+ *   last-win. Explicit exclusion here is safer and self-documenting.
+ *
+ *   Slice 6d will extend this exclusion list to also cover xfString.regex.
  */
+const {
+  uuid: _vendorUuid, // excluded — replaced by native Hermes-safe shim
+  ...xfStringWithoutExcluded
+} = xfString;
+
 const xf = new FunctionLibrary(XFORMS_NAMESPACE_URI, [
 	...Object.values(xfBoolean),
 	...Object.values(xfDatetime),
 	...Object.values(xfGeo),
 	...Object.values(xfNumber),
 	...Object.values(xfSelect),
-	...Object.values(xfString),
+	...Object.values(xfStringWithoutExcluded),
 	indexedRepeat,
 	instance,
+	uuid, // native Hermes-safe pure-JS v4 replacement for xfString.uuid (6c)
 ]);
 
 // Unprefixed function calls (e.g. date(), if(), selected(), boolean-from-string())
