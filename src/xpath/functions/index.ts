@@ -12,8 +12,9 @@
  *     The vendored version calls XFormsXPathEvaluator.getTranslationValues(),
  *     a static method unavailable in ts-rosa's InstanceEvaluator.
  *   xforms/node-set.ts    — vendored `instance` and others: REPLACED for
- *     `instance` by native instance-fn.ts. Remaining functions (count-non-empty,
- *     randomize, etc.) still excluded (DOM-traversal, not yet needed).
+ *     `instance` by native instance-fn.ts; `once` and `randomize` replaced by
+ *     native shims (Slice 6b). Remaining functions (count-non-empty, etc.) still
+ *     excluded (DOM-traversal, not yet needed).
  *
  * Both excluded modules import XFormsXPathEvaluator.ts which in turn imports
  * the jr/xf index files, creating a circular module graph that makes the
@@ -48,6 +49,8 @@ import * as xfString from '../vendor/xpath/functions/xforms/string.ts';
 import { indexedRepeat } from './xforms-indexed-repeat.ts';
 import { instance } from './instance-fn.ts';
 import { itext } from './itext-fn.ts';
+import { once } from './xforms-once.ts';
+import { randomize } from './xforms-randomize.ts';
 import { uuid } from './xforms-uuid.ts';
 
 /**
@@ -77,6 +80,11 @@ const jr = new FunctionLibrary(JAVAROSA_NAMESPACE_URI, [
  *   last-win. Explicit exclusion here is safer and self-documenting.
  *
  *   Slice 6d will extend this exclusion list to also cover xfString.regex.
+ *
+ * `once` and `randomize` are also native shims (xforms-once.ts,
+ * xforms-randomize.ts). They come from vendor xforms/node-set.ts which imports
+ * XFormsXPathEvaluator.ts (circular dep — excluded module). The native shims
+ * import only from vendor sort.ts and function infrastructure; no cycle exists.
  */
 const {
   uuid: _vendorUuid, // excluded — replaced by native Hermes-safe shim
@@ -92,6 +100,8 @@ const xf = new FunctionLibrary(XFORMS_NAMESPACE_URI, [
 	...Object.values(xfStringWithoutExcluded),
 	indexedRepeat,
 	instance,
+	once,     // native shim — vendor node-set.ts excluded (circular dep, 6b)
+	randomize, // native shim — vendor node-set.ts excluded (circular dep, 6b)
 	uuid, // native Hermes-safe pure-JS v4 replacement for xfString.uuid (6c)
 ]);
 
