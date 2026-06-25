@@ -328,29 +328,11 @@ function answerHousehold(scenario: Scenario, number: number, children: ChildActi
 // ---------------------------------------------------------------------------
 
 describe('ChildVaccinationTest', () => {
-  // STOP-AND-REPORT: smoke_test fails at household[3] child[1] with
-  // "Unexpected next ref at child 1: /data/household/finished2".
-  //
-  // Root cause: applyCondition multi-instance path uses evaluateAsNodeSet with an
-  // ABSOLUTE generic XPath (e.g. /data/household/child_repeat/penta1[expr]) evaluated
-  // from the document root. This evaluates the relevance condition against ALL instances
-  // across ALL households simultaneously. Newly-initialized child instances have empty
-  // fields (health_card='', age_months=''), causing the relevance predicate to return
-  // false for the new instance. When the user subsequently answers health_card and age,
-  // the cascade may not update all dependent nodes (e.g. child_repeat.relevant) correctly
-  // for later households because the generic key stores only the LAST evaluated result
-  // (last-write-wins, poisoned by cross-household evaluation).
-  //
-  // Required fix (NOT in this commit):
-  //   - Scope applyCondition multi-instance XPath to the concrete parent context instead
-  //     of using the absolute generic path from root. This requires passing the changedRef
-  //     context to evaluateAsNodeSet so it can evaluate from the nearest household ancestor
-  //     rather than from /data. Alternatively, per-instance evaluateCompiled (single-instance
-  //     path) should be used and the predicate optimization removed for non-position() exprs.
-  //   - Ensure initializeRepeatInstance defers condition evaluation until after the user
-  //     has answered the first question in the new instance (or re-evaluates on first answer).
-  //
-  // Tracking: SDD e2e-validation Phase 7b — engine bug in multi-instance applyCondition.
+  // STOP-AND-REPORT: still failing — child_repeat relevance is false after init for
+  // freshly-created (empty-field) instances, so navigation skips to /data/household/finished2.
+  // Multi-instance condition scoping was reworked (evaluate predicate per concrete parent),
+  // which removes cross-household leakage and causes no regressions, but does NOT fix this
+  // init-time relevance facet. Remaining gap tracked for Phase 7 continuation.
   it.fails(
     // Source: org.javarosa.smoketests.ChildVaccinationTest#smoke_test
     'smoke_test',

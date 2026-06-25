@@ -492,24 +492,6 @@ export class FormEvaluator {
    * Returns a primitive (string | number | boolean) or the first node's
    * string-value when the result is a nodeset.
    */
-  /**
-   * Evaluate an XPath expression and return the set of InstanceNodes in the result nodeset.
-   * Used for position-aware condition evaluation (multi-instance targets).
-   */
-  private evaluateAsNodeSet(expr: string): Set<InstanceNode> {
-    const ctx = this.makeContext(null);
-    const result = evaluateInstanceExpr(expr, ctx.contextNode, XPATH_EVALUATION_RESULT.ANY_TYPE);
-    const nodes = new Set<InstanceNode>();
-    let node = result.iterateNext();
-    while (node !== null) {
-      if (node.kind === 'element') {
-        nodes.add(node.node);
-      }
-      node = result.iterateNext();
-    }
-    return nodes;
-  }
-
   evaluateOnInstance(
     expr: string,
     contextNode?: InstanceNode | null,
@@ -778,6 +760,73 @@ export class FormEvaluator {
   }
 
   /**
+   * For multi-instance conditions, evaluate the predicate expression scoped to
+   * each concrete parent — not the document root.
+   *
+   * JavaRosa evaluates each triggerable's expression once per affected concrete node
+   * using that node's concrete context (EvaluationContext with the concrete ref).
+   * For position()-dependent expressions this must be done as a child-step predicate
+   * from the parent so position() returns the node's position among same-name siblings.
+   *
+   * Algorithm:
+   *   1. Group targetNodes by their parent InstanceNode (concrete parent).
+   *   2. For each unique parent, evaluate `{nodeName}[{exprSource}]` with the parent
+   *      as the context node — this is a child-axis step with the predicate.
+   *   3. Collect all nodes in the result nodeset into the returned Set.
+   *
+   * This correctly handles:
+   *   - `position() > 2` on top-level repeats (parent = /data, position is 1-based among siblings)
+   *   - `../consent = 'yes'` on nested repeats (parent = concrete /data/household[N], so `..`
+   *     resolves to that specific household — no cross-household leakage)
+   */
+  private evaluateRelevantSetByConcreteParent(
+    targetNodes: InstanceNode[],
+    compiled: CompiledInstanceExpression,
+    exprSource: string,
+  ): Set<InstanceNode> {
+    const relevantNodes = new Set<InstanceNode>();
+
+    // Group nodes by parent
+    const nodesByParent = new Map<InstanceNode, InstanceNode[]>();
+    for (const node of targetNodes) {
+      const parent = node.parent;
+      if (parent === null) {
+        // No parent — fall back to single-node evaluation
+        const raw = this.evaluateCompiled(compiled, node);
+        if (toBoolean(raw)) {
+          relevantNodes.add(node);
+        }
+        continue;
+      }
+      let group = nodesByParent.get(parent);
+      if (group === undefined) {
+        group = [];
+        nodesByParent.set(parent, group);
+      }
+      group.push(node);
+    }
+
+    // For each concrete parent, evaluate nodeName[expr] from that parent context
+    for (const [parent, nodes] of nodesByParent) {
+      const nodeName = nodes[0]!.name;
+      // Evaluate "nodeName[expr]" with parent as context
+      // This gives each node its correct position() within the parent's children
+      const parentCtx = this.makeContext(parent);
+      const stepExpr = `${nodeName}[${exprSource}]`;
+      const result = evaluateInstanceExpr(stepExpr, parentCtx.contextNode, XPATH_EVALUATION_RESULT.ANY_TYPE);
+      let xpathNode = result.iterateNext();
+      while (xpathNode !== null) {
+        if (xpathNode.kind === 'element') {
+          relevantNodes.add(xpathNode.node);
+        }
+        xpathNode = result.iterateNext();
+      }
+    }
+
+    return relevantNodes;
+  }
+
+  /**
    * Evaluate a Condition triggerable and update NodeState for its target nodes.
    *
    * Uses resolveAll to handle repeated nodes — each instance of the target path
@@ -807,23 +856,26 @@ export class FormEvaluator {
       const genericKey = refToString(genericize(target));
       const hasMultipleInstances = targetNodes.length > 1;
 
-      // For multi-instance targets: evaluate with nodeset predicate to get correct
-      // position() context. Evaluate (targetPath)[expr] from root and compare nodes.
-      // This handles position()-dependent conditions (e.g. relevant="position() > 2").
-      let relevantSet: Set<InstanceNode> | null = null;
+      // For multi-instance relevant conditions, pre-compute a relevant set by evaluating
+      // the predicate from each concrete parent context. This mirrors JavaRosa's behavior
+      // where each triggerable is evaluated with a per-instance context:
+      //   contextRef.contextualize(qualified) → EvaluationContext(parentContext, concreteRef)
+      //   expr.eval(instance, ec)
+      //
+      // We use the predicate approach (parentPath/nodeName[expr]) so that position()
+      // is correct (position within the parent's children of that name), while keeping
+      // the context scoped to the concrete parent — fixing the cross-instance scoping bug
+      // for nested repeats (e.g. /data/household/child_repeat where ../consent differs
+      // per household).
+      let relevantSetForTarget: Set<InstanceNode> | null = null;
       if (hasMultipleInstances && t.action === 'relevant') {
-        // Build predicate expression: genericPath[expr] to get position-aware nodeset
-        // E.g. /data/node[position() > 2]  — XPath 1.0 path predicate, correct position context
-        const genericPath = refToString(genericize(target));
-        const predicateExpr = `${genericPath}[${t.expr.source}]`;
-        relevantSet = this.evaluateAsNodeSet(predicateExpr);
+        relevantSetForTarget = this.evaluateRelevantSetByConcreteParent(targetNodes, t.expr, t.expr.source);
       }
 
       for (const targetNode of targetNodes) {
         let boolResult: boolean;
-        if (relevantSet !== null) {
-          // Multi-instance with position: use the nodeset result
-          boolResult = relevantSet.has(targetNode);
+        if (relevantSetForTarget !== null) {
+          boolResult = relevantSetForTarget.has(targetNode);
         } else {
           const rawResult = this.evaluateCompiled(t.expr, targetNode);
           boolResult = toBoolean(rawResult);
