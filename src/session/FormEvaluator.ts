@@ -606,6 +606,23 @@ export class FormEvaluator {
     return wrapInstanceNode(node, this.docNode);
   }
 
+  /**
+   * Determine whether an InstanceNode is effectively relevant.
+   *
+   * Reuses the existing private nodeToRef + isEffectivelyRelevant path (ADR-2).
+   * Returns true when the ref cannot be derived (root or unresolvable nodes are
+   * always considered relevant — no NodeState marks root non-relevant).
+   *
+   * Slice 6a — used by FormSession.serializeToXml to build the isRelevant
+   * callback for serializeInstance without duplicating ref-derivation logic.
+   */
+  isNodeRelevant(node: InstanceNode): boolean {
+    const xpathNode = this.wrap(node);
+    const ref = this.nodeToRef(xpathNode);
+    if (ref === null) return true;
+    return this.isEffectivelyRelevant(ref);
+  }
+
   // ---------------------------------------------------------------------------
   // Slice 3.4 — reactive cascade engine
   // ---------------------------------------------------------------------------

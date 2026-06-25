@@ -11,6 +11,7 @@ import type { InstanceTree } from '../model/instance/InstanceTree.ts';
 import type { FormDefinition } from '../model/def/FormDefinition.ts';
 import { FormEvaluator } from './FormEvaluator.ts';
 import { FormNavigator } from './FormNavigator.ts';
+import { serializeInstance } from '../model/instance/InstanceSerializer.ts';
 
 export interface FormSession {
   /** The full form definition (immutable defs + compiled bindings + DAG). */
@@ -24,6 +25,18 @@ export interface FormSession {
    * Owns the mutable cursor and all navigation methods.
    */
   readonly navigator: FormNavigator;
+  /**
+   * Serialize the primary instance to ODK-submission XML.
+   *
+   * Applies JavaRosa-default filtering: omits non-relevant nodes and
+   * INDEX_TEMPLATE nodes. Relevance is determined via FormEvaluator.isNodeRelevant,
+   * which reuses the proven nodeToRef + isEffectivelyRelevant path (ADR-2).
+   *
+   * No XML declaration is emitted (mirrors JavaRosa XFormSerializingVisitor).
+   *
+   * Slice 6a — serialization-odk-functions
+   */
+  readonly serializeToXml: () => string;
 }
 
 /**
@@ -52,5 +65,9 @@ export function createFormSession(definition: FormDefinition): FormSession {
     tree: definition.mainInstance,
     evaluator,
     navigator,
+    serializeToXml: () =>
+      serializeInstance(definition.mainInstance, {
+        isRelevant: (node) => evaluator.isNodeRelevant(node),
+      }),
   };
 }
