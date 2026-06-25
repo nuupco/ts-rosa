@@ -50,6 +50,7 @@ import { indexedRepeat } from './xforms-indexed-repeat.ts';
 import { instance } from './instance-fn.ts';
 import { itext } from './itext-fn.ts';
 import { once } from './xforms-once.ts';
+import { pulldata } from './xforms-pulldata.ts';
 import { randomize } from './xforms-randomize.ts';
 import { regex } from './xforms-regex.ts';
 import { uuid } from './xforms-uuid.ts';
@@ -92,8 +93,11 @@ const jr = new FunctionLibrary(JAVAROSA_NAMESPACE_URI, [
  * import only from vendor sort.ts and function infrastructure; no cycle exists.
  */
 const {
-  uuid: _vendorUuid,   // excluded — replaced by native Hermes-safe shim (6c)
-  regex: _vendorRegex, // excluded — replaced by native full-match shim (6d)
+  uuid: _vendorUuid,        // excluded — replaced by native Hermes-safe shim (6c)
+  regex: _vendorRegex,      // excluded — replaced by native full-match shim (6d)
+  pulldata: _vendorPulldata, // excluded — replaced by native shim (6e); vendor calls
+                             // context.evaluator.evaluateString() without a contextNode,
+                             // which throws since the InstanceEvaluator singleton has no rootNode.
   ...xfStringWithoutExcluded
 } = xfString;
 
@@ -107,6 +111,7 @@ const xf = new FunctionLibrary(XFORMS_NAMESPACE_URI, [
 	indexedRepeat,
 	instance,
 	once,     // native shim — vendor node-set.ts excluded (circular dep, 6b)
+	pulldata, // native shim — vendor throws (no rootNode on InstanceEvaluator singleton, 6e)
 	randomize, // native shim — vendor node-set.ts excluded (circular dep, 6b)
 	regex,    // native full-match shim — vendor partial-match replaced (6d)
 	uuid, // native Hermes-safe pure-JS v4 replacement for xfString.uuid (6c)
