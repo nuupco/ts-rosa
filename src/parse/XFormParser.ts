@@ -23,7 +23,7 @@ import { makeRecalculate, makeCondition, type Triggerable } from '../eval/Trigge
 import { genericize, refToString } from '../model/instance/TreeReference.ts';
 import type { TriggerableDag } from '../eval/TriggerableDag.ts';
 import type { CompiledBinding } from './bindProcessor.ts';
-import { bodyHandlers } from './handlers.ts';
+import { bodyHandlers, buildFormElements } from './handlers.ts';
 import { childElementsByLocalName, firstByLocalName, directTextContent, textContent } from './domHelpers.ts';
 import { parseItext } from './itextParser.ts';
 
@@ -138,17 +138,7 @@ function applyBindings(tree: InstanceTree, bindings: ReadonlyMap<string, DataBin
 
 function buildBody(bodyEl: Element, bindings: ReadonlyMap<string, DataBinding>): readonly FormElement[] {
   const ctx = { bindings };
-  const elements: FormElement[] = [];
-  const childEls = childElementsByLocalName(bodyEl, '*');
-  for (const childEl of childEls) {
-    const tag = childEl.localName ?? '';
-    const handler = bodyHandlers.get(tag);
-    if (handler) {
-      elements.push(handler(childEl, ctx));
-    }
-    // Unknown tags silently skipped
-  }
-  return elements;
+  return buildFormElements(bodyEl, ctx);
 }
 
 // ---------------------------------------------------------------------------

@@ -457,6 +457,15 @@ export class Scenario {
     return this.session.navigator.refAtIndex();
   }
 
+  /**
+   * Peek at the TreeReference one step ahead without advancing the cursor.
+   * Relevance-blind — mirrors JavaRosa Scenario.nextRef().
+   * Returns null when the next position is EOF.
+   */
+  nextRef(): TreeReference | null {
+    return this.session.navigator.nextRef();
+  }
+
   atQuestion(): boolean {
     return this.session.navigator.atQuestion();
   }

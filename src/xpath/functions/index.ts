@@ -50,6 +50,7 @@ import { indexedRepeat } from './xforms-indexed-repeat.ts';
 import { instance } from './instance-fn.ts';
 import { itext } from './itext-fn.ts';
 import { once } from './xforms-once.ts';
+import { position } from './xforms-position.ts';
 import { pulldata } from './xforms-pulldata.ts';
 import { randomize } from './xforms-randomize.ts';
 import { regex } from './xforms-regex.ts';
@@ -110,6 +111,7 @@ const xf = new FunctionLibrary(XFORMS_NAMESPACE_URI, [
 	...Object.values(xfStringWithoutExcluded),
 	indexedRepeat,
 	instance,
+	position,  // native shim — extends fn.position() with JR extension: position(nodeset) (7b)
 	once,     // native shim — vendor node-set.ts excluded (circular dep, 6b)
 	pulldata, // native shim — vendor throws (no rootNode on InstanceEvaluator singleton, 6e)
 	randomize, // native shim — vendor node-set.ts excluded (circular dep, 6b)

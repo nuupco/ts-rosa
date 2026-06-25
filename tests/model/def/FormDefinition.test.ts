@@ -137,6 +137,7 @@ describe('FormElement discriminated union', () => {
       ref: parseAbsoluteRef('/data/items'),
       children: [],
       labelText: null,
+      countExpr: null,
     };
     expect(r.kind).toBe('repeat');
   });

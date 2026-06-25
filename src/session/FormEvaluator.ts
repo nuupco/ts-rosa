@@ -412,23 +412,46 @@ export class FormEvaluator {
    */
   isEffectivelyRelevant(ref: TreeReference): boolean {
     // Walk from the ref upward, checking NodeState.relevant at each level.
-    // Check CONCRETE key first (per-instance state), then generic key (single-instance state).
+    //
+    // Key format note: state is stored by applyCondition using nodeToRef, which assigns
+    // concrete multiplicity [0] to all non-repeat scalars. FormNavigator's refs use
+    // INDEX_UNBOUND for non-repeat elements. To bridge this mismatch, we try THREE keys:
+    //   1. The ref's own string (FormNavigator format: concrete repeats, unbound scalars)
+    //   2. A "fully concrete" key (all unbound levels → [0], to match nodeToRef format)
+    //   3. The generic key (all levels unbound, for single-instance backward compat)
+    //
+    // For multi-instance repeat children, the generic key is "last write wins" and may
+    // be poisoned by the last instance's evaluation. Prefer concrete keys over generic.
     let current: TreeReference = ref;
     while (current.levels.length > 0) {
-      // Try concrete key (with positional multiplicity) first
-      const concreteKey = refToString(current);
-      const concreteState = this.nodeStates.get(concreteKey);
-      if (concreteState !== undefined && !concreteState.relevant) {
-        return false;
-      }
-      // Also check generic key (for conditions stored under genericized ref)
+      const navKey = refToString(current);
       const genericKey = refToString(genericize(current));
-      if (genericKey !== concreteKey) {
+
+      // Build "fully concrete" version: replace INDEX_UNBOUND with 0 for non-root levels
+      // to match nodeToRef format (root level stays INDEX_UNBOUND, scalars get [0]).
+      const concreteLevels = current.levels.map((l, i) =>
+        i > 0 && l.multiplicity < 0 ? level(l.name, 0) : l
+      );
+      const fullConcreteKey = refToString({ ...current, levels: Object.freeze(concreteLevels) });
+
+      // Look up in order of specificity: navKey, fullConcreteKey, then generic
+      const navState = this.nodeStates.get(navKey);
+      const concreteState = navKey !== fullConcreteKey ? this.nodeStates.get(fullConcreteKey) : undefined;
+
+      // If a concrete-ish state exists, trust it — it has per-instance accuracy.
+      // Only fall back to generic if no concrete state was found at all.
+      const definiteState = navState ?? concreteState;
+      if (definiteState !== undefined) {
+        if (!definiteState.relevant) return false;
+        // Found a concrete state — do not also check generic (it may be poisoned)
+      } else if (genericKey !== navKey) {
+        // No concrete state found: check generic key (single-instance paths only)
         const genericState = this.nodeStates.get(genericKey);
         if (genericState !== undefined && !genericState.relevant) {
           return false;
         }
       }
+
       current = parentOf(current);
     }
     return true;
@@ -811,7 +834,6 @@ export class FormEvaluator {
         const concreteRef = this.nodeToRef(wrapInstanceNode(targetNode, this.docNode));
         const concreteKey = concreteRef !== null ? refToString(concreteRef) : genericKey;
 
-        // Primary state: always update the concrete key
         const concreteState = this.getOrCreateState(concreteKey);
 
         // For single-instance (non-repeat) paths, concrete key = generic key effectively

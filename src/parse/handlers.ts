@@ -100,18 +100,45 @@ function getItemset(el: Element): ItemsetDef | null {
   return { nodesetExpr, valueExpr, labelExpr, labelIsItext, labelItextId };
 }
 
-function buildChildren(el: Element, ctx: BuildCtx): readonly FormElement[] {
-  const children: FormElement[] = [];
-  const childEls = childElementsByLocalName(el, '*');
+/**
+ * Build FormElement children from DOM child elements.
+ * Used both at body top-level (buildBodyElements) and recursively for group/repeat children.
+ *
+ * Applies transparent group flattening (JR compat): a <group ref="/data/X"> that
+ * directly wraps a <repeat nodeset="/data/X"> with the SAME ref is a JR idiom for
+ * labeling the repeat (both map to a single GroupDef in JR but are distinct kinds
+ * in ts-rosa). Flattening avoids an extra GROUP stop and the double-extended ref
+ * /data/X/X that would otherwise appear during navigation.
+ */
+export function buildFormElements(parentEl: Element, ctx: BuildCtx): readonly FormElement[] {
+  const elements: FormElement[] = [];
+  const childEls = childElementsByLocalName(parentEl, '*');
   for (const childEl of childEls) {
     const tag = childEl.localName ?? '';
+    if (tag === 'group') {
+      const groupRef = childEl.getAttribute('ref') ?? childEl.getAttribute('nodeset') ?? '';
+      const repeatChildren = childElementsByLocalName(childEl, 'repeat');
+      if (repeatChildren.length === 1 && repeatChildren[0] !== undefined) {
+        const repeatRef = repeatChildren[0].getAttribute('nodeset') ?? repeatChildren[0].getAttribute('ref') ?? '';
+        if (groupRef !== '' && groupRef === repeatRef) {
+          // Transparent group: promote its children directly
+          const promoted = buildFormElements(childEl, ctx);
+          elements.push(...promoted);
+          continue;
+        }
+      }
+    }
     const handler = handlers.get(tag);
     if (handler) {
-      children.push(handler(childEl, ctx));
+      elements.push(handler(childEl, ctx));
     }
-    // Unknown tags are skipped silently (diagnostic could be recorded here)
+    // Unknown tags are skipped silently
   }
-  return children;
+  return elements;
+}
+
+function buildChildren(el: Element, ctx: BuildCtx): readonly FormElement[] {
+  return buildFormElements(el, ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +181,11 @@ function repeatHandler(el: Element, ctx: BuildCtx): FormElement {
   const ref = parseAbsoluteRef(refAttr);
   const labelText = getLabelText(el);
   const children = buildChildren(el, ctx);
-  return { kind: 'repeat', ref, labelText, children };
+  // jr:count — XPath expression controlling how many instances to auto-create.
+  // Attribute is in the jr: namespace; xmldom preserves the prefix when xmlns:jr is declared.
+  // Fall back to localName 'count' (without prefix) for robustness.
+  const countExpr = el.getAttribute('jr:count') ?? el.getAttribute('count') ?? null;
+  return { kind: 'repeat', ref, labelText, children, countExpr };
 }
 
 // ---------------------------------------------------------------------------

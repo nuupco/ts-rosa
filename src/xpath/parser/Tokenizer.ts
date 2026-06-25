@@ -300,6 +300,17 @@ export function tokenize(expression: string): Token[] {
 				continue;
 			}
 
+			// Keyword-operators disambiguation (§3.7) — MUST run before `(` lookahead.
+			// XPath §3.7: after an operand token, `and`/`or`/`div`/`mod` are always
+			// operators regardless of what character follows (including `(`).
+			// e.g. `a and (b)` — `and` is AND, not a function call.
+			if (isAfterOperand(prev)) {
+				if (rawName === 'div') { push(TokenKind.DIV, rawName, start); continue; }
+				if (rawName === 'mod') { push(TokenKind.MOD, rawName, start); continue; }
+				if (rawName === 'and') { push(TokenKind.AND, rawName, start); continue; }
+				if (rawName === 'or')  { push(TokenKind.OR, rawName, start); continue; }
+			}
+
 			// node-type keyword or function_name — lookahead for `(`
 			if (nextCh === '(') {
 				if (NODE_TYPE_KEYWORDS.has(rawName)) {
@@ -308,15 +319,6 @@ export function tokenize(expression: string): Token[] {
 					push(TokenKind.FUNCTION_NAME, rawName, start);
 				}
 				continue;
-			}
-
-			// Keyword-operators disambiguation (§3.7)
-			// `div`, `mod`, `and`, `or` are operator keywords only after an operand.
-			if (isAfterOperand(prev)) {
-				if (rawName === 'div') { push(TokenKind.DIV, rawName, start); continue; }
-				if (rawName === 'mod') { push(TokenKind.MOD, rawName, start); continue; }
-				if (rawName === 'and') { push(TokenKind.AND, rawName, start); continue; }
-				if (rawName === 'or')  { push(TokenKind.OR, rawName, start); continue; }
 			}
 
 			// Default: treat as a plain name

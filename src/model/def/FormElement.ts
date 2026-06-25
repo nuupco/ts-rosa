@@ -84,4 +84,11 @@ export type FormElement =
       readonly ref: TreeReference;
       readonly children: readonly FormElement[];
       readonly labelText: string | null;
+      /**
+       * XPath expression from jr:count attribute on the <repeat> element.
+       * When set, the repeat is count-controlled (no-add-remove) and the navigator
+       * auto-creates instances up to count during navigation (mirrors JR createModelIfNecessary).
+       * null when no jr:count is present (add/remove by user).
+       */
+      readonly countExpr: string | null;
     };

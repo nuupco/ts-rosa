@@ -25,8 +25,10 @@ export const instance = new NodeSetFunction(
   <T extends XPathNode>(context: LocationPathEvaluation<T>, [idExpr]: readonly EvaluableArgument[]): readonly T[] => {
     const id = idExpr!.evaluate(context).toString();
     const doc = context.contextDocument as unknown as InstanceDocumentNode;
-    const secondaryRoot = doc.secondaryInstances?.get(id) ?? null;
+    const secondaryDoc = doc.secondaryInstances?.get(id) ?? null;
     // Safe cast: this function is only registered for InstanceXPathNode evaluations.
-    return secondaryRoot == null ? [] : [secondaryRoot as unknown as T];
+    // Returns the document node of the secondary instance so that paths like
+    // instance('id')/root/item navigate correctly (document → root element → children).
+    return secondaryDoc == null ? [] : [secondaryDoc as unknown as T];
   },
 );

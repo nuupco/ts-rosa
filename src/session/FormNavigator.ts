@@ -38,7 +38,9 @@ import {
   genericize,
   refEquals,
 } from '../model/instance/TreeReference.ts';
-import { resolveReference, countRepeatInstances } from '../model/instance/InstanceTree.ts';
+import { resolveReference, countRepeatInstances, addRepeatInstance } from '../model/instance/InstanceTree.ts';
+import { level } from '../model/instance/TreeReferenceLevel.ts';
+import { INDEX_TEMPLATE } from '../model/instance/multiplicity.ts';
 
 
 // ---------------------------------------------------------------------------
@@ -119,6 +121,70 @@ export class FormNavigator {
     const target = idx ?? this.currentIndex;
     if (!isAt(target)) return null;
     return target.ref;
+  }
+
+  /**
+   * @experimental
+   * Returns the TreeReference at the NEXT relevant position without permanently
+   * moving the cursor. Mirrors JavaRosa Scenario.nextRef() which does:
+   *   silentNext(); ref = refAtIndex(); silentPrev(); return ref.
+   *
+   * This is relevance-aware (skips non-relevant positions) but NON-MUTATING:
+   * it does NOT call createModelIfNecessary (no instance-tree side effects).
+   * Returns null when the next relevant position is EOF.
+   */
+  nextRef(): TreeReference | null {
+    // Advance relevance-blind, skip non-relevant positions, but NO side effects.
+    // Also skip count-controlled repeat junctions whose multiplicity >= count
+    // (mirrors stepToNextEvent's createModelIfNecessary: those junctions are never
+    // presented as navigable stops when the count limit is reached).
+    let next = this.incrementIndex(this.currentIndex);
+    while (isAt(next)) {
+      if (!this.isStopRelevant(next)) {
+        next = this.incrementIndex(next);
+        continue;
+      }
+      if (this.isExhaustedCountRepeat(next)) {
+        next = this.incrementIndex(next);
+        continue;
+      }
+      break;
+    }
+    if (!isAt(next)) return null;
+    return next.ref;
+  }
+
+  /**
+   * Returns true when `idx` is a count-controlled repeat junction whose
+   * instance does not exist AND whose multiplicity has reached (or exceeded)
+   * the count expression value — meaning createModelIfNecessary would skip it.
+   * Non-mutating: does NOT create any instances.
+   */
+  private isExhaustedCountRepeat(idx: AtFormIndex): boolean {
+    const resolved = this.resolvePath(idx.path);
+    if (resolved === null || resolved.element.kind !== 'repeat') return false;
+    const repeat = resolved.element;
+    if (repeat.countExpr == null) return false; // not count-controlled
+    if (resolveReference(this.tree, idx.ref) !== null) return false; // instance exists — not exhausted
+    // Evaluate count with the first existing instance as context (same logic as createModelIfNecessary).
+    const lastLvl = idx.ref.levels[idx.ref.levels.length - 1]!;
+    const firstInstanceRef = { ...idx.ref, levels: [...idx.ref.levels.slice(0, -1), level(lastLvl.name, 0)] };
+    const existingInstance = resolveReference(this.tree, firstInstanceRef);
+    let countCtx = existingInstance;
+    if (countCtx === null && idx.ref.levels.length > 1) {
+      const parentRef = { ...idx.ref, levels: idx.ref.levels.slice(0, -1) };
+      const parentNode = resolveReference(this.tree, parentRef);
+      if (parentNode !== null) {
+        countCtx = parentNode.children.find((c) => c.multiplicity !== INDEX_TEMPLATE) ?? null;
+      }
+    }
+    const countVal = this.evaluator.evaluateOnInstance(repeat.countExpr, countCtx);
+    const count = typeof countVal === 'number' ? countVal : Number(countVal);
+    if (isNaN(count)) return false;
+    const lastLevel = idx.path[idx.path.length - 1];
+    const multiplicity = lastLevel?.multiplicity ?? 0;
+    // Exhausted when multiplicity >= count (no more instances to create)
+    return multiplicity >= count;
   }
 
   /**
@@ -253,14 +319,97 @@ export class FormNavigator {
    *
    * Mirrors JavaRosa FormEntryController.stepToNextEvent (LINEAR mode):
    *   do { next = incrementIndex(next) } while next is at && not relevant
+   *
+   * After landing on a new position, calls createModelIfNecessary to
+   * auto-create repeat instances when jr:count controls the repeat size
+   * (mirrors JR FormEntryModel.setQuestionIndex → createModelIfNecessary).
    */
   stepToNextEvent(): FormEntryEvent {
     let next = this.incrementIndex(this.currentIndex);
-    while (isAt(next) && !this.isStopRelevant(next)) {
-      next = this.incrementIndex(next);
+    while (isAt(next)) {
+      if (!this.isStopRelevant(next)) {
+        next = this.incrementIndex(next);
+        continue;
+      }
+      // Skip exhausted count-controlled repeat junctions (same logic as nextRef).
+      // createModelIfNecessary will not create an instance for these, so they must
+      // not be presented as navigable stops.
+      if (this.isExhaustedCountRepeat(next)) {
+        next = this.incrementIndex(next);
+        continue;
+      }
+      break;
     }
     this.currentIndex = next;
+    if (isAt(next)) {
+      this.createModelIfNecessary(next);
+    }
     return this.eventAt(next);
+  }
+
+  /**
+   * Mirrors JavaRosa FormEntryModel.createModelIfNecessary.
+   * If the position is a count-controlled repeat (jr:count) and the instance
+   * at the current multiplicity doesn't exist yet AND multiplicity < count,
+   * auto-create the repeat instance.
+   *
+   * This enables navigation INTO count-controlled repeats via next() without
+   * requiring an explicit createNewRepeat() call (matching JR behavior).
+   */
+  private createModelIfNecessary(idx: AtFormIndex): void {
+    const resolved = this.resolvePath(idx.path);
+    if (resolved === null || resolved.element.kind !== 'repeat') return;
+
+    const repeat = resolved.element;
+    if (repeat.countExpr == null) return; // not count-controlled
+
+    // Check if the instance already exists
+    if (resolveReference(this.tree, idx.ref) !== null) return;
+
+    // Evaluate the count expression with context = an existing instance of the repeat
+    // (jr:count is relative to the repeat's nodeset — e.g. `../child_repeat_count` means
+    // from a child_repeat node, step up to the parent and get child_repeat_count).
+    // Use the first existing instance (multiplicity=0) as context; fall back to the
+    // parent node when no instances exist yet (first instance creation).
+    const lastLvl = idx.ref.levels[idx.ref.levels.length - 1]!;
+    const firstInstanceRef = { ...idx.ref, levels: [...idx.ref.levels.slice(0, -1), level(lastLvl.name, 0)] };
+    const existingInstance = resolveReference(this.tree, firstInstanceRef);
+
+    // When no instance exists yet (existingInstance === null), fall back to the repeat's
+    // parent node. jr:count expressions like `../child_repeat_count` navigate UP from
+    // child_repeat to its parent; evaluating from the parent with the parent-relative
+    // form of the count expression is equivalent and correct for count-controlled repeats.
+    // When no instance of the repeat exists yet, we cannot use a child node as
+    // context for the count expression (e.g. `../child_repeat_count` needs a
+    // child_repeat node to navigate from). Instead, find any SIBLING node that
+    // shares the same parent — `../child_repeat_count` from any sibling of
+    // child_repeat also resolves to the parent's `child_repeat_count` child.
+    let contextNode = existingInstance;
+    if (contextNode === null && idx.ref.levels.length > 1) {
+      const parentRef = { ...idx.ref, levels: idx.ref.levels.slice(0, -1) };
+      const parentNode = resolveReference(this.tree, parentRef);
+      if (parentNode !== null && parentNode.children.length > 0) {
+        // Use the first non-template child as a sibling context node.
+        // `../X` from any sibling of the repeat navigates up to the parent and
+        // then finds X — the same as from an actual repeat instance.
+        contextNode = parentNode.children.find((c) => c.multiplicity !== INDEX_TEMPLATE) ?? null;
+      }
+    }
+    const countVal = this.evaluator.evaluateOnInstance(repeat.countExpr, contextNode);
+    const count = typeof countVal === 'number' ? countVal : Number(countVal);
+    if (isNaN(count) || count <= 0) return;
+
+    // Current multiplicity: the last level's multiplicity in the path
+    const lastLevel = idx.path[idx.path.length - 1];
+    const multiplicity = lastLevel?.multiplicity ?? 0;
+
+    if (multiplicity < count) {
+      // Auto-create this instance (mirrors JR form.createNewRepeat(index))
+      const genericRef = genericize(idx.ref);
+      addRepeatInstance(this.tree, genericRef);
+      // Re-run the DAG cascade for the new instance
+      this.evaluator.initializeRepeatInstance(idx.ref);
+    }
   }
 
   /**
