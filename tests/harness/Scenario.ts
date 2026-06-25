@@ -15,11 +15,20 @@
  *   - No real Scenario.init() loading
  */
 
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { XFormsElement } from "./XFormsElement.ts";
 import type { AnswerValue } from "../../src/model/data/AnswerValue.ts";
 import type { FormDefinition } from "../../src/model/def/FormDefinition.ts";
 import { cast, stringValue } from "../../src/model/data/codecs.ts";
 import { parseAbsoluteRef, refToString, genericize } from "../../src/model/instance/TreeReference.ts";
+import type { TreeReference } from "../../src/model/instance/TreeReference.ts";
+import type { PreloadProvider } from "../../src/session/PreloadProvider.ts";
+import { frozenPreloadProvider } from "../../src/session/PreloadProvider.ts";
+
+/** Absolute path to the tests/fixtures/ directory. */
+const FIXTURES = resolve(dirname(fileURLToPath(import.meta.url)), '../fixtures');
 import {
   resolveReference,
   addRepeatInstance,
@@ -122,18 +131,36 @@ export class Scenario {
    * Overload 2: init(filename: string)    — real for inline XML; file loading → notImplemented
    * Overload 3: init(formDef: FormDefStub)— mirrors JavaRosa Scenario.init(FormDef)
    */
-  static init(form: XFormsElement): Scenario;
-  static init(filename: string): Scenario;
-  static init(formDef: FormDefStub): Scenario;
-  static init(arg: XFormsElement | string | FormDefStub): Scenario {
+  static init(form: XFormsElement, opts?: { preloadProvider?: PreloadProvider }): Scenario;
+  static init(filenameOrXml: string, opts?: { preloadProvider?: PreloadProvider }): Scenario;
+  static init(formDef: FormDefStub, opts?: { preloadProvider?: PreloadProvider }): Scenario;
+  static init(
+    arg: XFormsElement | string | FormDefStub,
+    opts?: { preloadProvider?: PreloadProvider },
+  ): Scenario {
     // FormDefStub overload is not yet implemented
     if (typeof arg !== 'string' && '__type' in arg && (arg as FormDefStub).__type === 'FormDef') {
       return notImplemented("init");
     }
-    const xml = typeof arg === 'string' ? arg : (arg as XFormsElement).asXml();
+
+    let xml: string;
+    if (typeof arg === 'string') {
+      // ADR-5: treat as a filename when the string does NOT contain '<'.
+      // Raw XML always has at least one '<' tag; filenames never do.
+      if (!arg.includes('<')) {
+        const fixturePath = resolve(FIXTURES, arg);
+        xml = readFileSync(fixturePath, 'utf8');
+      } else {
+        xml = arg;
+      }
+    } else {
+      xml = (arg as XFormsElement).asXml();
+    }
+
+    const provider = opts?.preloadProvider ?? frozenPreloadProvider();
     const s = new Scenario();
     s.def = parseForm(xml);
-    s.session = createFormSession(s.def);
+    s.session = createFormSession(s.def, { preloadProvider: provider });
     return s;
   }
 
@@ -210,8 +237,9 @@ export class Scenario {
     return notImplemented("expandSingle");
   }
 
+  /** ADR-6: no-op. JR trace() only logs; ported tests assert on refAtIndex, not trace output. */
   trace(_msg: string): void {
-    return notImplemented("trace");
+    // intentional no-op
   }
 
   finalizeInstance(): void {
@@ -421,12 +449,12 @@ export class Scenario {
   }
 
   /**
-   * @experimental Slice 4.5
-   * Delegates to navigator.refAtIndex(). Returns the ref at the current cursor.
+   * ADR-6: Returns the real TreeReference at the current cursor so ported tests can
+   * call .genericize() via the imported function.
    * Returns null when the cursor is at BOF or EOF.
    */
-  refAtIndex(): TreeReferenceStub | null {
-    return this.session.navigator.refAtIndex() as unknown as TreeReferenceStub | null;
+  refAtIndex(): TreeReference | null {
+    return this.session.navigator.refAtIndex();
   }
 
   atQuestion(): boolean {

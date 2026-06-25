@@ -214,7 +214,9 @@ describe("Scenario instance method stubs", () => {
     expectNotImplemented(() => scenario.expandSingle({ __type: "TreeReference" } as unknown as import("./Scenario.ts").TreeReferenceStub), "expandSingle");
   });
 
-  it("trace(msg) throws not implemented: trace", () => {
-    expectNotImplemented(() => scenario.trace("hello"), "trace");
+  it("trace(msg) is a no-op (ADR-6 — does not throw)", () => {
+    // trace() was previously a notImplemented stub; now it is a deliberate no-op
+    // so ported tests that call trace() for waypoint logging compile and run.
+    expect(() => scenario.trace("hello")).not.toThrow();
   });
 });

@@ -28,6 +28,7 @@
     "lint:eslint": "eslint src/"
   },
   "devDependencies": {
+    "@types/node": "^26.0.1",
     "@typescript-eslint/eslint-plugin": "^8.62.0",
     "@typescript-eslint/parser": "^8.62.0",
     "@xmldom/xmldom": "^0.9.0",
