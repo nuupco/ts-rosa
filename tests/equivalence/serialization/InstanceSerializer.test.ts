@@ -12,9 +12,17 @@
  *   - XML escaping in text content and attribute values
  *   - Idempotency (REQ-6A-9)
  *
- * JavaRosa equivalence:
- *   XFormSerializingVisitorTest.serializeInstance_preservesUnicodeCharacters
- *   XFormAnswerDataSerializerTest
+ * JavaRosa provenance:
+ *   - ONE test is ported from JavaRosa:
+ *       6A-S5 "preserves multi-byte unicode characters"
+ *       Source: XFormSerializingVisitorTest#serializeInstance_preservesUnicodeCharacters
+ *       (XFormSerializingVisitorTest.java has exactly 1 @Test method)
+ *   - Answer wire-format (ADR-1/ADR-2 guards: boolean→"1"/"0", decimal→"1.0") is
+ *     informed by XFormAnswerDataSerializerTest, but re-implemented as ts-rosa-original
+ *     unit tests — not direct ports.
+ *   - All remaining tests (6A-S1, 6A-S2, 6A-S3, 6A-S4, 6A-S6, XML escaping,
+ *     idempotency, ADR guards) are ts-rosa-original serialization-contract tests
+ *     (Phase 6 slice 6a, ADR-1/ADR-2). No direct JavaRosa counterpart.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -204,6 +212,7 @@ describe('serializeInstance — 6A-S4 attributes preserved', () => {
 // ---------------------------------------------------------------------------
 
 describe('serializeInstance — 6A-S5 unicode preserved verbatim', () => {
+  // Source: XFormSerializingVisitorTest#serializeInstance_preservesUnicodeCharacters
   it('preserves multi-byte unicode characters (JR equivalence: serializeInstance_preservesUnicodeCharacters)', () => {
     const root = newNode('data');
     const greeting = newNode('greeting');
