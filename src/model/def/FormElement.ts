@@ -72,12 +72,15 @@ export type FormElement =
        * Mutually exclusive with a non-empty choices array.
        */
       readonly itemset: ItemsetDef | null;
+      readonly appearance?: string | null;
+      readonly mediatype?: string | null;
     }
   | {
       readonly kind: 'group';
       readonly ref: TreeReference;
       readonly children: readonly FormElement[];
       readonly labelText: string | null;
+      readonly appearance?: string | null;
     }
   | {
       readonly kind: 'repeat';

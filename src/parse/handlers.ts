@@ -156,8 +156,10 @@ function questionHandler(el: Element, ctx: BuildCtx): FormElement {
   const itemset = getItemset(el);
   // When itemset is present, choices = [] (itemset takes precedence)
   const choices = itemset !== null ? [] : getChoices(el);
+  const appearance = el.getAttribute('appearance') ?? null;
+  const mediatype = el.getAttribute('mediatype') ?? null;
 
-  return { kind: 'question', ref, controlType, binding, labelText, labelInnerText: innerText, choices, itemset };
+  return { kind: 'question', ref, controlType, binding, labelText, labelInnerText: innerText, choices, itemset, appearance, mediatype };
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +171,8 @@ function groupHandler(el: Element, ctx: BuildCtx): FormElement {
   const ref = parseAbsoluteRef(refAttr);
   const labelText = getLabelText(el);
   const children = buildChildren(el, ctx);
-  return { kind: 'group', ref, labelText, children };
+  const appearance = el.getAttribute('appearance') ?? null;
+  return { kind: 'group', ref, labelText, children, appearance };
 }
 
 // ---------------------------------------------------------------------------
@@ -198,6 +201,8 @@ const handlers: Map<string, BodyHandler> = new Map([
   ['select', questionHandler],
   ['trigger', questionHandler],
   ['upload', questionHandler],
+  ['range', questionHandler],
+  ['secret', questionHandler],
   ['group', groupHandler],
   ['repeat', repeatHandler],
 ]);

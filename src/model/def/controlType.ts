@@ -1,4 +1,4 @@
-export type ControlType = 'input' | 'select1' | 'select' | 'trigger' | 'upload' | 'unknown';
+export type ControlType = 'input' | 'select1' | 'select' | 'trigger' | 'upload' | 'range' | 'secret' | 'unknown';
 
 /**
  * Maps an XForms element localName to a ControlType.
@@ -11,6 +11,8 @@ export function controlTypeFromTag(localName: string): ControlType {
     case 'select':  return 'select';
     case 'trigger': return 'trigger';
     case 'upload':  return 'upload';
+    case 'range':   return 'range';
+    case 'secret':  return 'secret';
     default:        return 'unknown';
   }
 }
