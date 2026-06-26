@@ -55,7 +55,7 @@ export function resolveReference(tree: InstanceTree, ref: TreeReference): Instan
  * Used by applyRecalculate in initializeRepeatInstance (Fix B: scope resolveAll
  * to subtreeRoot so the global walk is eliminated during repeat-instance init).
  */
-export function resolveAllWithin(subtreeRoot: InstanceNode, ref: TreeReference): InstanceNode[] {
+export function resolveAllWithin(tree: InstanceTree, subtreeRoot: InstanceNode, ref: TreeReference): InstanceNode[] {
   // Compute depth of subtreeRoot from tree root (count parent hops)
   let depth = 0;
   let cur: InstanceNode | null = subtreeRoot;
@@ -63,16 +63,17 @@ export function resolveAllWithin(subtreeRoot: InstanceNode, ref: TreeReference):
   // depth == number of parent hops == index into ref.levels of subtreeRoot itself
   // The levels below subtreeRoot start at index (depth + 1)
 
-  // Invariant guards — fall back to empty (caller already scoped to a subtree,
-  // so an invariant violation means this ref simply does not resolve within it):
+  // Invariant guards — fall back to global resolveAll (correctness-safe, slower)
+  // rather than returning [] so that legitimate refs that happen to be outside
+  // the subtree still get resolved instead of silently dropped.
   //   (a) ref must have enough levels to include depth (i.e. it references the subtree)
   //   (b) subtreeRoot name must match ref.levels[depth] — otherwise wrong subtree
   //   (c) the anchor prefix levels (0..depth) in ref must NOT be concrete (INDEX_UNBOUND)
   //       — a concrete index in the ref itself means the ref is already fully resolved
   //       to a specific instance and does not need subtree-relative expansion.
-  if (ref.levels.length <= depth) return [];
+  if (ref.levels.length <= depth) return resolveAll(tree, ref);
   const anchorLevel = ref.levels[depth]!;
-  if (anchorLevel.name !== subtreeRoot.name && anchorLevel.name !== '*') return [];
+  if (anchorLevel.name !== subtreeRoot.name && anchorLevel.name !== '*') return resolveAll(tree, ref);
   for (let i = 0; i < depth; i++) {
     const rl = ref.levels[i]!;
     // If ref has a concrete multiplicity in the anchor prefix that doesn't match the
@@ -82,7 +83,7 @@ export function resolveAllWithin(subtreeRoot: InstanceNode, ref: TreeReference):
     // full chain, take the conservative path: if any prefix level is concrete (not
     // INDEX_UNBOUND), we cannot guarantee it matches this subtreeRoot without walking
     // the parent chain — so fall back to resolveAll from the tree root (safe, slower).
-    if (rl.multiplicity !== INDEX_UNBOUND) return [];
+    if (rl.multiplicity !== INDEX_UNBOUND) return resolveAll(tree, ref);
   }
 
   const suffixLevels = ref.levels.slice(depth + 1);

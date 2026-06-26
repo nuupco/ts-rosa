@@ -739,7 +739,7 @@ export class FormEvaluator {
         // Fix B: scope the resolve to the subtree instead of a full-tree BFS +
         // post-filter. resolveAllWithin starts from subtreeRoot and walks only
         // the suffix of the absolute target ref — O(subtree) instead of O(tree).
-        targetNodes = resolveAllWithin(subtreeRoot, target);
+        targetNodes = resolveAllWithin(this.tree, subtreeRoot, target);
       } else if (changedRef !== null && isSafeToContextualize(t, target)) {
         // Fix C: contextualize the resolve to the deepest concrete ancestor shared
         // with changedRef — mirrors JavaRosa Triggerable.contextualize. Safe only
@@ -893,7 +893,7 @@ export class FormEvaluator {
       let targetNodes: InstanceNode[];
       if (subtreeRoot !== null) {
         // Fix B: scope resolve to subtree — same rationale as applyRecalculate.
-        targetNodes = resolveAllWithin(subtreeRoot, target);
+        targetNodes = resolveAllWithin(this.tree, subtreeRoot, target);
       } else if (changedRef !== null && isSafeToContextualize(t, target)) {
         // Fix C: safe contextualization — same guard as applyRecalculate.
         // An empty result means "no nodes in THIS context" — do NOT fall back to
@@ -1255,26 +1255,28 @@ function isContextIndependent(src: string): boolean {
  * Returns true when it is safe to use resolveAllContextualized (scope target resolution
  * to the deepest concrete ancestor shared with changedRef) for a triggerable/target pair.
  *
- * Conservative: returns false (fall back to global resolveAll) whenever the expression
- * could read OUTSIDE the concrete subtree of the changed node. Conditions:
+ * WHITELIST (positive): returns true ONLY when the expression is provably confined
+ * to the concrete subtree of the changed node. Fails CLOSED — anything not
+ * explicitly safe returns false and falls back to the always-correct global resolveAll.
  *
- *   (a) A trigger is a proper prefix of the target (repeat-count change fires triggerable
- *       from above → all instances must update, not just one subtree).
- *   (c) The expression source contains `//` (descendant-or-self axis — crosses instances).
- *   (d) The expression source contains an aggregate function call (count/sum/max/min/etc.)
- *       AND a relative parent step (`..`) inside that aggregate's argument. The `..` means
- *       the aggregate accumulates values filtered by a parent-relative predicate, producing
- *       different results per repeat instance. Example: count(/data/hh/child[../consent='yes'])
- *       counts children per household — contextualizing would leave sibling households stale
- *       with WRONG counts. Aggregates with only absolute arguments are context-independent
- *       (all instances converge to the same value) and are allowed to contextualize.
+ * Safe conditions (ALL must hold):
+ *   (a) No trigger is a proper prefix of the target — i.e. no "fired from above"
+ *       (repeat-count change) pattern.
+ *   (b) Expression source contains NO absolute path marker (leading `/` that is
+ *       NOT part of `//`, OR a bare `//`).
+ *   (c) Expression source contains NO `//` (descendant-or-self axis).
+ *   (d) Expression source contains NO aggregate function (count/sum/max/min/etc.).
+ *   (e) Expression source contains NO `current()`.
+ *   (f) Expression source contains NO non-child/parent named axis
+ *       (ancestor::, descendant::, following-sibling::, preceding-sibling::,
+ *        following::, preceding::, namespace::, attribute::).
+ *
+ * String heuristic only — no structured AST available (CompiledInstanceExpression
+ * exposes only `source`). Errs toward false (correctness over performance).
  *
  * The safe case is expressions like `if(../consent='yes',...)` on target
- * `/data/household/child_repeat/field` triggered by `/data/household/consent`: no
- * trigger is a prefix of the target, and the expression only uses relative paths
- * confined to the concrete sibling — safe to contextualize.
- *
- * When in doubt, do NOT contextualize (correctness over performance).
+ * `/data/household/child_repeat/field` triggered by `/data/household/consent`:
+ * uses only relative paths confined to the concrete sibling → safe to contextualize.
  */
 function isSafeToContextualize(t: Triggerable, target: TreeReference): boolean {
   const targetStr = refToString(target);
@@ -1287,21 +1289,26 @@ function isSafeToContextualize(t: Triggerable, target: TreeReference): boolean {
     }
   }
 
-  // (c)/(d) Inspect expression source for cross-instance reads.
   const src = t.expr.source;
+
   // (c) descendant-or-self axis — always crosses instance boundaries
   if (src.includes('//')) return false;
+
   // (d) aggregate function whose argument contains a relative path step (`..`).
-  // A relative step inside an aggregate argument means the aggregate value DIFFERS
-  // per repeat instance (e.g. count(/data/household/child[../consent='yes']) counts
-  // children filtered by THEIR household's consent, giving a different result per
-  // household). Contextualizing would update only the changed household's target,
-  // leaving other households with stale, WRONG counts.
-  //
-  // Aggregates with ONLY absolute argument paths produce the same result for every
-  // target instance (context-independent); contextualizing those is safe because
-  // all instances converge to the same value.
+  // A relative step inside an aggregate means the aggregate value DIFFERS per
+  // repeat instance (e.g. count(/data/hh/child[../consent='yes']) counts children
+  // filtered by THEIR household's consent). Contextualizing would update only the
+  // changed household, leaving others with stale counts.
+  // Aggregates with ONLY absolute arguments are context-independent (same result
+  // for every instance) and are safe to contextualize.
   if (AGGREGATE_FUNCTIONS.test(src) && src.includes('..')) return false;
+
+  // (e) current() references the context node explicitly — context-sensitive in a
+  // way our contextualization doesn't account for
+  if (/\bcurrent\s*\(\s*\)/.test(src)) return false;
+
+  // (f) named axes other than child (default) and parent (..)
+  if (/\b(ancestor|descendant|following-sibling|preceding-sibling|following|preceding|namespace|attribute)\s*::/.test(src)) return false;
 
   return true;
 }

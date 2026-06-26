@@ -269,6 +269,64 @@ describe("Equivalence — repeat: out-of-subtree aggregate updated on createNewR
   );
 });
 
+// ---------------------------------------------------------------------------
+// Region: C2 guard — answering field in instance[1] must NOT corrupt instance[0]
+// ---------------------------------------------------------------------------
+
+describe("Equivalence — repeat: per-instance calculate isolation (C2 guard)", () => {
+  it(
+    // Guards Fix C2: contextualization must scope recalculation to the CHANGED
+    // instance only. Before C2, applyRecalculate would resolve the target ref
+    // with DEFAULT_MULTIPLICITY (instance[0]) regardless of which instance
+    // triggered the change — so answering a field in instance[1] would overwrite
+    // instance[0]'s computed field with instance[1]'s value.
+    //
+    // This test FAILS against pre-C2 behavior (wrong-instance write) and PASSES
+    // with the contextualized resolve.
+    "answering a field in repeat instance[1] does not overwrite instance[0]'s computed value",
+    () => {
+      // Form: each repeat instance has a `val` field and a `doubled` calculate
+      // that depends on that instance's own `val` (relative path: ../val or ./val).
+      const scenario = Scenario.init(
+        html(
+          head(
+            title("Per-instance calculate isolation"),
+            model(
+              mainInstance(
+                t(
+                  'data id="per-instance-calc"',
+                  t('rep jr:template=""', t("val", "0"), t("doubled")),
+                ),
+              ),
+              bind("/data/rep/val").type("int"),
+              bind("/data/rep/doubled").type("int").calculate("../val * 2"),
+            ),
+          ),
+          body(repeat("/data/rep", input("/data/rep/val"))),
+        ),
+      );
+
+      scenario.createNewRepeat("/data/rep");
+      scenario.createNewRepeat("/data/rep");
+
+      // Answer instance[0] val = 10
+      scenario.answer("/data/rep[1]/val", 10);
+      // Answer instance[1] val = 20
+      scenario.answer("/data/rep[2]/val", 20);
+
+      // instance[0].doubled must reflect instance[0].val (10*2 = 20)
+      expect(scenario.answerOf("/data/rep[1]/doubled")).intAnswer(20);
+      // instance[1].doubled must reflect instance[1].val (20*2 = 40)
+      expect(scenario.answerOf("/data/rep[2]/doubled")).intAnswer(40);
+
+      // Now change instance[1] — instance[0] must NOT change
+      scenario.answer("/data/rep[2]/val", 30);
+      expect(scenario.answerOf("/data/rep[1]/doubled")).intAnswer(20);
+      expect(scenario.answerOf("/data/rep[2]/doubled")).intAnswer(60);
+    },
+  );
+});
+
 /*
  * ============================================================================
  * BACKLOG — Cases NOT ported in this file
