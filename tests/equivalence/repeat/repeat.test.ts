@@ -224,6 +224,51 @@ describe("Equivalence — repeat: countRepeatInstancesOf", () => {
   );
 });
 
+// ---------------------------------------------------------------------------
+// Region: C3 guard — out-of-subtree aggregate re-evaluated on createNewRepeat
+// ---------------------------------------------------------------------------
+
+describe("Equivalence — repeat: out-of-subtree aggregate updated on createNewRepeat (C3 guard)", () => {
+  it(
+    // Guard for C3: Fix A pruning in initializeRepeatInstance must NOT drop
+    // triggerables whose TRIGGER is inside the new subtree but whose TARGET is
+    // OUTSIDE it (e.g. count(/data/rep) → /data/total lives outside /data/rep).
+    // If the DAG edge is missing this test fails; if it is present it stays green.
+    "adding a repeat instance re-evaluates an out-of-subtree aggregate over the repeat",
+    () => {
+      const scenario = Scenario.init(
+        html(
+          head(
+            title("Out-of-subtree aggregate"),
+            model(
+              mainInstance(
+                t(
+                  'data id="out-of-subtree-agg"',
+                  t("total"),
+                  t('rep jr:template=""', t("val")),
+                ),
+              ),
+              bind("/data/total").type("int").calculate("count(/data/rep)"),
+            ),
+          ),
+          body(repeat("/data/rep", input("/data/rep/val"))),
+        ),
+      );
+
+      expect(scenario.answerOf("/data/total")).intAnswer(0);
+
+      scenario.createNewRepeat("/data/rep");
+      expect(scenario.answerOf("/data/total")).intAnswer(1);
+
+      scenario.createNewRepeat("/data/rep");
+      expect(scenario.answerOf("/data/total")).intAnswer(2);
+
+      scenario.createNewRepeat("/data/rep");
+      expect(scenario.answerOf("/data/total")).intAnswer(3);
+    },
+  );
+});
+
 /*
  * ============================================================================
  * BACKLOG — Cases NOT ported in this file

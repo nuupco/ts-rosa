@@ -62,6 +62,29 @@ export function resolveAllWithin(subtreeRoot: InstanceNode, ref: TreeReference):
   while (cur.parent !== null) { depth++; cur = cur.parent; }
   // depth == number of parent hops == index into ref.levels of subtreeRoot itself
   // The levels below subtreeRoot start at index (depth + 1)
+
+  // Invariant guards — fall back to empty (caller already scoped to a subtree,
+  // so an invariant violation means this ref simply does not resolve within it):
+  //   (a) ref must have enough levels to include depth (i.e. it references the subtree)
+  //   (b) subtreeRoot name must match ref.levels[depth] — otherwise wrong subtree
+  //   (c) the anchor prefix levels (0..depth) in ref must NOT be concrete (INDEX_UNBOUND)
+  //       — a concrete index in the ref itself means the ref is already fully resolved
+  //       to a specific instance and does not need subtree-relative expansion.
+  if (ref.levels.length <= depth) return [];
+  const anchorLevel = ref.levels[depth]!;
+  if (anchorLevel.name !== subtreeRoot.name && anchorLevel.name !== '*') return [];
+  for (let i = 0; i < depth; i++) {
+    const rl = ref.levels[i]!;
+    // If ref has a concrete multiplicity in the anchor prefix that doesn't match the
+    // actual path of subtreeRoot, we'd be resolving against the wrong instance.
+    // Guard: if the ref is pinned to a specific concrete index in the prefix, verify
+    // it matches the subtreeRoot's own multiplicity chain. Rather than walking the
+    // full chain, take the conservative path: if any prefix level is concrete (not
+    // INDEX_UNBOUND), we cannot guarantee it matches this subtreeRoot without walking
+    // the parent chain — so fall back to resolveAll from the tree root (safe, slower).
+    if (rl.multiplicity !== INDEX_UNBOUND) return [];
+  }
+
   const suffixLevels = ref.levels.slice(depth + 1);
   if (suffixLevels.length === 0) {
     // ref points at the subtreeRoot itself
@@ -134,6 +157,26 @@ export function resolveAllContextualized(
   if (anchorDepth < 0) {
     // No shared concrete prefix — fall back to full resolve
     return resolveAll(tree, ref);
+  }
+
+  // Invariant guards — fall back to global resolveAll when assumptions break:
+  //   (c) anchor-prefix levels of changedRef (1..anchorDepth) must be concrete.
+  //       Level 0 is the root and is conventionally INDEX_UNBOUND (there is only one
+  //       root node, so the root is always "concrete" even though its multiplicity
+  //       is stored as INDEX_UNBOUND). Skip i=0.
+  for (let i = 1; i <= anchorDepth; i++) {
+    if (changedLevels[i]!.multiplicity === INDEX_UNBOUND) {
+      return resolveAll(tree, ref);
+    }
+  }
+  //   (d) ref levels at/below the anchor depth should be generic (INDEX_UNBOUND)
+  //       — a concrete multiplicity in `ref` (above level 0 root) means the ref is
+  //       already fully pinned to a specific instance and contextualization is nonsensical.
+  //       Skip i=0 (root is always INDEX_UNBOUND in generic refs too).
+  for (let i = 1; i <= anchorDepth; i++) {
+    if (i < refLevels.length && refLevels[i]!.multiplicity !== INDEX_UNBOUND) {
+      return resolveAll(tree, ref);
+    }
   }
 
   // Navigate to the anchor node using the concrete changedRef prefix

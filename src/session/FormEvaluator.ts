@@ -745,11 +745,9 @@ export class FormEvaluator {
         // with changedRef — mirrors JavaRosa Triggerable.contextualize. Safe only
         // when no trigger of this triggerable is an ancestor of the target (i.e.,
         // the triggerable reacts to a sibling/cousin, not a parent-count change).
+        // An empty result means "no nodes in THIS context" — do NOT fall back to
+        // resolveReference (which picks DEFAULT_MULTIPLICITY and writes to the wrong instance).
         targetNodes = resolveAllContextualized(this.tree, target, changedRef);
-        if (targetNodes.length === 0) {
-          const single = resolveReference(this.tree, target);
-          if (single !== null) targetNodes.push(single);
-        }
       } else {
         targetNodes = resolveAll(this.tree, target);
         if (targetNodes.length === 0) {
@@ -757,10 +755,21 @@ export class FormEvaluator {
           if (single !== null) targetNodes.push(single);
         }
       }
-      for (const targetNode of targetNodes) {
-        const rawResult = this.evaluateExprFast(t.expr, targetNode);
+      // Optimization: if the expression is context-independent (uses only absolute
+      // paths — no '..', no position(), no self) then all target nodes would produce
+      // the same value. Evaluate once using the first node and broadcast to all.
+      if (targetNodes.length > 1 && isContextIndependent(t.expr.source)) {
+        const firstNode = targetNodes[0]!;
+        const rawResult = this.evaluateExprFast(t.expr, firstNode);
         const rawString = typeof rawResult === 'string' ? rawResult : typeof rawResult === 'number' ? String(rawResult) : rawResult ? '1' : '0';
-        targetNode.value = cast(targetNode.dataType, rawString);
+        const v = cast(firstNode.dataType, rawString);
+        for (const targetNode of targetNodes) { targetNode.value = v; }
+      } else {
+        for (const targetNode of targetNodes) {
+          const rawResult = this.evaluateExprFast(t.expr, targetNode);
+          const rawString = typeof rawResult === 'string' ? rawResult : typeof rawResult === 'number' ? String(rawResult) : rawResult ? '1' : '0';
+          targetNode.value = cast(targetNode.dataType, rawString);
+        }
       }
     }
   }
@@ -887,11 +896,9 @@ export class FormEvaluator {
         targetNodes = resolveAllWithin(subtreeRoot, target);
       } else if (changedRef !== null && isSafeToContextualize(t, target)) {
         // Fix C: safe contextualization — same guard as applyRecalculate.
+        // An empty result means "no nodes in THIS context" — do NOT fall back to
+        // resolveReference (which picks DEFAULT_MULTIPLICITY and writes to the wrong instance).
         targetNodes = resolveAllContextualized(this.tree, target, changedRef);
-        if (targetNodes.length === 0) {
-          const single = resolveReference(this.tree, target);
-          if (single !== null) targetNodes.push(single);
-        }
       } else {
         targetNodes = resolveAll(this.tree, target);
         if (targetNodes.length === 0) {
@@ -1215,31 +1222,87 @@ function getAllToTrigger(
 // ---------------------------------------------------------------------------
 
 /**
+ * Aggregate function names that can read across repeat instances when used with
+ * an absolute or non-prefix path argument. If any of these appear in the expression
+ * source, we conservatively decline to contextualize.
+ */
+const AGGREGATE_FUNCTIONS = /\b(count|sum|max|min|avg|count-non-empty)\s*\(/;
+
+/**
+ * Returns true when an expression's value is INDEPENDENT of evaluation context —
+ * i.e., it produces the same result no matter which InstanceNode is the context.
+ *
+ * Used to optimize the cross-instance aggregate case: when the expression is
+ * context-independent, we can evaluate once using any target node and broadcast
+ * the result to all target nodes — avoiding O(N) redundant evaluations when
+ * the expression uses only absolute paths and no context-relative steps.
+ */
+function isContextIndependent(src: string): boolean {
+  if (src.includes('..')) return false;
+  if (src.includes('self::')) return false;
+  // bare '.' not followed by another '.' or '/'  (i.e. not '..' or './')
+  if (/(?:^|[\s([,])\.(?![./])/.test(src)) return false;
+  if (/\bposition\s*\(\s*\)/.test(src)) return false;
+  // A relative path step is a name token at a token boundary NOT preceded by '/'
+  // and NOT followed by '(' (which would make it a function call).
+  // Compact the expression and look for such tokens.
+  const stripped = src.replace(/\s+/g, '');
+  if (/(?:^|[([,])[a-zA-Z_][a-zA-Z0-9_\-]*(?!\s*\()/.test(stripped)) return false;
+  return true;
+}
+
+/**
  * Returns true when it is safe to use resolveAllContextualized (scope target resolution
  * to the deepest concrete ancestor shared with changedRef) for a triggerable/target pair.
  *
- * Safe = no trigger of the triggerable is a generic proper-prefix of the target path.
+ * Conservative: returns false (fall back to global resolveAll) whenever the expression
+ * could read OUTSIDE the concrete subtree of the changed node. Conditions:
  *
- * The unsafe case is expressions like `count(/data/repeat)` on target `/data/repeat/field`:
- * here the trigger `/data/repeat` is a prefix of the target — the triggerable fires when
- * the repeat COUNT changes, so ALL instances of the target must be updated. Contextualizing
- * would only update the one instance that shares a concrete ancestor with changedRef.
+ *   (a) A trigger is a proper prefix of the target (repeat-count change fires triggerable
+ *       from above → all instances must update, not just one subtree).
+ *   (c) The expression source contains `//` (descendant-or-self axis — crosses instances).
+ *   (d) The expression source contains an aggregate function call (count/sum/max/min/etc.)
+ *       AND a relative parent step (`..`) inside that aggregate's argument. The `..` means
+ *       the aggregate accumulates values filtered by a parent-relative predicate, producing
+ *       different results per repeat instance. Example: count(/data/hh/child[../consent='yes'])
+ *       counts children per household — contextualizing would leave sibling households stale
+ *       with WRONG counts. Aggregates with only absolute arguments are context-independent
+ *       (all instances converge to the same value) and are allowed to contextualize.
  *
  * The safe case is expressions like `if(../consent='yes',...)` on target
- * `/data/household/child_repeat/field` triggered by `/data/household/consent`: neither
- * trigger is a prefix of the target, so only the instances that share the household[n]
- * ancestor with the changed consent field are actually affected.
+ * `/data/household/child_repeat/field` triggered by `/data/household/consent`: no
+ * trigger is a prefix of the target, and the expression only uses relative paths
+ * confined to the concrete sibling — safe to contextualize.
+ *
+ * When in doubt, do NOT contextualize (correctness over performance).
  */
 function isSafeToContextualize(t: Triggerable, target: TreeReference): boolean {
   const targetStr = refToString(target);
   for (const trigger of t.triggers) {
     const trigStr = refToString(trigger);
-    // A trigger that is a proper prefix of the target path means the triggerable
+    // (a) A trigger that is a proper prefix of the target path means the triggerable
     // is "fired from above" (e.g. repeat-count change) → not safe to contextualize.
     if (targetStr.startsWith(trigStr + '/') || targetStr === trigStr) {
       return false;
     }
   }
+
+  // (c)/(d) Inspect expression source for cross-instance reads.
+  const src = t.expr.source;
+  // (c) descendant-or-self axis — always crosses instance boundaries
+  if (src.includes('//')) return false;
+  // (d) aggregate function whose argument contains a relative path step (`..`).
+  // A relative step inside an aggregate argument means the aggregate value DIFFERS
+  // per repeat instance (e.g. count(/data/household/child[../consent='yes']) counts
+  // children filtered by THEIR household's consent, giving a different result per
+  // household). Contextualizing would update only the changed household's target,
+  // leaving other households with stale, WRONG counts.
+  //
+  // Aggregates with ONLY absolute argument paths produce the same result for every
+  // target instance (context-independent); contextualizing those is safe because
+  // all instances converge to the same value.
+  if (AGGREGATE_FUNCTIONS.test(src) && src.includes('..')) return false;
+
   return true;
 }
 
