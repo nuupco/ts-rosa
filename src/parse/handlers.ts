@@ -28,7 +28,10 @@ function getLabelText(el: Element): string | null {
   return labelEl ? textContent(labelEl) : null;
 }
 
-/** Pattern to detect jr:itext('id') or jr:itext("id") in label ref attributes. */
+function getHintText(el: Element): string | null {
+  const hintEl = firstByLocalName(el, 'hint');
+  return hintEl ? textContent(hintEl) : null;
+}
 const ITEXT_REF_RE = /jr:itext\(\s*['"]([^'"]+)['"]\s*\)/;
 
 function getChoices(el: Element): readonly ChoiceItem[] {
@@ -158,8 +161,9 @@ function questionHandler(el: Element, ctx: BuildCtx): FormElement {
   const choices = itemset !== null ? [] : getChoices(el);
   const appearance = el.getAttribute('appearance') ?? null;
   const mediatype = el.getAttribute('mediatype') ?? null;
+  const hintText = getHintText(el);
 
-  return { kind: 'question', ref, controlType, binding, labelText, labelInnerText: innerText, choices, itemset, appearance, mediatype };
+  return { kind: 'question', ref, controlType, binding, labelText, labelInnerText: innerText, choices, itemset, appearance, mediatype, hintText };
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +176,8 @@ function groupHandler(el: Element, ctx: BuildCtx): FormElement {
   const labelText = getLabelText(el);
   const children = buildChildren(el, ctx);
   const appearance = el.getAttribute('appearance') ?? null;
-  return { kind: 'group', ref, labelText, children, appearance };
+  const hintText = getHintText(el);
+  return { kind: 'group', ref, labelText, children, appearance, hintText };
 }
 
 // ---------------------------------------------------------------------------
@@ -188,7 +193,8 @@ function repeatHandler(el: Element, ctx: BuildCtx): FormElement {
   // Attribute is in the jr: namespace; xmldom preserves the prefix when xmlns:jr is declared.
   // Fall back to localName 'count' (without prefix) for robustness.
   const countExpr = el.getAttribute('jr:count') ?? el.getAttribute('count') ?? null;
-  return { kind: 'repeat', ref, labelText, children, countExpr };
+  const hintText = getHintText(el);
+  return { kind: 'repeat', ref, labelText, children, countExpr, hintText };
 }
 
 // ---------------------------------------------------------------------------

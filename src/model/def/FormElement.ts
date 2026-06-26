@@ -66,14 +66,10 @@ export type FormElement =
        */
       readonly labelInnerText: string | null;
       readonly choices: readonly ChoiceItem[];
-      /**
-       * Dynamic itemset definition (Slice 5c).
-       * Null for questions with only static <item> children.
-       * Mutually exclusive with a non-empty choices array.
-       */
       readonly itemset: ItemsetDef | null;
       readonly appearance?: string | null;
       readonly mediatype?: string | null;
+      readonly hintText?: string | null;
     }
   | {
       readonly kind: 'group';
@@ -81,17 +77,13 @@ export type FormElement =
       readonly children: readonly FormElement[];
       readonly labelText: string | null;
       readonly appearance?: string | null;
+      readonly hintText?: string | null;
     }
   | {
       readonly kind: 'repeat';
       readonly ref: TreeReference;
       readonly children: readonly FormElement[];
       readonly labelText: string | null;
-      /**
-       * XPath expression from jr:count attribute on the <repeat> element.
-       * When set, the repeat is count-controlled (no-add-remove) and the navigator
-       * auto-creates instances up to count during navigation (mirrors JR createModelIfNecessary).
-       * null when no jr:count is present (add/remove by user).
-       */
       readonly countExpr: string | null;
+      readonly hintText?: string | null;
     };
