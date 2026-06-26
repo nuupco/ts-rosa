@@ -747,25 +747,37 @@ export class FormEvaluator {
         });
       }
       for (const targetNode of targetNodes) {
-        const rawResult = this.evaluateCompiled(t.expr, targetNode);
+        const rawResult = this.evaluateExprFast(t.expr, targetNode);
         const rawString = typeof rawResult === 'string' ? rawResult : typeof rawResult === 'number' ? String(rawResult) : rawResult ? '1' : '0';
         targetNode.value = cast(targetNode.dataType, rawString);
       }
     }
   }
 
+  private evaluateExprFast(compiled: CompiledInstanceExpression, ctx: InstanceNode): string | number | boolean {
+    if (compiled.source === 'position(..)') {
+      const p = ctx.parent;
+      if (p !== null) {
+        const s = p.children.filter((c) => c.name === ctx.name && c.multiplicity !== INDEX_TEMPLATE);
+        return s.indexOf(ctx) + 1;
+      }
+      return 1;
+    }
+    return this.evaluateCompiled(compiled, ctx);
+  }
+
   private applyRecalculateGrouped(t: Triggerable & { kind: 'recalculate' }, subtreeRoot: InstanceNode): void {
     for (const target of t.targets) {
       const nodes = resolveAll(this.tree, target);
-      if (nodes.length <= 1) { for (const n of nodes) { const r = this.evaluateCompiled(t.expr, n); n.value = cast(n.dataType, String(r)); } continue; }
+      if (nodes.length <= 1) { for (const n of nodes) { const r = this.evaluateExprFast(t.expr, n); n.value = cast(n.dataType, String(r)); } continue; }
       const byGp = new Map<InstanceNode, InstanceNode[]>();
       for (const n of nodes) {
         const gp = n.parent?.parent ?? null;
-        if (gp === null) { const r = this.evaluateCompiled(t.expr, n); n.value = cast(n.dataType, String(r)); continue; }
+        if (gp === null) { const r = this.evaluateExprFast(t.expr, n); n.value = cast(n.dataType, String(r)); continue; }
         let g = byGp.get(gp); if (!g) { g = []; byGp.set(gp, g); } g.push(n);
       }
       for (const group of byGp.values()) {
-        const f = group[0]!; const raw = this.evaluateCompiled(t.expr, f);
+        const f = group[0]!; const raw = this.evaluateExprFast(t.expr, f);
         const s = typeof raw === 'string' ? raw : typeof raw === 'number' ? String(raw) : raw ? '1' : '0';
         const v = cast(f.dataType, s); for (const n of group) n.value = v;
       }

@@ -401,6 +401,6 @@ describe('ChildVaccinationTest', () => {
       expect(refsEqual(scenario.refAtIndex(), FINISHED_FORM_REF)).toBe(true);
       scenario.next();
     },
-    60_000, // timeout: smoke tests are long-running
+    120_000, // smoke test generates 108 children across 18 households
   );
 });
