@@ -36,7 +36,7 @@ import type { TreeReference } from '../model/instance/TreeReference.ts';
 import { genericize, refToString, parentOf, parseAbsoluteRef, REF_ABSOLUTE } from '../model/instance/TreeReference.ts';
 import { level } from '../model/instance/TreeReferenceLevel.ts';
 import { INDEX_TEMPLATE, INDEX_UNBOUND } from '../model/instance/multiplicity.ts';
-import { resolveReference, resolveAll } from '../model/instance/InstanceTree.ts';
+import { resolveReference, resolveAll, resolveAllWithin, resolveAllContextualized } from '../model/instance/InstanceTree.ts';
 import { cast } from '../model/data/codecs.ts';
 import type { AnswerValue } from '../model/data/AnswerValue.ts';
 import { type NodeState, defaultNodeState } from '../model/state/NodeState.ts';
@@ -734,17 +734,28 @@ export class FormEvaluator {
    */
   private applyRecalculate(t: Triggerable & { kind: 'recalculate' }, changedRef: TreeReference | null, subtreeRoot: InstanceNode | null = null): void {
     for (const target of t.targets) {
-      let targetNodes = resolveAll(this.tree, target);
-      if (targetNodes.length === 0) {
-        const single = resolveReference(this.tree, target);
-        if (single !== null) targetNodes.push(single);
-      }
+      let targetNodes: InstanceNode[];
       if (subtreeRoot !== null) {
-        targetNodes = targetNodes.filter((n) => {
-          let cur: InstanceNode | null = n;
-          while (cur !== null) { if (cur === subtreeRoot) return true; cur = cur.parent; }
-          return false;
-        });
+        // Fix B: scope the resolve to the subtree instead of a full-tree BFS +
+        // post-filter. resolveAllWithin starts from subtreeRoot and walks only
+        // the suffix of the absolute target ref — O(subtree) instead of O(tree).
+        targetNodes = resolveAllWithin(subtreeRoot, target);
+      } else if (changedRef !== null && isSafeToContextualize(t, target)) {
+        // Fix C: contextualize the resolve to the deepest concrete ancestor shared
+        // with changedRef — mirrors JavaRosa Triggerable.contextualize. Safe only
+        // when no trigger of this triggerable is an ancestor of the target (i.e.,
+        // the triggerable reacts to a sibling/cousin, not a parent-count change).
+        targetNodes = resolveAllContextualized(this.tree, target, changedRef);
+        if (targetNodes.length === 0) {
+          const single = resolveReference(this.tree, target);
+          if (single !== null) targetNodes.push(single);
+        }
+      } else {
+        targetNodes = resolveAll(this.tree, target);
+        if (targetNodes.length === 0) {
+          const single = resolveReference(this.tree, target);
+          if (single !== null) targetNodes.push(single);
+        }
       }
       for (const targetNode of targetNodes) {
         const rawResult = this.evaluateExprFast(t.expr, targetNode);
@@ -870,17 +881,23 @@ export class FormEvaluator {
    */
   private applyCondition(t: Triggerable & { kind: 'condition' }, changedRef: TreeReference | null, subtreeRoot: InstanceNode | null = null): void {
     for (const target of t.targets) {
-      let targetNodes = resolveAll(this.tree, target);
-      if (targetNodes.length === 0) {
-        const single = resolveReference(this.tree, target);
-        if (single !== null) targetNodes.push(single);
-      }
+      let targetNodes: InstanceNode[];
       if (subtreeRoot !== null) {
-        targetNodes = targetNodes.filter((n) => {
-          let cur: InstanceNode | null = n;
-          while (cur !== null) { if (cur === subtreeRoot) return true; cur = cur.parent; }
-          return false;
-        });
+        // Fix B: scope resolve to subtree — same rationale as applyRecalculate.
+        targetNodes = resolveAllWithin(subtreeRoot, target);
+      } else if (changedRef !== null && isSafeToContextualize(t, target)) {
+        // Fix C: safe contextualization — same guard as applyRecalculate.
+        targetNodes = resolveAllContextualized(this.tree, target, changedRef);
+        if (targetNodes.length === 0) {
+          const single = resolveReference(this.tree, target);
+          if (single !== null) targetNodes.push(single);
+        }
+      } else {
+        targetNodes = resolveAll(this.tree, target);
+        if (targetNodes.length === 0) {
+          const single = resolveReference(this.tree, target);
+          if (single !== null) targetNodes.push(single);
+        }
       }
 
       // Determine generic key for this target (used for backward-compat lookup)
@@ -1063,15 +1080,42 @@ export class FormEvaluator {
 
     const subtreeRoot = resolveReference(this.tree, repeatRootRef);
     const rootGeneric = refToString(genericize(repeatRootRef));
+    const subtreePrefix = rootGeneric + '/';
+
+    // --- Fix A: prune triggerables to those relevant to the new subtree ---
+    // A triggerable is relevant to a new repeat instance if:
+    //   (a) any of its TARGETS fall inside the subtree (needs initialization), OR
+    //   (b) any of its TRIGGERS fall inside the subtree (reacts to the new instance).
+    // Triggerables with both triggers AND targets entirely outside the subtree
+    // cannot affect the new instance — skipping them is the key O(N²→N) improvement.
+    // We expand transitively via immediateCascades so ordering is preserved.
+    const subtreeRoots = new Set<Triggerable>();
+    for (const triggerable of this.dag.triggerablesDAG) {
+      const hasTargetInSubtree = triggerable.targets.some((tgt) => {
+        const k = refToString(tgt);
+        return k === rootGeneric || k.startsWith(subtreePrefix);
+      });
+      const hasTriggerInSubtree = triggerable.triggers.some((tr) => {
+        const k = refToString(tr);
+        return k === rootGeneric || k.startsWith(subtreePrefix);
+      });
+      if (hasTargetInSubtree || hasTriggerInSubtree) {
+        subtreeRoots.add(triggerable);
+      }
+    }
+    const toTrigger = getAllToTrigger(subtreeRoots, this.dag.immediateCascades);
+    // --- end Fix A ---
 
     for (const triggerable of this.dag.triggerablesDAG) {
+      if (!toTrigger.has(triggerable)) continue;
+
       if (triggerable.kind === 'recalculate') {
         const hasTriggers = triggerable.triggers.length > 0;
         const allInside = hasTriggers && triggerable.triggers.every(
-          (t) => refToString(t).startsWith(rootGeneric + '/'));
+          (t) => refToString(t).startsWith(subtreePrefix));
         const allOutside = hasTriggers && triggerable.triggers.every((t) => {
           const k = refToString(t);
-          return k !== rootGeneric && !k.startsWith(rootGeneric + '/');
+          return k !== rootGeneric && !k.startsWith(subtreePrefix);
         });
 
         if (allInside) {
@@ -1164,6 +1208,39 @@ function getAllToTrigger(
   }
 
   return toTrigger;
+}
+
+// ---------------------------------------------------------------------------
+// isSafeToContextualize — guard for Fix C contextualization in apply{Recalculate,Condition}
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when it is safe to use resolveAllContextualized (scope target resolution
+ * to the deepest concrete ancestor shared with changedRef) for a triggerable/target pair.
+ *
+ * Safe = no trigger of the triggerable is a generic proper-prefix of the target path.
+ *
+ * The unsafe case is expressions like `count(/data/repeat)` on target `/data/repeat/field`:
+ * here the trigger `/data/repeat` is a prefix of the target — the triggerable fires when
+ * the repeat COUNT changes, so ALL instances of the target must be updated. Contextualizing
+ * would only update the one instance that shares a concrete ancestor with changedRef.
+ *
+ * The safe case is expressions like `if(../consent='yes',...)` on target
+ * `/data/household/child_repeat/field` triggered by `/data/household/consent`: neither
+ * trigger is a prefix of the target, so only the instances that share the household[n]
+ * ancestor with the changed consent field are actually affected.
+ */
+function isSafeToContextualize(t: Triggerable, target: TreeReference): boolean {
+  const targetStr = refToString(target);
+  for (const trigger of t.triggers) {
+    const trigStr = refToString(trigger);
+    // A trigger that is a proper prefix of the target path means the triggerable
+    // is "fired from above" (e.g. repeat-count change) → not safe to contextualize.
+    if (targetStr.startsWith(trigStr + '/') || targetStr === trigStr) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------

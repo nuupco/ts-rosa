@@ -41,6 +41,155 @@ export function resolveReference(tree: InstanceTree, ref: TreeReference): Instan
 }
 
 /**
+ * Returns all matching InstanceNodes for the given reference, starting the
+ * BFS from `subtreeRoot` instead of tree.root.
+ *
+ * `subtreeRoot` must correspond to a prefix of `ref.levels`. The function
+ * computes the depth of `subtreeRoot` (by walking its parent chain) and uses
+ * the remaining ref levels (the suffix) to expand within the subtree only.
+ *
+ * This avoids the full-tree BFS of resolveAll() when we only need nodes inside
+ * a single concrete repeat instance. Returns the same nodes as resolveAll()
+ * would, but restricted to descendants of subtreeRoot.
+ *
+ * Used by applyRecalculate in initializeRepeatInstance (Fix B: scope resolveAll
+ * to subtreeRoot so the global walk is eliminated during repeat-instance init).
+ */
+export function resolveAllWithin(subtreeRoot: InstanceNode, ref: TreeReference): InstanceNode[] {
+  // Compute depth of subtreeRoot from tree root (count parent hops)
+  let depth = 0;
+  let cur: InstanceNode | null = subtreeRoot;
+  while (cur.parent !== null) { depth++; cur = cur.parent; }
+  // depth == number of parent hops == index into ref.levels of subtreeRoot itself
+  // The levels below subtreeRoot start at index (depth + 1)
+  const suffixLevels = ref.levels.slice(depth + 1);
+  if (suffixLevels.length === 0) {
+    // ref points at the subtreeRoot itself
+    return [subtreeRoot];
+  }
+  let currentNodes: InstanceNode[] = [subtreeRoot];
+  for (const lvl of suffixLevels) {
+    const nextNodes: InstanceNode[] = [];
+    for (const node of currentNodes) {
+      const candidates = childrenNamed(node, lvl.name).filter(
+        (c) => c.multiplicity !== INDEX_TEMPLATE,
+      );
+      if (lvl.multiplicity === INDEX_UNBOUND) {
+        nextNodes.push(...candidates);
+      } else {
+        const match = candidates[lvl.multiplicity] ?? null;
+        if (match !== null) nextNodes.push(match);
+      }
+    }
+    currentNodes = nextNodes;
+  }
+  return currentNodes;
+}
+
+/**
+ * Resolve `ref` (which may have wildcard levels) scoped to the deepest concrete
+ * ancestor shared with `changedRef`.
+ *
+ * This mirrors JavaRosa's Triggerable.contextualize: given a changed ref like
+ * /data/household[9]/consent and a generic target like /data/household/child_repeat/field,
+ * find the longest common concrete prefix (/data/household[9]), then expand only
+ * the suffix (child_repeat/field) from that concrete ancestor node.
+ *
+ * Result is always a strict subset of what resolveAll(tree, ref) returns — only the
+ * instances that share the same repeat-instance ancestors as changedRef. This is the
+ * key to breaking the O(N²) cost in triggerTriggerables: instead of resolving ALL 108
+ * child instances when answering a household-level field, we resolve only the 6 children
+ * of the changed household.
+ *
+ * Falls back to full resolveAll when changedRef and ref share no concrete prefix
+ * (e.g. the target is completely unrelated to the changed node's path).
+ *
+ * @param tree        The instance tree
+ * @param ref         Generic target ref (the triggerable's target)
+ * @param changedRef  Concrete changed ref (the trigger that fired the cascade)
+ */
+export function resolveAllContextualized(
+  tree: InstanceTree,
+  ref: TreeReference,
+  changedRef: TreeReference,
+): InstanceNode[] {
+  // Find the deepest level index where ref and changedRef share the same name
+  // AND changedRef has a concrete (non-wildcard) multiplicity.
+  // At that point, the changedRef's concrete node IS the scope anchor.
+  const refLevels = ref.levels;
+  const changedLevels = changedRef.levels;
+  const minLen = Math.min(refLevels.length, changedLevels.length);
+
+  let anchorDepth = -1; // -1 means no shared concrete prefix found
+  for (let i = 0; i < minLen; i++) {
+    const rl = refLevels[i]!;
+    const cl = changedLevels[i]!;
+    if (rl.name !== cl.name) break;
+    // changedRef is concrete at this level (specific index)
+    if (cl.multiplicity !== INDEX_UNBOUND) {
+      anchorDepth = i;
+    }
+  }
+
+  if (anchorDepth < 0) {
+    // No shared concrete prefix — fall back to full resolve
+    return resolveAll(tree, ref);
+  }
+
+  // Navigate to the anchor node using the concrete changedRef prefix
+  // (levels 0..anchorDepth inclusive, all concrete from changedRef)
+  const anchorLevels = changedLevels.slice(0, anchorDepth + 1);
+  let anchorNode: InstanceNode | null = tree.root;
+  // First level is root
+  if (anchorLevels.length === 0) {
+    anchorNode = tree.root;
+  } else {
+    const [first, ...rest] = anchorLevels;
+    if (first === undefined || (tree.root.name !== first.name && first.name !== '*')) {
+      return resolveAll(tree, ref);
+    }
+    anchorNode = tree.root;
+    for (const lvl of rest) {
+      const cur = anchorNode;
+      const candidates: InstanceNode[] = childrenNamed(cur, lvl.name).filter(
+        (c) => c.multiplicity !== INDEX_TEMPLATE,
+      );
+      const idx = lvl.multiplicity === INDEX_UNBOUND ? DEFAULT_MULTIPLICITY : lvl.multiplicity;
+      const next = candidates[idx] ?? null;
+      if (next === null) return [];
+      anchorNode = next;
+    }
+  }
+
+  if (anchorNode === null) return resolveAll(tree, ref);
+
+  // anchorNode is at depth anchorDepth. The remaining suffix levels of ref
+  // (levels anchorDepth+1 onward) define what to resolve within the anchor subtree.
+  const suffixLevels = refLevels.slice(anchorDepth + 1);
+  if (suffixLevels.length === 0) {
+    return [anchorNode];
+  }
+
+  let currentNodes: InstanceNode[] = [anchorNode];
+  for (const lvl of suffixLevels) {
+    const nextNodes: InstanceNode[] = [];
+    for (const node of currentNodes) {
+      const candidates = childrenNamed(node, lvl.name).filter(
+        (c) => c.multiplicity !== INDEX_TEMPLATE,
+      );
+      if (lvl.multiplicity === INDEX_UNBOUND) {
+        nextNodes.push(...candidates);
+      } else {
+        const match = candidates[lvl.multiplicity] ?? null;
+        if (match !== null) nextNodes.push(match);
+      }
+    }
+    currentNodes = nextNodes;
+  }
+  return currentNodes;
+}
+
+/**
  * Returns all matching InstanceNodes for the given reference.
  * When multiplicity is INDEX_UNBOUND, returns ALL same-name children (wildcard expansion).
  */

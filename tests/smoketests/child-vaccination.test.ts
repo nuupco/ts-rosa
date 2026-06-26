@@ -401,6 +401,6 @@ describe('ChildVaccinationTest', () => {
       expect(refsEqual(scenario.refAtIndex(), FINISHED_FORM_REF)).toBe(true);
       scenario.next();
     },
-    120_000, // smoke test generates 108 children across 18 households
+    30_000, // smoke test: 108 children across 18 households; ~8s after 7d perf fix
   );
 });
