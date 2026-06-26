@@ -328,12 +328,7 @@ function answerHousehold(scenario: Scenario, number: number, children: ChildActi
 // ---------------------------------------------------------------------------
 
 describe('ChildVaccinationTest', () => {
-  // STOP-AND-REPORT: still failing — child_repeat relevance is false after init for
-  // freshly-created (empty-field) instances, so navigation skips to /data/household/finished2.
-  // Multi-instance condition scoping was reworked (evaluate predicate per concrete parent),
-  // which removes cross-household leakage and causes no regressions, but does NOT fix this
-  // init-time relevance facet. Remaining gap tracked for Phase 7 continuation.
-  it.fails(
+  it(
     // Source: org.javarosa.smoketests.ChildVaccinationTest#smoke_test
     'smoke_test',
     () => {
@@ -378,6 +373,7 @@ describe('ChildVaccinationTest', () => {
           VACCINATION_PENTA3_REF,
           VACCINATION_MEASLES_REF,
           NEXT_CHILD_REF,
+          NEXT_CHILD_NO_MOTHER_REF,
         ];
         expect(
           refIn(cur, ...validStops),
@@ -390,6 +386,9 @@ describe('ChildVaccinationTest', () => {
         if (i + 1 < households.length) {
           scenario.answer('no');
           scenario.next();
+          // Create next household instance explicitly (non-count-controlled
+          // repeat, not auto-created by createModelIfNecessary).
+          scenario.createNewRepeat('/data/household');
         } else {
           scenario.answer('yes');
         }

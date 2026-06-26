@@ -150,7 +150,21 @@ export class FormNavigator {
       }
       break;
     }
-    if (!isAt(next)) return null;
+    if (!isAt(next)) {
+      // When EOF would be returned and the next logical position is a
+      // repeat junction with no instance, return the junction's own ref.
+      // This handles PROMPT_NEW_REPEAT where incrementIndex goes to EOF
+      // because no instance exists yet.
+      const one = this.incrementIndex(this.currentIndex);
+      if (isAt(one) && one.ref) {
+        const resolved = this.resolvePath(one.path);
+        if (resolved !== null && resolved.element.kind === 'repeat'
+            && resolveReference(this.tree, one.ref) === null) {
+          return one.ref;
+        }
+      }
+      return null;
+    }
     return next.ref;
   }
 
@@ -361,54 +375,37 @@ export class FormNavigator {
     if (resolved === null || resolved.element.kind !== 'repeat') return;
 
     const repeat = resolved.element;
-    if (repeat.countExpr == null) return; // not count-controlled
 
     // Check if the instance already exists
     if (resolveReference(this.tree, idx.ref) !== null) return;
 
-    // Evaluate the count expression with context = an existing instance of the repeat
-    // (jr:count is relative to the repeat's nodeset — e.g. `../child_repeat_count` means
-    // from a child_repeat node, step up to the parent and get child_repeat_count).
-    // Use the first existing instance (multiplicity=0) as context; fall back to the
-    // parent node when no instances exist yet (first instance creation).
-    const lastLvl = idx.ref.levels[idx.ref.levels.length - 1]!;
-    const firstInstanceRef = { ...idx.ref, levels: [...idx.ref.levels.slice(0, -1), level(lastLvl.name, 0)] };
-    const existingInstance = resolveReference(this.tree, firstInstanceRef);
+    if (repeat.countExpr != null) {
+      // Evaluate the count expression with context = an existing instance of the repeat
+      const lastLvl = idx.ref.levels[idx.ref.levels.length - 1]!;
+      const firstInstanceRef = { ...idx.ref, levels: [...idx.ref.levels.slice(0, -1), level(lastLvl.name, 0)] };
+      const existingInstance = resolveReference(this.tree, firstInstanceRef);
 
-    // When no instance exists yet (existingInstance === null), fall back to the repeat's
-    // parent node. jr:count expressions like `../child_repeat_count` navigate UP from
-    // child_repeat to its parent; evaluating from the parent with the parent-relative
-    // form of the count expression is equivalent and correct for count-controlled repeats.
-    // When no instance of the repeat exists yet, we cannot use a child node as
-    // context for the count expression (e.g. `../child_repeat_count` needs a
-    // child_repeat node to navigate from). Instead, find any SIBLING node that
-    // shares the same parent — `../child_repeat_count` from any sibling of
-    // child_repeat also resolves to the parent's `child_repeat_count` child.
-    let contextNode = existingInstance;
-    if (contextNode === null && idx.ref.levels.length > 1) {
-      const parentRef = { ...idx.ref, levels: idx.ref.levels.slice(0, -1) };
-      const parentNode = resolveReference(this.tree, parentRef);
-      if (parentNode !== null && parentNode.children.length > 0) {
-        // Use the first non-template child as a sibling context node.
-        // `../X` from any sibling of the repeat navigates up to the parent and
-        // then finds X — the same as from an actual repeat instance.
-        contextNode = parentNode.children.find((c) => c.multiplicity !== INDEX_TEMPLATE) ?? null;
+      let contextNode = existingInstance;
+      if (contextNode === null && idx.ref.levels.length > 1) {
+        const parentRef = { ...idx.ref, levels: idx.ref.levels.slice(0, -1) };
+        const parentNode = resolveReference(this.tree, parentRef);
+        if (parentNode !== null && parentNode.children.length > 0) {
+          contextNode = parentNode.children.find((c) => c.multiplicity !== INDEX_TEMPLATE) ?? null;
+        }
       }
-    }
-    const countVal = this.evaluator.evaluateOnInstance(repeat.countExpr, contextNode);
-    const count = typeof countVal === 'number' ? countVal : Number(countVal);
-    if (isNaN(count) || count <= 0) return;
+      const countVal = this.evaluator.evaluateOnInstance(repeat.countExpr, contextNode);
+      const count = typeof countVal === 'number' ? countVal : Number(countVal);
+      if (isNaN(count) || count <= 0) return;
 
-    // Current multiplicity: the last level's multiplicity in the path
-    const lastLevel = idx.path[idx.path.length - 1];
-    const multiplicity = lastLevel?.multiplicity ?? 0;
+      const lastLevel = idx.path[idx.path.length - 1];
+      const multiplicity = lastLevel?.multiplicity ?? 0;
 
-    if (multiplicity < count) {
-      // Auto-create this instance (mirrors JR form.createNewRepeat(index))
-      const genericRef = genericize(idx.ref);
-      addRepeatInstance(this.tree, genericRef);
-      // Re-run the DAG cascade for the new instance
-      this.evaluator.initializeRepeatInstance(idx.ref);
+      if (multiplicity < count) {
+        const node = addRepeatInstance(this.tree, idx.ref);
+        if (node !== null) {
+          this.evaluator.initializeRepeatInstance(idx.ref);
+        }
+      }
     }
   }
 

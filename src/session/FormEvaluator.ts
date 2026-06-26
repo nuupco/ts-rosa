@@ -732,29 +732,42 @@ export class FormEvaluator {
    * non-relevant groups; only descendant nodes that depend on a non-relevant node
    * see '' via the relevanceOf closure).
    */
-  private applyRecalculate(t: Triggerable & { kind: 'recalculate' }, changedRef: TreeReference | null): void {
+  private applyRecalculate(t: Triggerable & { kind: 'recalculate' }, changedRef: TreeReference | null, subtreeRoot: InstanceNode | null = null): void {
     for (const target of t.targets) {
-      // Use resolveAll to handle repeated paths (multiple instances at same generic path)
-      const targetNodes = resolveAll(this.tree, target);
+      let targetNodes = resolveAll(this.tree, target);
       if (targetNodes.length === 0) {
-        // Fallback: resolve single (for non-repeated paths)
         const single = resolveReference(this.tree, target);
         if (single !== null) targetNodes.push(single);
       }
-
+      if (subtreeRoot !== null) {
+        targetNodes = targetNodes.filter((n) => {
+          let cur: InstanceNode | null = n;
+          while (cur !== null) { if (cur === subtreeRoot) return true; cur = cur.parent; }
+          return false;
+        });
+      }
       for (const targetNode of targetNodes) {
         const rawResult = this.evaluateCompiled(t.expr, targetNode);
+        const rawString = typeof rawResult === 'string' ? rawResult : typeof rawResult === 'number' ? String(rawResult) : rawResult ? '1' : '0';
+        targetNode.value = cast(targetNode.dataType, rawString);
+      }
+    }
+  }
 
-        const rawString = typeof rawResult === 'string'
-          ? rawResult
-          : typeof rawResult === 'number'
-            ? String(rawResult)
-            : rawResult
-              ? '1'
-              : '0';
-
-        const coerced = cast(targetNode.dataType, rawString);
-        targetNode.value = coerced;
+  private applyRecalculateGrouped(t: Triggerable & { kind: 'recalculate' }, subtreeRoot: InstanceNode): void {
+    for (const target of t.targets) {
+      const nodes = resolveAll(this.tree, target);
+      if (nodes.length <= 1) { for (const n of nodes) { const r = this.evaluateCompiled(t.expr, n); n.value = cast(n.dataType, String(r)); } continue; }
+      const byGp = new Map<InstanceNode, InstanceNode[]>();
+      for (const n of nodes) {
+        const gp = n.parent?.parent ?? null;
+        if (gp === null) { const r = this.evaluateCompiled(t.expr, n); n.value = cast(n.dataType, String(r)); continue; }
+        let g = byGp.get(gp); if (!g) { g = []; byGp.set(gp, g); } g.push(n);
+      }
+      for (const group of byGp.values()) {
+        const f = group[0]!; const raw = this.evaluateCompiled(t.expr, f);
+        const s = typeof raw === 'string' ? raw : typeof raw === 'number' ? String(raw) : raw ? '1' : '0';
+        const v = cast(f.dataType, s); for (const n of group) n.value = v;
       }
     }
   }
@@ -843,13 +856,19 @@ export class FormEvaluator {
    * After updating own relevant, propagates inherited relevance to descendants
    * (ancestor walk semantics: a node is non-relevant if any ancestor is non-relevant).
    */
-  private applyCondition(t: Triggerable & { kind: 'condition' }, changedRef: TreeReference | null): void {
+  private applyCondition(t: Triggerable & { kind: 'condition' }, changedRef: TreeReference | null, subtreeRoot: InstanceNode | null = null): void {
     for (const target of t.targets) {
-      // Use resolveAll to handle repeated paths
-      const targetNodes = resolveAll(this.tree, target);
+      let targetNodes = resolveAll(this.tree, target);
       if (targetNodes.length === 0) {
         const single = resolveReference(this.tree, target);
         if (single !== null) targetNodes.push(single);
+      }
+      if (subtreeRoot !== null) {
+        targetNodes = targetNodes.filter((n) => {
+          let cur: InstanceNode | null = n;
+          while (cur !== null) { if (cur === subtreeRoot) return true; cur = cur.parent; }
+          return false;
+        });
       }
 
       // Determine generic key for this target (used for backward-compat lookup)
@@ -1030,13 +1049,28 @@ export class FormEvaluator {
   initializeRepeatInstance(repeatRootRef: TreeReference): void {
     if (this.dag === null) return;
 
-    // Re-run initializeInstance logic for all triggerables — their target
-    // resolution via resolveAll will now include the new instance.
+    const subtreeRoot = resolveReference(this.tree, repeatRootRef);
+    const rootGeneric = refToString(genericize(repeatRootRef));
+
     for (const triggerable of this.dag.triggerablesDAG) {
       if (triggerable.kind === 'recalculate') {
-        this.applyRecalculate(triggerable, repeatRootRef);
+        const hasTriggers = triggerable.triggers.length > 0;
+        const allInside = hasTriggers && triggerable.triggers.every(
+          (t) => refToString(t).startsWith(rootGeneric + '/'));
+        const allOutside = hasTriggers && triggerable.triggers.every((t) => {
+          const k = refToString(t);
+          return k !== rootGeneric && !k.startsWith(rootGeneric + '/');
+        });
+
+        if (allInside) {
+          this.applyRecalculate(triggerable, repeatRootRef, subtreeRoot);
+        } else if (allOutside && subtreeRoot !== null) {
+          this.applyRecalculateGrouped(triggerable, subtreeRoot);
+        } else {
+          this.applyRecalculate(triggerable, repeatRootRef, null);
+        }
       } else if (triggerable.kind === 'condition') {
-        this.applyCondition(triggerable, repeatRootRef);
+        this.applyCondition(triggerable, repeatRootRef, subtreeRoot);
       }
     }
   }

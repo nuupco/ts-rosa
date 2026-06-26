@@ -88,7 +88,18 @@ export function addRepeatInstance(tree: InstanceTree, ref: TreeReference): Insta
   const lastLevel = ref.levels[ref.levels.length - 1]!;
 
   // Resolve parent
-  const parent = resolveReference(tree, parentRef);
+  let parent = resolveReference(tree, parentRef);
+  if (parent === null && parentRef.levels.length > 0) {
+    const gpRef = { ...parentRef, levels: parentRef.levels.slice(0, -1) };
+    const gp = resolveReference(tree, gpRef);
+    if (gp !== null) {
+      const parentName = parentRef.levels[parentRef.levels.length - 1]!.name;
+      const candidates = gp.children.filter(
+        (c) => c.name === parentName && c.multiplicity !== INDEX_TEMPLATE,
+      );
+      parent = candidates[0] ?? null; // FIRST matching parent
+    }
+  }
   if (parent === null) return null;
 
   // Find template or use first non-template instance as source
