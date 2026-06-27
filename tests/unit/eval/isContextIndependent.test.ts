@@ -127,4 +127,56 @@ describe('isContextIndependent broadcast guard', () => {
       expect(TESTONLY_isContextIndependent('now()')).toBe(true);
     });
   });
+
+  describe('M1 — last() is context-dependent (Round-5 fixes)', () => {
+    it('bare last(): last()', () => {
+      expect(TESTONLY_isContextIndependent('last()')).toBe(false);
+    });
+
+    it('last() in comparison: /data/x = last()', () => {
+      expect(TESTONLY_isContextIndependent('/data/x = last()')).toBe(false);
+    });
+  });
+
+  describe('M2 — NODE_TYPE relative step is context-dependent (Round-5 fixes)', () => {
+    it('count(node()) — relative node() step', () => {
+      expect(TESTONLY_isContextIndependent('count(node())')).toBe(false);
+    });
+
+    it('text() as relative step', () => {
+      expect(TESTONLY_isContextIndependent('text()')).toBe(false);
+    });
+  });
+
+  describe('M3 — WILDCARD / PREFIXED_WILDCARD relative step is context-dependent (Round-5 fixes)', () => {
+    it('count(*) — bare wildcard step', () => {
+      expect(TESTONLY_isContextIndependent('count(*)')).toBe(false);
+    });
+
+    it('bare * as expression', () => {
+      expect(TESTONLY_isContextIndependent('*')).toBe(false);
+    });
+  });
+
+  describe('absolute wildcard/node-type regression (must stay INDEPENDENT / broadcast fires)', () => {
+    it('/data/rep/* — absolute wildcard step', () => {
+      expect(TESTONLY_isContextIndependent('/data/rep/*')).toBe(true);
+    });
+
+    it('/data/rep/node() — absolute node-type step', () => {
+      expect(TESTONLY_isContextIndependent('/data/rep/node()')).toBe(true);
+    });
+
+    it('if(/data/x=\'a\',/data/y,/data/z) — stays independent', () => {
+      expect(TESTONLY_isContextIndependent("/data/x='a'")).toBe(true);
+    });
+
+    it('concat(/data/x,/data/y) — stays independent', () => {
+      expect(TESTONLY_isContextIndependent('concat(/data/x,/data/y)')).toBe(true);
+    });
+
+    it('now() — stays independent', () => {
+      expect(TESTONLY_isContextIndependent('now()')).toBe(true);
+    });
+  });
 });

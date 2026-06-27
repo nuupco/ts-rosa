@@ -1272,9 +1272,10 @@ function isContextIndependent(src: string): boolean {
       case TokenKind.AT:
         return false;
 
-      // current() and position() — always context-dependent
+      // current(), position(), last() — always context-dependent
       case TokenKind.FUNCTION_NAME:
-        if (tok.text === 'current' || tok.text === 'position') return false;
+        if (tok.text === 'current' || tok.text === 'position' || tok.text === 'last')
+          return false;
         break;
 
       // Named axis (ancestor::, self::, parent::, descendant::, attribute::, etc.)
@@ -1292,6 +1293,29 @@ function isContextIndependent(src: string): boolean {
         const followedByLparen =
           next !== null && next.kind === TokenKind.LPAREN;
         if (!precededBySlash && !followedByLparen) return false;
+        break;
+      }
+
+      // node()/text()/comment()/processing-instruction() as a relative step.
+      // NODE_TYPE is only context-dependent when used as a step — i.e. NOT
+      // preceded by / or //, which would make it an absolute step.
+      case TokenKind.NODE_TYPE: {
+        const precededBySlash =
+          prev !== null &&
+          (prev.kind === TokenKind.SLASH || prev.kind === TokenKind.SLASHSLASH);
+        if (!precededBySlash) return false;
+        break;
+      }
+
+      // * (WILDCARD) and ns:* (PREFIXED_WILDCARD) as a relative name-test step.
+      // Context-dependent unless preceded by / or //, which makes it an
+      // absolute child step (e.g. /data/rep/* is safe).
+      case TokenKind.WILDCARD:
+      case TokenKind.PREFIXED_WILDCARD: {
+        const precededBySlash =
+          prev !== null &&
+          (prev.kind === TokenKind.SLASH || prev.kind === TokenKind.SLASHSLASH);
+        if (!precededBySlash) return false;
         break;
       }
 
