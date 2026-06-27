@@ -1,3 +1,5 @@
+export { AnswerResult } from './AnswerResult.ts';
+export type { NodeState } from '../model/state/NodeState.ts';
 export type { FormSession, CreateFormSessionOpts } from './FormSession.ts';
 export { createFormSession } from './FormSession.ts';
 export { FormEvaluator } from './FormEvaluator.ts';
