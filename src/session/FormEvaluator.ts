@@ -1247,9 +1247,17 @@ function isContextIndependent(src: string): boolean {
   // and NOT followed by '(' (which would make it a function call).
   // Compact the expression and look for such tokens.
   const stripped = src.replace(/\s+/g, '');
-  if (/(?:^|[([,])[a-zA-Z_][a-zA-Z0-9_\-]*(?!\s*\()/.test(stripped)) return false;
+  // Detect a bare relative location-path step: a name token that is NOT preceded
+  // by '/' (which would make it an absolute/child path step) and NOT followed by
+  // '(' (which would make it a function call).  Operator characters (+, -, *, |,
+  // =, <, >, !) are valid token-start delimiters in addition to '(', '[', ',',
+  // and string-start.
+  if (/(?:^|[([,+\-*|=<>!])[a-zA-Z_][a-zA-Z0-9_-]*\b(?!\()/.test(stripped)) return false;
   return true;
 }
+
+/** @internal — exported for unit tests only; do NOT use in production code. */
+export { isContextIndependent as TESTONLY_isContextIndependent };
 
 /**
  * Returns true when it is safe to use resolveAllContextualized (scope target resolution
