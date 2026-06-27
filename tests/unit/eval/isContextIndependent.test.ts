@@ -60,6 +60,42 @@ describe('isContextIndependent broadcast guard', () => {
     });
   });
 
+  describe('word-operator relative steps (Round-3 regression cases)', () => {
+    it('relative step after div: count(/data/rep) div foo', () => {
+      expect(TESTONLY_isContextIndependent('count(/data/rep) div foo')).toBe(false);
+    });
+
+    it('relative step after mod: count(/data/rep) mod foo', () => {
+      expect(TESTONLY_isContextIndependent('count(/data/rep) mod foo')).toBe(false);
+    });
+
+    it('relative step after and: /data/a and relStep', () => {
+      expect(TESTONLY_isContextIndependent('/data/a and relStep')).toBe(false);
+    });
+
+    it('relative step after or: /data/a or relStep', () => {
+      expect(TESTONLY_isContextIndependent('/data/a or relStep')).toBe(false);
+    });
+  });
+
+  describe('@ attribute axis (Round-3 regression cases)', () => {
+    it('bare @attr: count(@type)', () => {
+      expect(TESTONLY_isContextIndependent('count(@type)')).toBe(false);
+    });
+
+    it('predicate with @attr on relative path: /data/rep[@type="x"]/field', () => {
+      expect(TESTONLY_isContextIndependent('/data/rep[@type="x"]/field')).toBe(false);
+    });
+  });
+
+  describe('current() (regression guard)', () => {
+    it('current() in predicate: count(/data/rep[. = current()/../x])', () => {
+      expect(
+        TESTONLY_isContextIndependent('count(/data/rep[. = current()/../x])')
+      ).toBe(false);
+    });
+  });
+
   describe('context-INDEPENDENT expressions (must return true)', () => {
     it('pure absolute path: /data/field', () => {
       expect(TESTONLY_isContextIndependent('/data/field')).toBe(true);

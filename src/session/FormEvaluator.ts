@@ -47,6 +47,7 @@ import {
 import type { CompiledBinding } from '../parse/bindProcessor.ts';
 import type { FormElement, ItemsetDef } from '../model/def/FormElement.ts';
 import { PureJSExpressionParser } from '../xpath/parser/PureJSExpressionParser.ts';
+import { tokenize, TokenKind } from '../xpath/parser/Tokenizer.ts';
 import { getTriggers } from '../eval/getTriggers.ts';
 import { AnswerResult } from './AnswerResult.ts';
 
@@ -1236,23 +1237,69 @@ const AGGREGATE_FUNCTIONS = /\b(count|sum|max|min|avg|count-non-empty)\s*\(/;
  * context-independent, we can evaluate once using any target node and broadcast
  * the result to all target nodes — avoiding O(N) redundant evaluations when
  * the expression uses only absolute paths and no context-relative steps.
+ *
+ * Implementation: structural token-walk using the project's XPath tokenizer so
+ * that word-operators (div/mod/and/or) and the @ axis are disambiguated correctly
+ * by the same §3.7 rules the evaluator uses — no regex string-scanning.
+ *
+ * Returns false (err toward dependent = correct) for anything that cannot be
+ * structurally classified as context-free.
  */
 function isContextIndependent(src: string): boolean {
-  if (src.includes('..')) return false;
-  if (src.includes('self::')) return false;
-  // bare '.' not followed by another '.' or '/'  (i.e. not '..' or './')
-  if (/(?:^|[\s([,])\.(?![./])/.test(src)) return false;
-  if (/\bposition\s*\(\s*\)/.test(src)) return false;
-  // A relative path step is a name token at a token boundary NOT preceded by '/'
-  // and NOT followed by '(' (which would make it a function call).
-  // Compact the expression and look for such tokens.
-  const stripped = src.replace(/\s+/g, '');
-  // Detect a bare relative location-path step: a name token that is NOT preceded
-  // by '/' (which would make it an absolute/child path step) and NOT followed by
-  // '(' (which would make it a function call).  Operator characters (+, -, *, |,
-  // =, <, >, !) are valid token-start delimiters in addition to '(', '[', ',',
-  // and string-start.
-  if (/(?:^|[([,+\-*|=<>!])[a-zA-Z_][a-zA-Z0-9_-]*\b(?!\()/.test(stripped)) return false;
+  let tokens;
+  try {
+    tokens = tokenize(src);
+  } catch {
+    // Unparseable expression — fail closed (dependent).
+    return false;
+  }
+
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i]!;
+    const prev = i > 0 ? tokens[i - 1]! : null;
+    const next = i < tokens.length - 1 ? tokens[i + 1]! : null;
+
+    switch (tok.kind) {
+      // .. — parent axis shorthand
+      case TokenKind.DOTDOT:
+        return false;
+
+      // . — self/context node
+      case TokenKind.DOT:
+        return false;
+
+      // @ — attribute axis shorthand
+      case TokenKind.AT:
+        return false;
+
+      // current() and position() — always context-dependent
+      case TokenKind.FUNCTION_NAME:
+        if (tok.text === 'current' || tok.text === 'position') return false;
+        break;
+
+      // Named axis (ancestor::, self::, parent::, descendant::, attribute::, etc.)
+      // AXIS_NAME tokens are always context-dependent — the tokenizer only emits
+      // AXIS_NAME when the token is followed by '::'.
+      case TokenKind.AXIS_NAME:
+        return false;
+
+      // NAME token: a relative path step UNLESS it is preceded by / or //
+      // (absolute child step) or followed by ( (function call).
+      case TokenKind.NAME: {
+        const precededBySlash =
+          prev !== null &&
+          (prev.kind === TokenKind.SLASH || prev.kind === TokenKind.SLASHSLASH);
+        const followedByLparen =
+          next !== null && next.kind === TokenKind.LPAREN;
+        if (!precededBySlash && !followedByLparen) return false;
+        break;
+      }
+
+      default:
+        break;
+    }
+  }
+
   return true;
 }
 
