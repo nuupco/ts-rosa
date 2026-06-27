@@ -168,7 +168,7 @@ describe('isContextIndependent broadcast guard', () => {
     });
 
     it('if(/data/x=\'a\',/data/y,/data/z) — stays independent', () => {
-      expect(TESTONLY_isContextIndependent("/data/x='a'")).toBe(true);
+      expect(TESTONLY_isContextIndependent("if(/data/x='a', /data/y, /data/z)")).toBe(true);
     });
 
     it('concat(/data/x,/data/y) — stays independent', () => {
@@ -177,6 +177,50 @@ describe('isContextIndependent broadcast guard', () => {
 
     it('now() — stays independent', () => {
       expect(TESTONLY_isContextIndependent('now()')).toBe(true);
+    });
+  });
+
+  describe('zero-arg context functions — must be DEPENDENT (blocked unconditionally)', () => {
+    // These functions implicitly operate on the context node in their
+    // zero-argument form. Blocked unconditionally in the guard; the arg form
+    // (e.g. name(/data/x)) also returns false — perf miss only, not a bug.
+
+    it('name() — context-dependent (zero-arg form)', () => {
+      expect(TESTONLY_isContextIndependent('name()')).toBe(false);
+    });
+
+    it('local-name() — context-dependent (zero-arg form)', () => {
+      expect(TESTONLY_isContextIndependent('local-name()')).toBe(false);
+    });
+
+    it('string() — context-dependent (zero-arg form)', () => {
+      expect(TESTONLY_isContextIndependent('string()')).toBe(false);
+    });
+
+    it('number() — context-dependent (zero-arg form)', () => {
+      expect(TESTONLY_isContextIndependent('number()')).toBe(false);
+    });
+
+    it('normalize-space() — context-dependent (zero-arg form)', () => {
+      expect(TESTONLY_isContextIndependent('normalize-space()')).toBe(false);
+    });
+
+    it('string-length() — context-dependent (zero-arg form, unconditional block)', () => {
+      expect(TESTONLY_isContextIndependent('string-length()')).toBe(false);
+    });
+
+    it('string-length(/data/x) — also false: unconditional block (perf miss, not a bug)', () => {
+      // Guard blocks string-length unconditionally. Falling back to per-instance
+      // eval is correctness-safe; independence is simply not asserted here.
+      expect(TESTONLY_isContextIndependent('string-length(/data/x)')).toBe(false);
+    });
+
+    it('/data/foo[last()] — predicate with context function is DEPENDENT', () => {
+      expect(TESTONLY_isContextIndependent('/data/foo[last()]')).toBe(false);
+    });
+
+    it('ns:* bare prefixed-wildcard — DEPENDENT (relative step)', () => {
+      expect(TESTONLY_isContextIndependent('ns:*')).toBe(false);
     });
   });
 });

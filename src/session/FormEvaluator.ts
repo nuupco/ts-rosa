@@ -1272,9 +1272,26 @@ function isContextIndependent(src: string): boolean {
       case TokenKind.AT:
         return false;
 
-      // current(), position(), last() — always context-dependent
+      // current(), position(), last() — always context-dependent.
+      // name(), local-name(), namespace-uri(), string(), number(),
+      // normalize-space(), string-length() — context-dependent in their
+      // zero-argument form (they implicitly operate on the context node).
+      // Blocked unconditionally: over-blocking the rare arg form
+      // (e.g. name(/abs/path)) only costs a perf miss (falls back to
+      // per-instance eval), which is correctness-safe.
       case TokenKind.FUNCTION_NAME:
-        if (tok.text === 'current' || tok.text === 'position' || tok.text === 'last')
+        if (
+          tok.text === 'current' ||
+          tok.text === 'position' ||
+          tok.text === 'last' ||
+          tok.text === 'name' ||
+          tok.text === 'local-name' ||
+          tok.text === 'namespace-uri' ||
+          tok.text === 'string' ||
+          tok.text === 'number' ||
+          tok.text === 'normalize-space' ||
+          tok.text === 'string-length'
+        )
           return false;
         break;
 
