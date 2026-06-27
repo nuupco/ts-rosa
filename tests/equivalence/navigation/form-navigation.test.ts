@@ -866,4 +866,59 @@ describe('Equivalence — navigation: prompt API (Slice 4.5)', () => {
       expect(question!.getControlType()).toBe('input');
     },
   );
+
+  it(
+    // S4.5-E: getQuestionAtIndex exposes getDataType() returning the binding's DataType
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'getQuestionAtIndex_returnsQuestionWithDataType',
+    () => {
+      const scenario = Scenario.init(
+        html(
+          head(
+            title('DataType Question'),
+            model(
+              mainInstance(t('data id="datatype-test"', t('age'))),
+              bind('/data/age').type('int'),
+            ),
+          ),
+          body(input('/data/age')),
+        ),
+      );
+      scenario.next();
+      const question = scenario.getQuestionAtIndex();
+      expect(question).not.toBeNull();
+      expect(question!.getDataType()).toBe('int');
+    },
+  );
+
+  it(
+    // S4.5-F: getDataType() returns null when the question has no binding
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'getQuestionAtIndex_getDataType_nullWhenNoBinding',
+    () => {
+      // Build via raw XML string to produce a question with no <bind> element.
+      const xform = `<?xml version="1.0"?>
+<h:html xmlns="http://www.w3.org/2002/xforms"
+        xmlns:h="http://www.w3.org/1999/xhtml">
+  <h:head>
+    <h:title>No Bind</h:title>
+    <model>
+      <instance>
+        <data id="nobind-test">
+          <q/>
+        </data>
+      </instance>
+    </model>
+  </h:head>
+  <h:body>
+    <input ref="/data/q"/>
+  </h:body>
+</h:html>`;
+      const scenario = Scenario.init(xform);
+      scenario.next();
+      const question = scenario.getQuestionAtIndex();
+      expect(question).not.toBeNull();
+      expect(question!.getDataType()).toBeNull();
+    },
+  );
 });

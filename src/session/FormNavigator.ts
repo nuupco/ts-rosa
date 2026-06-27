@@ -12,6 +12,7 @@
  * engine internals cross this module boundary.
  */
 
+import type { DataType } from '../model/data/DataType.ts';
 import type { FormDefinition } from '../model/def/FormDefinition.ts';
 import type { FormElement } from '../model/def/FormElement.ts';
 import type { InstanceTree } from '../model/instance/InstanceTree.ts';
@@ -512,7 +513,7 @@ export class FormNavigator {
    * R4.5.2: walks FormDefinition.body via resolvePath — O(depth). No XPath eval.
    * R4.5.8: does NOT trigger XPath evaluation or modify InstanceTree.
    */
-  getQuestionAtIndex(idx?: FormIndex): { getLabelInnerText(): string | null; getControlType(): string } | null {
+  getQuestionAtIndex(idx?: FormIndex): { getLabelInnerText(): string | null; getControlType(): string; getDataType(): DataType | null } | null {
     const target = idx ?? this.currentIndex;
     if (!isAt(target)) return null;
     const resolved = this.resolvePath(target.path);
@@ -524,6 +525,9 @@ export class FormNavigator {
       },
       getControlType(): string {
         return element.controlType;
+      },
+      getDataType(): DataType | null {
+        return element.binding?.dataType ?? null;
       },
     };
   }
