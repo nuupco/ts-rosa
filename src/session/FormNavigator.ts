@@ -513,7 +513,7 @@ export class FormNavigator {
    * R4.5.2: walks FormDefinition.body via resolvePath — O(depth). No XPath eval.
    * R4.5.8: does NOT trigger XPath evaluation or modify InstanceTree.
    */
-  getQuestionAtIndex(idx?: FormIndex): { getLabelInnerText(): string | null; getControlType(): string; getDataType(): DataType | null; getHintText(): string | null; getRangeBounds(): { start?: number; end?: number; step?: number } | null } | null {
+  getQuestionAtIndex(idx?: FormIndex): { getLabelInnerText(): string | null; getControlType(): string; getDataType(): DataType | null; getHintText(): string | null; getRangeBounds(): { start?: number; end?: number; step?: number } | null; getAppearance(): string | null; getMediatype(): string | null } | null {
     const target = idx ?? this.currentIndex;
     if (!isAt(target)) return null;
     const resolved = this.resolvePath(target.path);
@@ -541,6 +541,12 @@ export class FormNavigator {
         if (element.rangeEnd !== undefined) bounds.end = element.rangeEnd;
         if (element.rangeStep !== undefined) bounds.step = element.rangeStep;
         return bounds;
+      },
+      getAppearance(): string | null {
+        return element.appearance ?? null;
+      },
+      getMediatype(): string | null {
+        return element.mediatype ?? null;
       },
     };
   }
