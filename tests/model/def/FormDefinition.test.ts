@@ -235,4 +235,25 @@ describe('FormDefinition and walkControls', () => {
       expect(q.choices[0]!.value).toBe('red');
     }
   });
+
+  it('question can carry optional range bounds', () => {
+    const q: FormElement = {
+      kind: 'question',
+      ref: parseAbsoluteRef('/data/rating'),
+      controlType: 'range',
+      binding: null,
+      labelText: 'Rate',
+      labelInnerText: 'Rate',
+      choices: [],
+      itemset: null,
+      rangeStart: 1,
+      rangeEnd: 100,
+      rangeStep: 5,
+    };
+    if (q.kind === 'question') {
+      expect(q.rangeStart).toBe(1);
+      expect(q.rangeEnd).toBe(100);
+      expect(q.rangeStep).toBe(5);
+    }
+  });
 });

@@ -476,7 +476,7 @@ export class Scenario {
    * Exposes getLabelInnerText() and getControlType().
    * Returns null when not at a question position.
    */
-  getQuestionAtIndex(): { getLabelInnerText(): string | null; getControlType(): string; getDataType(): import('../../src/model/data/DataType.ts').DataType | null } | null {
+  getQuestionAtIndex(): { getLabelInnerText(): string | null; getControlType(): string; getDataType(): import('../../src/model/data/DataType.ts').DataType | null; getHintText(): string | null; getRangeBounds(): { start?: number; end?: number; step?: number } | null } | null {
     return this.session.navigator.getQuestionAtIndex();
   }
 

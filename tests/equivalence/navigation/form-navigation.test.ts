@@ -31,6 +31,7 @@ import {
   repeat,
   t,
   title,
+  label,
 } from '../../harness/XFormsElement.ts';
 import { Scenario } from '../../harness/Scenario.ts';
 import { FORM_ENTRY_EVENT } from '../../../src/session/FormEntryEvent.ts';
@@ -919,6 +920,124 @@ describe('Equivalence — navigation: prompt API (Slice 4.5)', () => {
       const question = scenario.getQuestionAtIndex();
       expect(question).not.toBeNull();
       expect(question!.getDataType()).toBeNull();
+    },
+  );
+
+  it(
+    // S4.5-G: getHintText() returns the hint text when present
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'getQuestionAtIndex_getHintText_returnsHintWhenPresent',
+    () => {
+      const scenario = Scenario.init(
+        html(
+          head(
+            title('Hint Test'),
+            model(
+              mainInstance(t('data id="hint-test"', t('q'))),
+              bind('/data/q').type('string'),
+            ),
+          ),
+          body(
+            t('input ref="/data/q"', label('Question'), t('hint', 'Please answer carefully')),
+          ),
+        ),
+      );
+      scenario.next();
+      const question = scenario.getQuestionAtIndex();
+      expect(question).not.toBeNull();
+      expect(question!.getHintText()).toBe('Please answer carefully');
+    },
+  );
+
+  it(
+    // S4.5-H: getHintText() returns null when no hint is present
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'getQuestionAtIndex_getHintText_nullWhenAbsent',
+    () => {
+      const scenario = Scenario.init(singleQuestionForm());
+      scenario.next();
+      const question = scenario.getQuestionAtIndex();
+      expect(question).not.toBeNull();
+      expect(question!.getHintText()).toBeNull();
+    },
+  );
+
+  it(
+    // S4.5-I: getRangeBounds() returns bounds for a range question
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'getQuestionAtIndex_getRangeBounds_returnsBoundsForRange',
+    () => {
+      const scenario = Scenario.init(
+        html(
+          head(
+            title('Range Test'),
+            model(
+              mainInstance(t('data id="range-test"', t('rating'))),
+              bind('/data/rating').type('int'),
+            ),
+          ),
+          body(
+            t('range ref="/data/rating" start="1" end="100" step="5"', label('Rate')),
+          ),
+        ),
+      );
+      scenario.next();
+      const question = scenario.getQuestionAtIndex();
+      expect(question).not.toBeNull();
+      const bounds = question!.getRangeBounds();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.start).toBe(1);
+      expect(bounds!.end).toBe(100);
+      expect(bounds!.step).toBe(5);
+    },
+  );
+
+  it(
+    // S4.5-J: getRangeBounds() returns null for a non-range question
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'getQuestionAtIndex_getRangeBounds_nullForNonRange',
+    () => {
+      const scenario = Scenario.init(singleQuestionForm());
+      scenario.next();
+      const question = scenario.getQuestionAtIndex();
+      expect(question).not.toBeNull();
+      expect(question!.getRangeBounds()).toBeNull();
+    },
+  );
+
+  it(
+    // S4.5-K: end-to-end — range question with hint and bounds round-trips through parser + navigator
+    // original ts-rosa behavioral test (no direct JavaRosa counterpart)
+    'getQuestionAtIndex_rangeWithHintAndBounds_endToEnd',
+    () => {
+      const scenario = Scenario.init(
+        html(
+          head(
+            title('Range E2E'),
+            model(
+              mainInstance(t('data id="range-e2e"', t('rating'))),
+              bind('/data/rating').type('int'),
+            ),
+          ),
+          body(
+            t(
+              'range ref="/data/rating" start="0" end="10" step="2"',
+              label('Rate your experience'),
+              t('hint', '0 = terrible, 10 = excellent'),
+            ),
+          ),
+        ),
+      );
+      scenario.next();
+      const question = scenario.getQuestionAtIndex();
+      expect(question).not.toBeNull();
+      expect(question!.getControlType()).toBe('range');
+      expect(question!.getHintText()).toBe('0 = terrible, 10 = excellent');
+      const bounds = question!.getRangeBounds();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.start).toBe(0);
+      expect(bounds!.end).toBe(10);
+      expect(bounds!.step).toBe(2);
     },
   );
 });

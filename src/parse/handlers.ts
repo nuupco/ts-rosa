@@ -163,7 +163,29 @@ function questionHandler(el: Element, ctx: BuildCtx): FormElement {
   const mediatype = el.getAttribute('mediatype') ?? null;
   const hintText = getHintText(el);
 
-  return { kind: 'question', ref, controlType, binding, labelText, labelInnerText: innerText, choices, itemset, appearance, mediatype, hintText };
+  // Range bounds — only for <range> elements
+  let rangeStart: number | undefined;
+  let rangeEnd: number | undefined;
+  let rangeStep: number | undefined;
+  if (controlType === 'range') {
+    const startAttr = el.getAttribute('start');
+    const endAttr = el.getAttribute('end');
+    const stepAttr = el.getAttribute('step');
+    if (startAttr !== null) {
+      const parsed = parseFloat(startAttr);
+      if (Number.isFinite(parsed)) rangeStart = parsed;
+    }
+    if (endAttr !== null) {
+      const parsed = parseFloat(endAttr);
+      if (Number.isFinite(parsed)) rangeEnd = parsed;
+    }
+    if (stepAttr !== null) {
+      const parsed = parseFloat(stepAttr);
+      if (Number.isFinite(parsed)) rangeStep = parsed;
+    }
+  }
+
+  return { kind: 'question', ref, controlType, binding, labelText, labelInnerText: innerText, choices, itemset, appearance, mediatype, hintText, rangeStart, rangeEnd, rangeStep };
 }
 
 // ---------------------------------------------------------------------------

@@ -70,6 +70,9 @@ export type FormElement =
       readonly appearance?: string | null;
       readonly mediatype?: string | null;
       readonly hintText?: string | null;
+      readonly rangeStart?: number;
+      readonly rangeEnd?: number;
+      readonly rangeStep?: number;
     }
   | {
       readonly kind: 'group';

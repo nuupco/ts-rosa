@@ -124,6 +124,58 @@ describe('select handler', () => {
 });
 
 // ---------------------------------------------------------------------------
+// range handler
+// ---------------------------------------------------------------------------
+
+describe('range handler', () => {
+  it('returns kind=question, controlType=range', () => {
+    const el = parseElement('<range ref="/data/rating"/>');
+    const handler = bodyHandlers.get('range')!;
+    const fe = handler(el, emptyCtx);
+    expect(fe.kind).toBe('question');
+    if (fe.kind === 'question') {
+      expect(fe.controlType).toBe('range');
+    }
+  });
+
+  it('parses start, end, step attributes as numbers', () => {
+    const el = parseElement('<range ref="/data/rating" start="1" end="100" step="5"/>');
+    const handler = bodyHandlers.get('range')!;
+    const fe = handler(el, emptyCtx);
+    expect(fe.kind).toBe('question');
+    if (fe.kind === 'question') {
+      expect(fe.rangeStart).toBe(1);
+      expect(fe.rangeEnd).toBe(100);
+      expect(fe.rangeStep).toBe(5);
+    }
+  });
+
+  it('parses decimal bounds', () => {
+    const el = parseElement('<range ref="/data/rating" start="0.5" end="10.5" step="0.5"/>');
+    const handler = bodyHandlers.get('range')!;
+    const fe = handler(el, emptyCtx);
+    expect(fe.kind).toBe('question');
+    if (fe.kind === 'question') {
+      expect(fe.rangeStart).toBe(0.5);
+      expect(fe.rangeEnd).toBe(10.5);
+      expect(fe.rangeStep).toBe(0.5);
+    }
+  });
+
+  it('ignores malformed start, keeps valid end', () => {
+    const el = parseElement('<range ref="/data/rating" start="abc" end="10"/>');
+    const handler = bodyHandlers.get('range')!;
+    const fe = handler(el, emptyCtx);
+    expect(fe.kind).toBe('question');
+    if (fe.kind === 'question') {
+      expect(fe.rangeStart).toBeUndefined();
+      expect(fe.rangeEnd).toBe(10);
+      expect(fe.rangeStep).toBeUndefined();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // group handler
 // ---------------------------------------------------------------------------
 
