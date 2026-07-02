@@ -10,15 +10,19 @@
  *     (`buildInstanceNode` + `applyBindings`), with relaxed/tolerant schema
  *     drift handling. A `null` resolver result (no prior submission) yields
  *     an empty-root tree rather than an error (ADR-3).
+ *   - A `src` ending in `.xml` (case-insensitive), other than the exact
+ *     last-saved literal, is parsed as XML via the same shared tree-building
+ *     machinery, but fail-loud: a `null` resolver result or malformed/rootless
+ *     XML throws (unlike last-saved's relaxed handling).
  *   - Any other `src` keeps the existing CSV resolution path, unchanged.
  *
  * `parseForm` stays synchronous/pure; this step is the only place I/O
  * happens.
  *
- * Fail-loud (spec R5): a rejecting resolver, a `null` CSV result, malformed
- * CSV, or malformed last-saved XML all throw with an operation-prefixed
- * message identifying the offending instance id/src. An unregistered
- * resolver seam propagates its own error unchanged.
+ * Fail-loud (spec R5): a rejecting resolver, a `null` CSV or `.xml` result,
+ * malformed CSV, or malformed last-saved/external XML all throw with an
+ * operation-prefixed message identifying the offending instance id/src. An
+ * unregistered resolver seam propagates its own error unchanged.
  */
 
 import type { FormDefinition } from '../model/def/FormDefinition.ts';
@@ -31,6 +35,11 @@ import { newNode } from '../model/instance/InstanceNode.ts';
 
 /** ODK's reserved URI for the last-saved-submission secondary instance. */
 const LAST_SAVED_SRC = 'jr://instance/last-saved';
+
+/** Case-insensitive `.xml` suffix check used to dispatch external XML instances. */
+function isXmlSrc(src: string): boolean {
+  return src.toLowerCase().endsWith('.xml');
+}
 
 export async function resolveExternalInstances(definition: FormDefinition): Promise<FormDefinition> {
   if (definition.externalInstances.size === 0) {
@@ -52,6 +61,16 @@ export async function resolveExternalInstances(definition: FormDefinition): Prom
 
     if (src === LAST_SAVED_SRC) {
       merged.set(id, buildLastSavedTree(id, src, raw, definition));
+      continue;
+    }
+
+    if (isXmlSrc(src)) {
+      if (raw === null) {
+        throw new Error(
+          `resolveExternalInstances: external instance '${id}' (${src}) has malformed external XML: resolver returned null`,
+        );
+      }
+      merged.set(id, xmlTextToInstanceTree(id, src, raw, 'external XML'));
       continue;
     }
 
@@ -100,18 +119,29 @@ function buildLastSavedTree(
     return tree;
   }
 
+  return xmlTextToInstanceTree(id, src, raw, 'last-saved XML');
+}
+
+/**
+ * Shared non-null XML-to-tree conversion used by both the last-saved branch
+ * (once its `raw === null` relaxed policy has already been handled by its
+ * caller) and the fail-loud `.xml` external branch. `kind` is a message
+ * label only — it does not change behavior between callers; NULL-handling
+ * policy stays outside this helper, owned by each caller (design Decision 2).
+ */
+function xmlTextToInstanceTree(id: string, src: string, raw: string, kind: string): InstanceTree {
   let documentElement: Element | null;
   try {
     documentElement = getXmlParser().parse(raw).documentElement;
   } catch (cause) {
     throw new Error(
-      `resolveExternalInstances: external instance '${id}' (${src}) has malformed last-saved XML: ${String(cause)}`,
+      `resolveExternalInstances: external instance '${id}' (${src}) has malformed ${kind}: ${String(cause)}`,
     );
   }
 
   if (documentElement === null || documentElement === undefined) {
     throw new Error(
-      `resolveExternalInstances: external instance '${id}' (${src}) has malformed last-saved XML: no root element`,
+      `resolveExternalInstances: external instance '${id}' (${src}) has malformed ${kind}: no root element`,
     );
   }
 
