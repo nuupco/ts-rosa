@@ -70,6 +70,20 @@ export type FormElement =
       readonly appearance?: string | null;
       readonly mediatype?: string | null;
       readonly hintText?: string | null;
+      /**
+       * The extracted itext id when the question's <label> is driven by
+       * jr:itext('id') rather than literal text, e.g.
+       * <label ref="jr:itext('q1:label')"/> → labelItextId = 'q1:label'.
+       * Null/undefined when the label is not itext-driven or absent.
+       * Added in output-label-substitution PR1 (question label/hint itext wiring).
+       */
+      readonly labelItextId?: string | null;
+      /**
+       * The extracted itext id when the question's <hint> is driven by
+       * jr:itext('id'), mirroring labelItextId.
+       * Added in output-label-substitution PR1.
+       */
+      readonly hintItextId?: string | null;
       readonly rangeStart?: number;
       readonly rangeEnd?: number;
       readonly rangeStep?: number;

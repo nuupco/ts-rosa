@@ -34,6 +34,20 @@ function getHintText(el: Element): string | null {
 }
 const ITEXT_REF_RE = /jr:itext\(\s*['"]([^'"]+)['"]\s*\)/;
 
+/**
+ * Extract the static itext id from a <label ref="jr:itext('id')"/> or
+ * <hint ref="jr:itext('id')"/> element, if present.
+ * Returns null when the element is absent, has no ref attribute, or the ref
+ * is not a static jr:itext('...') reference.
+ */
+function getItextRefId(el: Element | null): string | null {
+  if (el === null) return null;
+  const refAttr = el.getAttribute('ref');
+  if (refAttr === null) return null;
+  const match = ITEXT_REF_RE.exec(refAttr);
+  return match !== null ? (match[1] ?? null) : null;
+}
+
 function getChoices(el: Element): readonly ChoiceItem[] {
   return childElementsByLocalName(el, 'item').map((itemEl) => {
     const valueEl = firstByLocalName(itemEl, 'value');
@@ -156,12 +170,14 @@ function questionHandler(el: Element, ctx: BuildCtx): FormElement {
   const labelEl = firstByLocalName(el, 'label');
   const labelText = labelEl ? textContent(labelEl) : null;
   const innerText = labelEl ? labelInnerText(labelEl) : null;
+  const labelItextId = getItextRefId(labelEl);
   const itemset = getItemset(el);
   // When itemset is present, choices = [] (itemset takes precedence)
   const choices = itemset !== null ? [] : getChoices(el);
   const appearance = el.getAttribute('appearance') ?? null;
   const mediatype = el.getAttribute('mediatype') ?? null;
   const hintText = getHintText(el);
+  const hintItextId = getItextRefId(firstByLocalName(el, 'hint'));
 
   // Range bounds — only for <range> elements
   let rangeStart: number | undefined;
@@ -197,6 +213,8 @@ function questionHandler(el: Element, ctx: BuildCtx): FormElement {
     appearance,
     mediatype,
     hintText,
+    labelItextId,
+    hintItextId,
     ...(rangeStart !== undefined ? { rangeStart } : {}),
     ...(rangeEnd !== undefined ? { rangeEnd } : {}),
     ...(rangeStep !== undefined ? { rangeStep } : {}),

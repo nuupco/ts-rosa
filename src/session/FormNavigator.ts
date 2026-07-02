@@ -513,12 +513,13 @@ export class FormNavigator {
    * R4.5.2: walks FormDefinition.body via resolvePath — O(depth). No XPath eval.
    * R4.5.8: does NOT trigger XPath evaluation or modify InstanceTree.
    */
-  getQuestionAtIndex(idx?: FormIndex): { getLabelInnerText(): string | null; getControlType(): string; getDataType(): DataType | null; getHintText(): string | null; getRangeBounds(): { start?: number; end?: number; step?: number } | null; getAppearance(): string | null; getMediatype(): string | null } | null {
+  getQuestionAtIndex(idx?: FormIndex): { getLabelInnerText(): string | null; getControlType(): string; getDataType(): DataType | null; getHintText(): string | null; getRangeBounds(): { start?: number; end?: number; step?: number } | null; getAppearance(): string | null; getMediatype(): string | null; getQuestionText(): string | null; getSubstitutedHintText(): string | null } | null {
     const target = idx ?? this.currentIndex;
     if (!isAt(target)) return null;
     const resolved = this.resolvePath(target.path);
     if (resolved === null || resolved.element.kind !== 'question') return null;
     const element = resolved.element;
+    const evaluator = this.evaluator;
     return {
       getLabelInnerText(): string | null {
         return element.labelInnerText;
@@ -530,6 +531,35 @@ export class FormNavigator {
         return element.binding?.dataType ?? null;
       },
       getHintText(): string | null {
+        return element.hintText ?? null;
+      },
+      /**
+       * @experimental output-label-substitution PR1
+       * Resolves the question label through itext (when driven by
+       * <label ref="jr:itext('id')"/>) in the currently active language,
+       * falling back to the raw label text otherwise.
+       * NOTE: does NOT yet perform <output> placeholder substitution — that
+       * lands in a later slice (parse-time output capture + evaluator wiring).
+       */
+      getQuestionText(): string | null {
+        if (element.labelItextId != null) {
+          const resolved = evaluator.resolveItext(element.labelItextId);
+          if (resolved !== null) return resolved;
+        }
+        return element.labelInnerText;
+      },
+      /**
+       * @experimental output-label-substitution PR1
+       * Resolves the question hint through itext (when driven by
+       * <hint ref="jr:itext('id')"/>) in the currently active language,
+       * falling back to the raw hint text otherwise.
+       * NOTE: does NOT yet perform <output> placeholder substitution.
+       */
+      getSubstitutedHintText(): string | null {
+        if (element.hintItextId != null) {
+          const resolved = evaluator.resolveItext(element.hintItextId);
+          if (resolved !== null) return resolved;
+        }
         return element.hintText ?? null;
       },
       getRangeBounds(): { start?: number; end?: number; step?: number } | null {

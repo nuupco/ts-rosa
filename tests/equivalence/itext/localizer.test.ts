@@ -253,3 +253,86 @@ it('C7: itemset with jr:itext labels resolves through active language (5c)', () 
   expect(enLabels).toContain('Apple');
   expect(enLabels).toContain('Banana');
 });
+
+// ---------------------------------------------------------------------------
+// Phase 1 (output-label-substitution PR1) — question label/hint itext wiring
+// ---------------------------------------------------------------------------
+// Question-level <label ref="jr:itext('id')"/> and <hint ref="jr:itext('id')"/>
+// were previously unwired (only choices/itemset resolved itext). This phase
+// wires resolution through getQuestionAtIndex().getQuestionText() /
+// getSubstitutedHintText(), reusing the existing ItextResolver.resolve(id)
+// path. No <output> substitution exists yet — that lands in PR2/PR3.
+// original ts-rosa behavioral tests (no direct JavaRosa counterpart).
+
+describe('Phase 1 — question label/hint itext wiring', () => {
+  it('getQuestionText() resolves an itext-driven question label in the active language', () => {
+    const xml = formWithItext(
+      `<translation lang="en">
+         <text id="q1:label"><value>Name</value></text>
+       </translation>
+       <translation lang="es">
+         <text id="q1:label"><value>Nombre</value></text>
+       </translation>`,
+      `<input ref="/data/q1"><label ref="jr:itext('q1:label')"/></input>`,
+    );
+    const scenario = Scenario.init(xml);
+    scenario.next();
+    const question = scenario.getQuestionAtIndex();
+    expect(question).not.toBeNull();
+    expect(question!.getQuestionText()).toBe('Name');
+
+    scenario.setLanguage('es');
+    expect(question!.getQuestionText()).toBe('Nombre');
+  });
+
+  it('getSubstitutedHintText() resolves an itext-driven question hint in the active language', () => {
+    const xml = formWithItext(
+      `<translation lang="en">
+         <text id="q1:hint"><value>Enter your name</value></text>
+       </translation>
+       <translation lang="es">
+         <text id="q1:hint"><value>Ingrese su nombre</value></text>
+       </translation>`,
+      `<input ref="/data/q1"><label>Name</label><hint ref="jr:itext('q1:hint')"/></input>`,
+    );
+    const scenario = Scenario.init(xml);
+    scenario.next();
+    const question = scenario.getQuestionAtIndex();
+    expect(question).not.toBeNull();
+    expect(question!.getSubstitutedHintText()).toBe('Enter your name');
+
+    scenario.setLanguage('es');
+    expect(question!.getSubstitutedHintText()).toBe('Ingrese su nombre');
+  });
+
+  it('getQuestionText() falls back to the plain label when not itext-driven', () => {
+    const xml = formWithItext(
+      `<translation lang="en">
+         <text id="unused"><value>Unused</value></text>
+       </translation>`,
+      `<input ref="/data/q1"><label>Plain Name</label></input>`,
+    );
+    const scenario = Scenario.init(xml);
+    scenario.next();
+    const question = scenario.getQuestionAtIndex();
+    expect(question).not.toBeNull();
+    expect(question!.getQuestionText()).toBe('Plain Name');
+  });
+
+  it('raw getLabelInnerText() and getHintText() remain unaffected by itext wiring', () => {
+    const xml = formWithItext(
+      `<translation lang="en">
+         <text id="q1:label"><value>Name</value></text>
+         <text id="q1:hint"><value>Enter your name</value></text>
+       </translation>`,
+      `<input ref="/data/q1"><label ref="jr:itext('q1:label')"/><hint ref="jr:itext('q1:hint')"/></input>`,
+    );
+    const scenario = Scenario.init(xml);
+    scenario.next();
+    const question = scenario.getQuestionAtIndex();
+    expect(question).not.toBeNull();
+    // Raw accessors do not resolve itext refs — no plain text content on the ref-driven elements.
+    expect(question!.getLabelInnerText()).toBeNull();
+    expect(question!.getHintText()).toBeNull();
+  });
+});
