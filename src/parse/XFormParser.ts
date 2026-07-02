@@ -127,10 +127,24 @@ function applyBindingsToNode(node: InstanceNode, bindings: ReadonlyMap<string, D
   }
 }
 
-function applyBindings(tree: InstanceTree, bindings: ReadonlyMap<string, DataBinding>): void {
+/**
+ * Applies bindings to a tree and casts raw text leaves to typed AnswerValues.
+ *
+ * Exported for reuse by other tree builders (e.g. csvToInstanceTree) that need
+ * the exact same string-cast normalization pass that inline secondary
+ * instances get, without duplicating the casting logic.
+ */
+export function applyBindings(tree: InstanceTree, bindings: ReadonlyMap<string, DataBinding>): void {
   // The root path segment is the root node's name
   applyBindingsToNode(tree.root, bindings, '');
 }
+
+/**
+ * Attribute key used to stash a leaf's raw text before applyBindings casts it.
+ * Exported so other tree builders (e.g. csvToInstanceTree) can produce trees
+ * that applyBindings knows how to normalize.
+ */
+export { RAW_TEXT_ATTR };
 
 // ---------------------------------------------------------------------------
 // Step 3: Build body FormElements
