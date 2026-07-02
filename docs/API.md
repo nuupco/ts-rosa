@@ -35,6 +35,54 @@ const session = createFormSession(def, {
 });
 ```
 
+#### Editing an existing submission (`opts.instanceXml`)
+
+```ts
+const session = createFormSession(def, { instanceXml: previousSubmissionXml });
+```
+
+When `instanceXml` is provided, the session's working tree is built via
+`hydrateInstance(def, instanceXml)` instead of the template defaults. This is
+additive and opt-in — omitting `instanceXml` is 100% behavior-identical to
+before.
+
+Semantics:
+
+- `calculate` expressions ALWAYS recompute (the full initial DAG cascade runs
+  unconditionally); a loaded `calculate` value is never trusted over a fresh
+  computation.
+- `applyPreloads` is SKIPPED — `jr:preload` values (timestamps, uids) from the
+  original submission are preserved, not regenerated.
+- Drift policy is strict-on-extra: a root-name mismatch, an element with no
+  matching template node, unexpected multiplicity on a declared non-repeat
+  node, or a value that fails `cast()` throws `HydrationError` (with the
+  offending node's path). A template node the submission omits silently
+  falls back to its template default.
+- Round-trip (hydrate → `serializeToXml()`) is semantically, not always
+  lexically, lossless for `decimal` (`"1"` → `"1.0"`), `date`/`time`/`dateTime`
+  (re-emitted in canonical UTC form), geopoint/geoshape/geotrace (component
+  reformatting), and `selectMulti` (whitespace collapsed between tokens). All
+  other types round-trip as an exact string.
+
+### `hydrateInstance(definition, instanceXml): InstanceTree`
+
+Standalone hydrator used internally by `createFormSession({ instanceXml })`.
+Populates a clone of `definition.mainInstance` with `instanceXml`'s values
+and repeat multiplicity; does not mutate `definition`. Throws `HydrationError`
+on drift (see above).
+
+```ts
+import { hydrateInstance, HydrationError } from '@nuup/ts-rosa';
+
+try {
+  const tree = hydrateInstance(def, submissionXml);
+} catch (e) {
+  if (e instanceof HydrationError) {
+    // e.message includes the offending node's path
+  }
+}
+```
+
 ### `FormSession`
 
 | Property | Type | Description |

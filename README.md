@@ -50,6 +50,26 @@ evaluator.answerQuestion(ref, 'yes');  // answer it
 const xml = session.serializeToXml();
 ```
 
+## Editing an Existing Submission
+
+Pass `instanceXml` to hydrate a session from a previously-submitted instance
+instead of starting from the form's template defaults:
+
+```ts
+const session = createFormSession(def, { instanceXml: previousSubmissionXml });
+```
+
+Semantics:
+
+- **Repeat multiplicity** is restored from the submission XML — one instance node per matching element, including nested repeats.
+- **`calculate` always recomputes.** The full initial DAG cascade runs unconditionally, so any `calculate`-bound node's final value is the freshly computed result, not the loaded value.
+- **Preloads are skipped.** `jr:preload` values (timestamps, uids) from the original submission are preserved as-is; they are not regenerated.
+- **Strict drift policy.** An unknown/extra node in the submission XML, a root-name mismatch, an unexpected multiplicity on a non-repeat node, or a value that fails to cast throws `HydrationError` (with the offending node's path). A node the template declares but the submission omits silently falls back to its template default — no error.
+- **Round-trip is semantic, not always lexical**, for `decimal` (`1` → `1.0`), `date`/`time`/`dateTime` (normalized to UTC), geo types (component reformatting), and `selectMulti` (whitespace collapsed). All other types round-trip byte-for-byte.
+
+`hydrateInstance(definition, instanceXml)` is also exported standalone for
+building an `InstanceTree` without going through `createFormSession`.
+
 ## Architecture
 
 ```
@@ -109,8 +129,10 @@ doesn't implement it.
 
 | Export | Description |
 |--------|-------------|
-| `createFormSession(def, opts?)` | Create a `FormSession` with navigator + evaluator |
+| `createFormSession(def, opts?)` | Create a `FormSession` with navigator + evaluator. Pass `opts.instanceXml` to hydrate the session from a previously-submitted instance for editing — see [Editing an Existing Submission](#editing-an-existing-submission). |
 | `frozenPreloadProvider(opts?)` | Deterministic preload provider for tests |
+| `hydrateInstance(definition, instanceXml)` | Standalone hydrator: builds an `InstanceTree` from `definition` populated with `instanceXml`'s values and repeat multiplicity |
+| `HydrationError` | Thrown by `hydrateInstance`/`createFormSession` on root-name mismatch, unknown/extra submission nodes, unexpected multiplicity, or a value that fails to cast |
 
 ### FormSession
 
