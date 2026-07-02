@@ -1,16 +1,21 @@
 /**
- * Unit / integration tests — ActionRegistry construction + load-time
- * setvalue action firing (sdd/setvalue-actions, PR2, Batch 2, tasks 8-12).
+ * Unit / integration tests — ActionRegistry construction + setvalue action
+ * firing (sdd/setvalue-actions).
  *
- * Scope (PR2 only): odk-instance-first-load / xforms-ready actions fire
- * exactly once during createFormSession, after the initial DAG cascade.
- * value-changed firing + the depth guard are PR3 scope — NOT covered here.
+ * PR2 (Batch 2, tasks 8-12): odk-instance-first-load / xforms-ready actions
+ * fire exactly once during createFormSession, after the initial DAG cascade.
+ *
+ * PR3 (Batch 3, tasks 13-17): xforms-value-changed firing wired into the tail
+ * of triggerTriggerables, plus the MAX_ACTION_CHAIN_DEPTH=16 runtime
+ * re-entrancy guard for chained value-changed actions.
  */
 
 import { describe, it, expect } from 'vitest';
 import { createFormSession } from '../../src/session/FormSession.ts';
 import { parseForm } from '../../src/parse/XFormParser.ts';
 import { buildActionRegistry } from '../../src/eval/ActionRegistry.ts';
+import { parseAbsoluteRef } from '../../src/model/instance/TreeReference.ts';
+import { cast } from '../../src/model/data/codecs.ts';
 import {
   html,
   head,
@@ -223,5 +228,119 @@ describe('createFormSession — load-time setvalue action with host-relative tar
     const g = session.tree.root.children.find((c) => c.name === 'g');
     const a = g?.children.find((c) => c.name === 'a');
     expect((a?.value as { value: string } | null)?.value).toBe('child-write');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR3 — Batch 3, tasks 13-15: xforms-value-changed firing at the tail of
+// triggerTriggerables.
+// ---------------------------------------------------------------------------
+
+describe('createFormSession — xforms-value-changed action firing', () => {
+  it('fires a value-changed action when its host control ref changes via answerQuestion', () => {
+    const form = html(
+      head(
+        title('ValueChanged'),
+        model(
+          mainInstance(t('data id="vc"', t('source'), t('destination'))),
+          bind('/data/source').type('int'),
+          bind('/data/destination').type('int'),
+        ),
+      ),
+      body(input('/data/source', setvalue('xforms-value-changed', '/data/destination', '4*4'))),
+    ).asXml();
+    const def = parseForm(form);
+    const session = createFormSession(def);
+
+    session.evaluator.answerQuestion(parseAbsoluteRef('/data/source'), cast('int', '22'));
+
+    const destination = session.tree.root.children.find((c) => c.name === 'destination');
+    expect((destination?.value as { value: number } | null)?.value).toBe(16);
+  });
+
+  it('propagates a value-changed action write through the DAG so downstream calculates recompute', () => {
+    const form = html(
+      head(
+        title('ValueChangedCascade'),
+        model(
+          mainInstance(t('data id="vcc"', t('source'), t('destination'), t('doubled'))),
+          bind('/data/source').type('int'),
+          bind('/data/destination').type('int'),
+          bind('/data/doubled').type('int').calculate('/data/destination * 2'),
+        ),
+      ),
+      body(input('/data/source', setvalue('xforms-value-changed', '/data/destination', '/data/source * 3'))),
+    ).asXml();
+    const def = parseForm(form);
+    const session = createFormSession(def);
+
+    session.evaluator.answerQuestion(parseAbsoluteRef('/data/source'), cast('int', '5'));
+
+    const destination = session.tree.root.children.find((c) => c.name === 'destination');
+    const doubled = session.tree.root.children.find((c) => c.name === 'doubled');
+    expect((destination?.value as { value: number } | null)?.value).toBe(15);
+    expect((doubled?.value as { value: number } | null)?.value).toBe(30);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR3 — Batch 3, tasks 16-17: MAX_ACTION_CHAIN_DEPTH=16 runtime guard.
+// ---------------------------------------------------------------------------
+
+describe('setvalue action chain depth guard (MAX_ACTION_CHAIN_DEPTH=16)', () => {
+  it('completes a short (2-3 action) legitimate chain without hitting the guard', () => {
+    // a -> b -> c, three value-changed actions chained, no cycle.
+    const form = html(
+      head(
+        title('ShortChain'),
+        model(
+          mainInstance(t('data id="chain"', t('a'), t('b'), t('c'))),
+          bind('/data/a').type('int'),
+          bind('/data/b').type('int'),
+          bind('/data/c').type('int'),
+        ),
+      ),
+      body(
+        input('/data/a', setvalue('xforms-value-changed', '/data/b', '/data/a + 1')),
+        input('/data/b', setvalue('xforms-value-changed', '/data/c', '/data/b + 1')),
+        input('/data/c'),
+      ),
+    ).asXml();
+    const def = parseForm(form);
+    const session = createFormSession(def);
+
+    expect(() =>
+      session.evaluator.answerQuestion(parseAbsoluteRef('/data/a'), cast('int', '1')),
+    ).not.toThrow();
+
+    const b = session.tree.root.children.find((c) => c.name === 'b');
+    const c = session.tree.root.children.find((c) => c.name === 'c');
+    expect((b?.value as { value: number } | null)?.value).toBe(2);
+    expect((c?.value as { value: number } | null)?.value).toBe(3);
+  });
+
+  it('throws a clear error when a chain of value-changed actions forms an unbounded cycle', () => {
+    // a's host action writes b (b = a+1); b's host action writes a (a = b+1) — a genuine
+    // runaway cycle with no fixed point, must be bounded by MAX_ACTION_CHAIN_DEPTH.
+    const form = html(
+      head(
+        title('Cycle'),
+        model(
+          mainInstance(t('data id="cycle"', t('a'), t('b'))),
+          bind('/data/a').type('int'),
+          bind('/data/b').type('int'),
+        ),
+      ),
+      body(
+        input('/data/a', setvalue('xforms-value-changed', '/data/b', '/data/a + 1')),
+        input('/data/b', setvalue('xforms-value-changed', '/data/a', '/data/b + 1')),
+      ),
+    ).asXml();
+    const def = parseForm(form);
+    const session = createFormSession(def);
+
+    expect(() =>
+      session.evaluator.answerQuestion(parseAbsoluteRef('/data/a'), cast('int', '1')),
+    ).toThrow(/max depth|cycle/i);
   });
 });

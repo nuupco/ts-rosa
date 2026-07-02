@@ -789,22 +789,39 @@ export class FormEvaluator {
     const genericRef = genericize(changedRef);
     const key = refToString(genericRef);
     const cascadeRoots = useDag.triggerablesPerTrigger.get(key);
-    if (!cascadeRoots || cascadeRoots.size === 0) return;
 
-    const toTrigger = getAllToTrigger(cascadeRoots, useDag.immediateCascades);
+    if (cascadeRoots !== undefined && cascadeRoots.size > 0) {
+      const toTrigger = getAllToTrigger(cascadeRoots, useDag.immediateCascades);
 
-    const alreadyEvaluated = new Set<Triggerable>();
-    for (const triggerable of useDag.triggerablesDAG) {
-      if (!toTrigger.has(triggerable)) continue;
-      if (alreadyEvaluated.has(triggerable)) continue;
+      const alreadyEvaluated = new Set<Triggerable>();
+      for (const triggerable of useDag.triggerablesDAG) {
+        if (!toTrigger.has(triggerable)) continue;
+        if (alreadyEvaluated.has(triggerable)) continue;
 
-      if (triggerable.kind === 'recalculate') {
-        this.applyRecalculate(triggerable, changedRef);
-      } else if (triggerable.kind === 'condition') {
-        this.applyCondition(triggerable, changedRef);
+        if (triggerable.kind === 'recalculate') {
+          this.applyRecalculate(triggerable, changedRef);
+        } else if (triggerable.kind === 'condition') {
+          this.applyCondition(triggerable, changedRef);
+        }
+
+        alreadyEvaluated.add(triggerable);
       }
+    }
 
-      alreadyEvaluated.add(triggerable);
+    // sdd/setvalue-actions PR3 (design ADR-4, section 5): fire xforms-value-changed
+    // actions AFTER the DAG cascade above completes, so their value expressions
+    // observe post-cascade values and they also fire when the trigger ref changes
+    // indirectly via a calculate cascade (not just a direct answerQuestion write).
+    // Deliberately placed at the tail of triggerTriggerables rather than as a new
+    // Triggerable kind inside the DAG itself (ADR-1: actions stay outside
+    // TriggerableDag — see src/eval/ActionRegistry.ts header).
+    if (this.actionRegistry !== null) {
+      const valueChangedActions = this.actionRegistry.valueChangedByTrigger.get(key);
+      if (valueChangedActions !== undefined) {
+        for (const action of valueChangedActions) {
+          this.fireAction(action);
+        }
+      }
     }
   }
 
@@ -831,9 +848,15 @@ export class FormEvaluator {
    * calculates, and each action's own triggerTriggerables call re-cascades
    * any downstream dependents of its target.
    *
-   * Per design's edit-mode decision: this fires unconditionally on both
-   * fresh and hydrated (instanceXml) sessions — grouped with `calculate`
-   * behavior (always wins), not with `preload` (skipped on hydration).
+   * Per design's edit-mode decision: ODK/XForms defines `odk-instance-first-load`
+   * as firing whenever the instance is instantiated into the engine, including an
+   * edit-mode reload of a previous submission — so this fires unconditionally on
+   * both fresh and hydrated (instanceXml) sessions. It happens to align with
+   * calculate's existing "always overwrite loaded values" behavior at
+   * instantiation time, but a load-time setvalue is a one-shot imperative write,
+   * not a standing declarative rule re-evaluated on every cascade like calculate —
+   * the two are not architecturally identical, only aligned on this one point.
+   * Grouped with `calculate` (fires), not with `preload` (skipped on hydration).
    *
    * sdd/setvalue-actions PR2, tasks 10-12.
    */
@@ -845,6 +868,22 @@ export class FormEvaluator {
   }
 
   /**
+   * Runtime re-entrancy depth counter bounding chained `xforms-value-changed`
+   * action cascades (design ADR-2). Static DAG cycle detection (finalizeDag)
+   * cannot see actions — they are not DAG vertices (ADR-1) — so a build-time
+   * "Cycle detected" check never fires for an action-only cycle (action A's
+   * write cascades into action B, whose write cascades back into A, etc.).
+   * fireAction increments this before its own triggerTriggerables call and
+   * decrements it in a finally block, so the counter reflects chain DEPTH
+   * (nesting), not breadth (sibling actions fired from the same tail do not
+   * accumulate against each other).
+   */
+  private actionChainDepth = 0;
+
+  /** sdd/setvalue-actions PR3, design ADR-2: fail-loud bound for chained actions. */
+  private static readonly MAX_ACTION_CHAIN_DEPTH = 16;
+
+  /**
    * Evaluate a single setvalue action's value expression (or literal),
    * write the typed result into its target node, then propagate through the
    * standard DAG cascade.
@@ -853,12 +892,27 @@ export class FormEvaluator {
    * (design section 4). Bypasses answerQuestion's constraint gating on
    * purpose (ADR-3) — action writes are not user-entered answers.
    *
-   * sdd/setvalue-actions PR2, task 10-11. The chained-action depth guard
-   * (ADR-2) is PR3 scope — this method does not yet accept/track a depth
-   * counter since only load-time (non-chaining, single-fire) actions exist
-   * in PR2.
+   * sdd/setvalue-actions PR3: tracks/enforces the MAX_ACTION_CHAIN_DEPTH
+   * re-entrancy guard (ADR-2) — throws fail-loud once a chain of
+   * value-changed actions triggering each other exceeds the bound, rather
+   * than looping indefinitely or silently truncating (spec Requirement 7).
    */
   private fireAction(action: SetValueAction): void {
+    this.actionChainDepth++;
+    try {
+      if (this.actionChainDepth > FormEvaluator.MAX_ACTION_CHAIN_DEPTH) {
+        throw new Error(
+          `setvalue action chain exceeded max depth ${FormEvaluator.MAX_ACTION_CHAIN_DEPTH} ` +
+            `(possible cycle) at ${action.sourceLocation}`,
+        );
+      }
+      this.fireActionInner(action);
+    } finally {
+      this.actionChainDepth--;
+    }
+  }
+
+  private fireActionInner(action: SetValueAction): void {
     const targetNode = resolveReference(this.tree, action.target);
     if (targetNode === null) return;
 

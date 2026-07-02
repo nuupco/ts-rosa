@@ -330,3 +330,12 @@ export function setvalue(event: string, ref: string, value?: string): XFormsElem
   }
   return new EmptyXFormsElement("setvalue", { event, ref });
 }
+
+/**
+ * `<setvalue event="..." ref="...">literal</setvalue>` — inner-text literal
+ * form (as opposed to a `value="..."` XPath attribute). Mirrors JavaRosa's
+ * `XFormsElement.setvalueLiteral` test helper (SetValueActionTest.java).
+ */
+export function setvalueLiteral(event: string, ref: string, literal: string): XFormsElement {
+  return new StringLiteralXFormsElement("setvalue", { event, ref }, literal);
+}
