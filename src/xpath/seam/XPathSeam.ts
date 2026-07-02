@@ -15,7 +15,7 @@
  * information beyond the primitive coercion.
  */
 
-import { DOMImplementation } from '@xmldom/xmldom';
+import { getXmlParser } from '../../platform/XmlParser.ts';
 import type { XmldomNode } from '../adapter/XmldomXPathAdapter.ts';
 import { xmldomEvaluator } from '../evaluator/XmldomEvaluator.ts';
 import {
@@ -81,8 +81,16 @@ let stubDocument: XmldomNode | null = null;
 
 function getStubDocument(): XmldomNode {
 	if (stubDocument === null) {
-		const impl = new DOMImplementation();
-		const doc = impl.createDocument(null, 'stub', null);
+		const provider = getXmlParser();
+		if (provider.createDocument === undefined) {
+			throw new Error(
+				'XmlParser provider does not implement createDocument(). ' +
+					'The XPath seam needs a stub document when no evaluation context ' +
+					'is provided. Implement createDocument(rootTagName) on the provider ' +
+					'passed to registerXmlParser().',
+			);
+		}
+		const doc = provider.createDocument('stub');
 		stubDocument = doc as unknown as XmldomNode;
 	}
 

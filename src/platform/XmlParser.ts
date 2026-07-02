@@ -21,6 +21,17 @@
  */
 export interface XmlParser {
   parse(xml: string): Document;
+  /**
+   * Optional stub-document factory.
+   *
+   * Some engine internals (e.g. the XPath seam) need a minimal, valid DOM
+   * Document to use as a context node when no real instance is available.
+   * Providers that back the engine in an environment where XPath evaluation
+   * happens (tests, RN bootstrap) MUST implement this; providers that only
+   * ever parse real XML (rare) may omit it, in which case callers relying on
+   * the stub document will get a clear, actionable error.
+   */
+  createDocument?(rootTagName: string): Document;
 }
 
 /** Module-level provider slot. Starts unregistered. */

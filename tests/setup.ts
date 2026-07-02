@@ -14,11 +14,15 @@
  * into the production src/ output.
  */
 
-import { DOMParser } from "@xmldom/xmldom";
+import { DOMImplementation, DOMParser } from "@xmldom/xmldom";
 import { registerXmlParser } from "../src/platform/XmlParser.ts";
 
 registerXmlParser({
   parse(xml: string): Document {
     return new DOMParser().parseFromString(xml, "text/xml") as unknown as Document;
+  },
+  createDocument(rootTagName: string): Document {
+    const impl = new DOMImplementation();
+    return impl.createDocument(null, rootTagName, null) as unknown as Document;
   },
 });
