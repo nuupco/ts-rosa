@@ -139,6 +139,23 @@ describe('resolveExternalInstances', () => {
     );
   });
 
+  it('resolver resolves to null for a CSV external -> still throws a prefixed error (ADR-1 non-regression)', async () => {
+    // sdd/last-saved-instance ADR-1: widening ExternalInstanceResolver.resolve
+    // to `Promise<string | null>` must NOT weaken the CSV path's fail-loud
+    // guarantee — a `null` result for a non-last-saved src is still a failure.
+    const def = parseForm(singleExternalForm());
+
+    registerExternalInstanceResolver({
+      resolve(): Promise<string | null> {
+        return Promise.resolve(null);
+      },
+    });
+
+    await expect(resolveExternalInstances(def)).rejects.toThrow(
+      "resolveExternalInstances: external instance 'cities' (jr://file-csv/cities.csv)",
+    );
+  });
+
   it("no resolver registered -> throws the seam's unregistered error", async () => {
     const def = parseForm(singleExternalForm());
 

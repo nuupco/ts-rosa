@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
-import { parseForm, parseDocument } from '../../src/parse/XFormParser.ts';
+import { parseForm, parseDocument, buildInstanceNode } from '../../src/parse/XFormParser.ts';
 import { html, head, body, model, mainInstance, bind, input, select1, select, t, label, item } from '../harness/XFormsElement.ts';
 import type { XFormsElement } from '../harness/XFormsElement.ts';
 
@@ -251,5 +251,18 @@ describe('parseDocument (seam-free)', () => {
     expect(() => parseDocument(doc)).not.toThrow();
     const fd = parseDocument(doc);
     expect(fd.mainInstance).toBeDefined();
+  });
+});
+
+describe('buildInstanceNode (public export — sdd/last-saved-instance)', () => {
+  it('is part of the module public surface and builds the expected InstanceNode shape', () => {
+    const doc = new DOMParser().parseFromString('<name>Alice</name>', 'text/xml') as unknown as Document;
+    const el = doc.documentElement as unknown as Element;
+
+    const node = buildInstanceNode(el);
+
+    expect(node.name).toBe('name');
+    expect(node.children).toHaveLength(0);
+    expect(node.attributes.get('__rawText')).toBe('Alice');
   });
 });

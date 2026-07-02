@@ -34,7 +34,7 @@ import { parseItext } from './itextParser.ts';
 /** Internal: raw text holder before applyBindings casts it */
 const RAW_TEXT_ATTR = '__rawText';
 
-function buildInstanceNode(el: Element): InstanceNode {
+export function buildInstanceNode(el: Element): InstanceNode {
   const node = newNode(el.localName ?? el.nodeName);
 
   // Copy non-namespace attributes

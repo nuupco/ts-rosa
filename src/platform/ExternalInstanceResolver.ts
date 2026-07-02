@@ -14,11 +14,14 @@
 /**
  * Minimal external instance resolver seam.
  * Implementations must return the raw UTF-8 text content for a given `jr://`
- * (or other scheme) URI. The engine owns all content-format parsing
- * (e.g. CSV); the resolver only fetches bytes/text.
+ * (or other scheme) URI, or `null` when there is no content available for
+ * that URI (e.g. `jr://instance/last-saved` with no prior submission). The
+ * engine owns all content-format parsing (e.g. CSV); the resolver only
+ * fetches bytes/text. Interpretation of a `null` result is the
+ * responsibility of the calling dispatch logic, not this seam.
  */
 export interface ExternalInstanceResolver {
-  resolve(uri: string): Promise<string>;
+  resolve(uri: string): Promise<string | null>;
 }
 
 /** Module-level provider slot. Starts unregistered. */
