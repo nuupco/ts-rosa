@@ -16,6 +16,7 @@ import { PureJSExpressionParser } from '../parser/PureJSExpressionParser.ts';
 import type { ExpressionParser } from '../vendor/xpath/static/grammar/ExpressionParser.ts';
 import { defaultFunctions } from '../functions/index.ts';
 import type { XPathValue } from '../seam/XPathSeam.ts';
+import { getPlatformTimeZoneId } from '../../platform/PlatformConfig.ts';
 
 export type { InstanceXPathNode };
 
@@ -49,13 +50,35 @@ export interface InstanceEvaluationContext {
 const sharedParser = new PureJSExpressionParser() as unknown as ExpressionParser;
 
 /**
- * Singleton InstanceEvaluator over InstanceXPathNode using the pure-JS parser.
- *
- * Use UTC for deterministic date arithmetic, matching JavaRosa oracle expectations.
+ * Lazily constructed so the platform timeZoneId (registered via
+ * registerPlatformConfig()) can be read at first use rather than frozen at
+ * module-import time. Defaults to 'UTC' when no config is registered,
+ * matching JavaRosa oracle expectations for deterministic date arithmetic.
  */
-export const instanceEvaluator = new Evaluator<InstanceXPathNode>({
-  domAdapter: instanceNodeXPathAdapter,
-  parser: sharedParser,
-  functions: defaultFunctions,
-  timeZoneId: 'UTC',
-});
+let _instanceEvaluator: Evaluator<InstanceXPathNode> | null = null;
+
+function getInstanceEvaluatorInstance(): Evaluator<InstanceXPathNode> {
+  if (_instanceEvaluator === null) {
+    _instanceEvaluator = new Evaluator<InstanceXPathNode>({
+      domAdapter: instanceNodeXPathAdapter,
+      parser: sharedParser,
+      functions: defaultFunctions,
+      timeZoneId: getPlatformTimeZoneId(),
+    });
+  }
+  return _instanceEvaluator;
+}
+
+/**
+ * Singleton InstanceEvaluator over InstanceXPathNode using the pure-JS parser.
+ * Backed by a lazily constructed singleton (see getInstanceEvaluatorInstance)
+ * so existing call sites (`instanceEvaluator.evaluate(...)`) are unaffected.
+ */
+export const instanceEvaluator: Evaluator<InstanceXPathNode> = new Proxy(
+  {} as Evaluator<InstanceXPathNode>,
+  {
+    get(_target, prop, receiver) {
+      return Reflect.get(getInstanceEvaluatorInstance(), prop, receiver);
+    },
+  },
+);

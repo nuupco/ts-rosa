@@ -14,6 +14,7 @@ import { xmldomXPathAdapter, type XmldomNode } from '../adapter/XmldomXPathAdapt
 import { PureJSExpressionParser } from '../parser/PureJSExpressionParser.ts';
 import type { ExpressionParser } from '../vendor/xpath/static/grammar/ExpressionParser.ts';
 import { defaultFunctions } from '../functions/index.ts';
+import { getPlatformTimeZoneId } from '../../platform/PlatformConfig.ts';
 
 /**
  * Singleton parser instance — shared across all evaluator instances.
@@ -27,19 +28,36 @@ import { defaultFunctions } from '../functions/index.ts';
 const sharedParser = new PureJSExpressionParser() as unknown as ExpressionParser;
 
 /**
- * Pre-configured evaluator over xmldom nodes using our pure-JS parser.
- *
- * Usage:
- *   const result = xmldomEvaluator.evaluate(expr, contextNode, null, XPATH_EVALUATION_RESULT.ANY_TYPE);
+ * Lazily constructed so the platform timeZoneId (registered via
+ * registerPlatformConfig()) can be read at first use rather than frozen at
+ * module-import time. Defaults to 'UTC' when no config is registered, which
+ * matches JavaRosa oracle expectations for date arithmetic
+ * (date(0) → "1970-01-01", date(1) → "1970-01-02").
  */
+let _xmldomEvaluator: Evaluator<XmldomNode> | null = null;
+
+function getXmldomEvaluatorInstance(): Evaluator<XmldomNode> {
+	if (_xmldomEvaluator === null) {
+		_xmldomEvaluator = new Evaluator<XmldomNode>({
+			domAdapter: xmldomXPathAdapter,
+			parser: sharedParser,
+			functions: defaultFunctions,
+			timeZoneId: getPlatformTimeZoneId(),
+		});
+	}
+	return _xmldomEvaluator;
+}
+
 /**
- * Use UTC so date arithmetic (date(0) → "1970-01-01", date(1) → "1970-01-02")
- * is deterministic and matches JavaRosa oracle expectations. JavaRosa uses UTC
- * internally for epoch-based date conversions.
+ * Pre-configured evaluator over xmldom nodes using our pure-JS parser.
+ * Backed by a lazily constructed singleton (see getXmldomEvaluatorInstance)
+ * so existing call sites (`xmldomEvaluator.evaluate(...)`) are unaffected.
  */
-export const xmldomEvaluator = new Evaluator<XmldomNode>({
-	domAdapter: xmldomXPathAdapter,
-	parser: sharedParser,
-	functions: defaultFunctions,
-	timeZoneId: 'UTC',
-});
+export const xmldomEvaluator: Evaluator<XmldomNode> = new Proxy(
+	{} as Evaluator<XmldomNode>,
+	{
+		get(_target, prop, receiver) {
+			return Reflect.get(getXmldomEvaluatorInstance(), prop, receiver);
+		},
+	},
+);
