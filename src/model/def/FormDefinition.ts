@@ -34,6 +34,15 @@ export type FormDefinition = {
    * Empty map when the form has no secondary instances.
    */
   readonly secondaryInstances: ReadonlyMap<string, InstanceTree>;
+  /**
+   * External secondary instance declarations parsed from
+   * `<instance id="..." src="jr://...">` children of `<model>`.
+   *
+   * Unresolved markers only — `resolveExternalInstances` (async) fetches
+   * and parses their content, merging the result into `secondaryInstances`.
+   * Empty map when the form declares no external instances.
+   */
+  readonly externalInstances: ReadonlyMap<string, { readonly src: string }>;
 };
 
 /**

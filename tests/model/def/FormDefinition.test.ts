@@ -183,6 +183,7 @@ describe('FormDefinition and walkControls', () => {
       constraintBindings: new Map(),
       itext: null,
       secondaryInstances: new Map(),
+      externalInstances: new Map(),
     };
   }
 

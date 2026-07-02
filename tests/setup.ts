@@ -16,6 +16,7 @@
 
 import { DOMImplementation, DOMParser } from "@xmldom/xmldom";
 import { registerXmlParser } from "../src/platform/XmlParser.ts";
+import { registerExternalInstanceResolver } from "../src/platform/ExternalInstanceResolver.ts";
 
 registerXmlParser({
   parse(xml: string): Document {
@@ -24,5 +25,25 @@ registerXmlParser({
   createDocument(rootTagName: string): Document {
     const impl = new DOMImplementation();
     return impl.createDocument(null, rootTagName, null) as unknown as Document;
+  },
+});
+
+/**
+ * ExternalInstanceResolver test provider.
+ *
+ * Default behavior throws — most tests never reach hydration and this makes
+ * a missing test-specific fixture fail loudly and clearly rather than
+ * silently returning empty/garbage content. Tests that exercise
+ * `resolveExternalInstances` (PR3) register their own resolver per-test via
+ * `registerExternalInstanceResolver()` before calling it.
+ */
+registerExternalInstanceResolver({
+  resolve(uri: string): Promise<string> {
+    return Promise.reject(
+      new Error(
+        `Test ExternalInstanceResolver has no fixture registered for '${uri}'. ` +
+          "Call registerExternalInstanceResolver() in your test to provide one.",
+      ),
+    );
   },
 });

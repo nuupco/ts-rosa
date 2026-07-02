@@ -274,7 +274,7 @@ function buildReactiveDag(
 export function parseDocument(doc: Document): FormDefinition {
   const root = doc.documentElement;
   if (!root) {
-    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [], dag: null, constraintBindings: new Map(), itext: null, secondaryInstances: new Map() };
+    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [], dag: null, constraintBindings: new Map(), itext: null, secondaryInstances: new Map(), externalInstances: new Map() };
   }
 
   // Find model (under h:head/head)
@@ -294,14 +294,28 @@ export function parseDocument(doc: Document): FormDefinition {
 
   // Secondary instances: all id-bearing <instance id="..."> elements.
   // Apply string-value conversion (empty bindings → all nodes become 'string' AnswerValue).
+  //
+  // An id-bearing instance with a non-empty `src` attribute is an EXTERNAL
+  // reference (e.g. `jr://file-csv/cities.csv`) — parsing is pure/sync and
+  // MUST NOT fetch content, so it is recorded as an unresolved {id, src}
+  // marker in `externalInstances` instead of being built into
+  // `secondaryInstances`. If `src` is present, it wins over any inline
+  // children (matches JavaRosa); inline children are ignored in that case.
   const secondaryInstances = new Map<string, InstanceTree>();
+  const externalInstances = new Map<string, { src: string }>();
   for (const el of instanceEls) {
     const id = el.getAttribute('id');
-    if (id !== null && id !== '') {
-      const secTree = buildInstanceTree(el);
-      applyBindings(secTree, new Map());
-      secondaryInstances.set(id, secTree);
+    if (id === null || id === '') {
+      continue;
     }
+    const src = el.getAttribute('src');
+    if (src !== null && src !== '') {
+      externalInstances.set(id, { src });
+      continue;
+    }
+    const secTree = buildInstanceTree(el);
+    applyBindings(secTree, new Map());
+    secondaryInstances.set(id, secTree);
   }
 
   // Step 2: bindProcessor — find all <bind> children of model
@@ -327,7 +341,7 @@ export function parseDocument(doc: Document): FormDefinition {
   // Step 5: Parse itext translations (slice 5a)
   const itext = parseItext(modelEl);
 
-  return { title, mainInstance, bindings, body, dag, constraintBindings, itext, secondaryInstances };
+  return { title, mainInstance, bindings, body, dag, constraintBindings, itext, secondaryInstances, externalInstances };
 }
 
 /**
