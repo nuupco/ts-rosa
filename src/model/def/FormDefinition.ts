@@ -4,6 +4,7 @@ import type { FormElement } from './FormElement';
 import type { TriggerableDag } from '../../eval/TriggerableDag';
 import type { CompiledBinding } from '../../parse/bindProcessor';
 import type { ItextTranslations } from './Itext';
+import type { SetValueAction } from '../../eval/SetValueAction';
 
 /**
  * FormDefinition — pure definition record for a parsed XForms form.
@@ -43,6 +44,15 @@ export type FormDefinition = {
    * Empty map when the form declares no external instances.
    */
   readonly externalInstances: ReadonlyMap<string, { readonly src: string }>;
+  /**
+   * Parsed `<setvalue>` action declarations (event-triggered writes), from
+   * both model-level action children and body-nested elements. Empty array
+   * when the form declares no setvalue actions.
+   *
+   * Stored here as pure data — NOT wired into the DAG. Consumed by a
+   * separate ActionRegistry at session-creation time (see FormSession.ts).
+   */
+  readonly actions: readonly SetValueAction[];
 };
 
 /**

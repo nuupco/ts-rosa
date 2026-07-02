@@ -184,6 +184,7 @@ describe('FormDefinition and walkControls', () => {
       itext: null,
       secondaryInstances: new Map(),
       externalInstances: new Map(),
+      actions: [],
     };
   }
 

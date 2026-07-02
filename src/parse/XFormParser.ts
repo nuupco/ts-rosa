@@ -26,6 +26,8 @@ import type { CompiledBinding } from './bindProcessor.ts';
 import { bodyHandlers, buildFormElements } from './handlers.ts';
 import { childElementsByLocalName, firstByLocalName, directTextContent, textContent } from './domHelpers.ts';
 import { parseItext } from './itextParser.ts';
+import { collectModelActions, collectBodyActions } from './actionParser.ts';
+import type { SetValueAction } from '../eval/SetValueAction.ts';
 
 // ---------------------------------------------------------------------------
 // Step 1: Build InstanceTree from <instance> element
@@ -274,7 +276,7 @@ function buildReactiveDag(
 export function parseDocument(doc: Document): FormDefinition {
   const root = doc.documentElement;
   if (!root) {
-    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [], dag: null, constraintBindings: new Map(), itext: null, secondaryInstances: new Map(), externalInstances: new Map() };
+    return { title: null, mainInstance: { root: newNode('data'), name: null }, bindings: new Map(), body: [], dag: null, constraintBindings: new Map(), itext: null, secondaryInstances: new Map(), externalInstances: new Map(), actions: [] };
   }
 
   // Find model (under h:head/head)
@@ -341,7 +343,14 @@ export function parseDocument(doc: Document): FormDefinition {
   // Step 5: Parse itext translations (slice 5a)
   const itext = parseItext(modelEl);
 
-  return { title, mainInstance, bindings, body, dag, constraintBindings, itext, secondaryInstances, externalInstances };
+  // Step 6: Collect setvalue actions (model-level + body-nested).
+  // Parsing/storage only — NOT wired into the DAG (see actionParser.ts).
+  const actions: readonly SetValueAction[] = [
+    ...collectModelActions(modelEl),
+    ...collectBodyActions(bodyEl),
+  ];
+
+  return { title, mainInstance, bindings, body, dag, constraintBindings, itext, secondaryInstances, externalInstances, actions };
 }
 
 /**

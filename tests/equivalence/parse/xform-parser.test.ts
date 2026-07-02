@@ -27,7 +27,7 @@
 import { describe, it, expect } from "vitest";
 import { parseForm } from "../../../src/parse/XFormParser.ts";
 import { Scenario } from "../../harness/Scenario.ts";
-import { html, head, body, model, mainInstance, bind, input, t } from "../../harness/XFormsElement.ts";
+import { html, head, body, model, mainInstance, bind, input, t, setvalue, repeat } from "../../harness/XFormsElement.ts";
 import { resolveReference } from "../../../src/model/instance/InstanceTree.ts";
 import { parseAbsoluteRef } from "../../../src/model/instance/TreeReference.ts";
 
@@ -292,11 +292,189 @@ describe("JR equivalence: XFormParserTest — Phase 2+ (it.fails)", () => {
     throw new Error("Phase 2: repeat template + DAG not implemented");
   });
 
-  it.fails("parseFormWithSetValueAction — setvalue action + DAG (Phase 2)", () => {
-    throw new Error("Phase 2: setvalue action not implemented");
-  });
-
   it.fails("parseFormWithBodyBeforeModel — form order validation (Phase 2)", () => {
     throw new Error("Phase 2: body-before-model error detection not implemented");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setvalue action parsing (parser + FormDefinition.actions field — parsing only,
+// no ActionRegistry/firing yet; see sdd/setvalue-actions design + tasks)
+// ---------------------------------------------------------------------------
+
+describe("setvalue action parsing", () => {
+  it("parseFormWithSetValueAction — model-level setvalue is recorded on FormDefinition.actions (JR: it.fails promoted)", () => {
+    const def = parseForm(
+      html(
+        head(
+          model(
+            mainInstance(t('data id="sv"', t("a"))),
+            bind("/data/a").type("string"),
+            setvalue("odk-instance-first-load", "/data/a", "'x'")
+          )
+        ),
+        body(input("/data/a"))
+      ).asXml()
+    );
+    expect(def.actions).toHaveLength(1);
+    const action = def.actions[0]!;
+    expect(action.event).toBe("odk-instance-first-load");
+    expect(action.target.levels.map((l) => l.name)).toEqual(["data", "a"]);
+    expect(action.expr).not.toBeNull();
+    expect(action.literal).toBeNull();
+  });
+
+  it("normalizes 'xforms-ready' event alias to 'odk-instance-first-load'", () => {
+    const def = parseForm(
+      html(
+        head(
+          model(
+            mainInstance(t('data id="svalias"', t("a"))),
+            bind("/data/a").type("string"),
+            setvalue("xforms-ready", "/data/a", "'x'")
+          )
+        ),
+        body(input("/data/a"))
+      ).asXml()
+    );
+    expect(def.actions).toHaveLength(1);
+    expect(def.actions[0]!.event).toBe("odk-instance-first-load");
+  });
+
+  it("body-nested setvalue with inner-text literal (no value attribute) is recorded", () => {
+    const def = parseForm(
+      html(
+        head(
+          model(
+            mainInstance(t('data id="svlit"', t("a"), t("b"))),
+            bind("/data/a").type("string"),
+            bind("/data/b").type("string")
+          )
+        ),
+        body(
+          input(
+            "/data/a",
+            t('setvalue event="xforms-value-changed" ref="/data/b"', "literal-value")
+          )
+        )
+      ).asXml()
+    );
+    expect(def.actions).toHaveLength(1);
+    const action = def.actions[0]!;
+    expect(action.event).toBe("xforms-value-changed");
+    expect(action.expr).toBeNull();
+    expect(action.literal).toBe("literal-value");
+    // trigger set includes the host control's ref (/data/a) per design's union rule
+    const triggerNames = action.triggers.map((r) => r.levels.map((l) => l.name).join("/"));
+    expect(triggerNames).toContain("data/a");
+  });
+
+  it("collects both model-level and body-nested setvalue actions together", () => {
+    const def = parseForm(
+      html(
+        head(
+          model(
+            mainInstance(t('data id="svboth"', t("a"), t("b"))),
+            bind("/data/a").type("string"),
+            bind("/data/b").type("string"),
+            setvalue("odk-instance-first-load", "/data/a", "'x'")
+          )
+        ),
+        body(input("/data/b", setvalue("xforms-value-changed", "/data/a", "/data/b")))
+      ).asXml()
+    );
+    expect(def.actions).toHaveLength(2);
+    const events = def.actions.map((a) => a.event).sort();
+    expect(events).toEqual(["odk-instance-first-load", "xforms-value-changed"]);
+  });
+});
+
+describe("setvalue action parsing: fail-loud on unsupported event", () => {
+  it("throws naming the unsupported event and ref for a single unsupported event", () => {
+    const xml = html(
+      head(
+        model(
+          mainInstance(t('data id="svbad"', t("a"))),
+          bind("/data/a").type("string"),
+          setvalue("odk-new-repeat", "/data/a", "1")
+        )
+      ),
+      body(input("/data/a"))
+    ).asXml();
+    expect(() => parseForm(xml)).toThrow(/odk-new-repeat/);
+    expect(() => parseForm(xml)).toThrow(/\/data\/a/);
+  });
+
+  it("throws for another unsupported event token (xforms-revalidate)", () => {
+    const xml = html(
+      head(
+        model(
+          mainInstance(t('data id="svbad2"', t("a"))),
+          bind("/data/a").type("string"),
+          setvalue("xforms-revalidate", "/data/a", "1")
+        )
+      ),
+      body(input("/data/a"))
+    ).asXml();
+    expect(() => parseForm(xml)).toThrow(/xforms-revalidate/);
+  });
+
+  it("throws when the event attribute is missing", () => {
+    const xml = html(
+      head(
+        model(
+          mainInstance(t('data id="svnoevt"', t("a"))),
+          bind("/data/a").type("string"),
+          t('setvalue ref="/data/a" value="1"')
+        )
+      ),
+      body(input("/data/a"))
+    ).asXml();
+    expect(() => parseForm(xml)).toThrow();
+  });
+
+  it("throws when multiple space-separated events include an unsupported one", () => {
+    const xml = html(
+      head(
+        model(
+          mainInstance(t('data id="svmulti"', t("a"))),
+          bind("/data/a").type("string"),
+          t('setvalue event="xforms-value-changed odk-new-repeat" ref="/data/a" value="1"')
+        )
+      ),
+      body(input("/data/a"))
+    ).asXml();
+    expect(() => parseForm(xml)).toThrow(/odk-new-repeat/);
+  });
+});
+
+describe("setvalue action parsing: repeat-relative target rejection (v1 limit)", () => {
+  it("throws a clear error for a relative target ref with no host context (model-level)", () => {
+    const xml = html(
+      head(
+        model(
+          mainInstance(t('data id="svrel"', t("a"))),
+          bind("/data/a").type("string"),
+          t('setvalue event="odk-instance-first-load" ref="a" value="1"')
+        )
+      ),
+      body(input("/data/a"))
+    ).asXml();
+    expect(() => parseForm(xml)).toThrow(/relative target ref/);
+  });
+
+  it("throws a clear error for a '..'-navigating (repeat-relative) target ref", () => {
+    const xml = html(
+      head(
+        model(
+          mainInstance(t('data id="svrel2"', t("reps", t("item")))),
+          bind("/data/reps/item").type("string")
+        )
+      ),
+      body(
+        repeat("/data/reps", input("/data/reps/item", t('setvalue event="xforms-value-changed" ref="../item" value="1"')))
+      )
+    ).asXml();
+    expect(() => parseForm(xml)).toThrow(/repeat-relative target ref/);
   });
 });
