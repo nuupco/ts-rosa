@@ -50,6 +50,8 @@ import { PureJSExpressionParser } from '../xpath/parser/PureJSExpressionParser.t
 import { tokenize, TokenKind } from '../xpath/parser/Tokenizer.ts';
 import { getTriggers } from '../eval/getTriggers.ts';
 import { AnswerResult } from './AnswerResult.ts';
+import type { ActionRegistry } from '../eval/ActionRegistry.ts';
+import type { SetValueAction } from '../eval/SetValueAction.ts';
 
 // ---------------------------------------------------------------------------
 // ValidateOutcome — internal engine type (not Scenario harness type)
@@ -88,6 +90,16 @@ export class FormEvaluator {
   private docNode: InstanceDocumentNode;
   /** Reactive DAG — set by initializeInstance; null until a form with bindings is loaded. */
   private dag: TriggerableDag | null = null;
+
+  /**
+   * setvalue ActionRegistry — set by setActionRegistry (session-creation
+   * time, src/session/FormSession.ts). Null when the form declares no
+   * setvalue actions (buildActionRegistry always returns a non-null
+   * registry, but a session that never calls setActionRegistry — e.g. tests
+   * constructing FormEvaluator directly — has no actions to fire).
+   * sdd/setvalue-actions PR2.
+   */
+  private actionRegistry: ActionRegistry | null = null;
 
   /** NodeState per bound node — keyed by refToString(genericize(ref)). */
   private readonly nodeStates: Map<string, NodeState> = new Map();
@@ -794,6 +806,79 @@ export class FormEvaluator {
 
       alreadyEvaluated.add(triggerable);
     }
+  }
+
+  /**
+   * Install the setvalue ActionRegistry built from the session's
+   * FormDefinition.actions (src/eval/ActionRegistry.ts). Must be called
+   * before fireLoadActions(). A no-op call with an empty registry is safe —
+   * fireLoadActions() then does nothing.
+   *
+   * sdd/setvalue-actions PR2, task 9.
+   */
+  setActionRegistry(registry: ActionRegistry): void {
+    this.actionRegistry = registry;
+  }
+
+  /**
+   * Fire all `odk-instance-first-load` (and `xforms-ready`-aliased) setvalue
+   * actions, in declaration order, exactly once.
+   *
+   * Mirrors JavaRosa ActionController.triggerActionsFromEvent for the
+   * FORM_LOAD event. Must be called AFTER initializeInstance's DAG cascade
+   * has already brought the instance to its initial steady state (design
+   * ADR-4) — a load action's value expression should see fully-cascaded
+   * calculates, and each action's own triggerTriggerables call re-cascades
+   * any downstream dependents of its target.
+   *
+   * Per design's edit-mode decision: this fires unconditionally on both
+   * fresh and hydrated (instanceXml) sessions — grouped with `calculate`
+   * behavior (always wins), not with `preload` (skipped on hydration).
+   *
+   * sdd/setvalue-actions PR2, tasks 10-12.
+   */
+  fireLoadActions(): void {
+    if (this.actionRegistry === null) return;
+    for (const action of this.actionRegistry.loadActions) {
+      this.fireAction(action);
+    }
+  }
+
+  /**
+   * Evaluate a single setvalue action's value expression (or literal),
+   * write the typed result into its target node, then propagate through the
+   * standard DAG cascade.
+   *
+   * Mirrors JavaRosa Action.processAction -> setValue -> triggerTriggerables
+   * (design section 4). Bypasses answerQuestion's constraint gating on
+   * purpose (ADR-3) — action writes are not user-entered answers.
+   *
+   * sdd/setvalue-actions PR2, task 10-11. The chained-action depth guard
+   * (ADR-2) is PR3 scope — this method does not yet accept/track a depth
+   * counter since only load-time (non-chaining, single-fire) actions exist
+   * in PR2.
+   */
+  private fireAction(action: SetValueAction): void {
+    const targetNode = resolveReference(this.tree, action.target);
+    if (targetNode === null) return;
+
+    let rawString: string;
+    if (action.expr !== null) {
+      const rawResult = this.evaluateExprFast(action.expr, targetNode);
+      rawString =
+        typeof rawResult === 'string'
+          ? rawResult
+          : typeof rawResult === 'number'
+            ? String(rawResult)
+            : rawResult
+              ? '1'
+              : '0';
+    } else {
+      rawString = action.literal ?? '';
+    }
+
+    targetNode.value = cast(targetNode.dataType, rawString);
+    this.triggerTriggerables(action.target);
   }
 
   /**

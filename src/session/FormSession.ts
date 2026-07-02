@@ -16,6 +16,7 @@ import type { PreloadProvider } from './PreloadProvider.ts';
 import { defaultPreloadProvider } from './PreloadProvider.ts';
 import { applyPreloads } from './preload/applyPreloads.ts';
 import { hydrateInstance } from '../model/instance/InstanceHydrator.ts';
+import { buildActionRegistry } from '../eval/ActionRegistry.ts';
 
 export interface FormSession {
   /** The full form definition (immutable defs + compiled bindings + DAG). */
@@ -120,6 +121,16 @@ export function createFormSession(
   if (definition.dag !== null) {
     evaluator.initializeInstance(definition.dag, definition.constraintBindings);
   }
+
+  // sdd/setvalue-actions PR2: build the ActionRegistry and fire load-time
+  // actions AFTER the initial DAG cascade (design ADR-4), so their value
+  // expressions observe fully-cascaded calculates. Fires unconditionally on
+  // both the fresh and hydrated (instanceXml) paths — grouped with
+  // `calculate` behavior (design's edit-mode decision), not with `preload`
+  // (which is skipped above on hydration, ADR-C).
+  const actionRegistry = buildActionRegistry(definition.actions);
+  evaluator.setActionRegistry(actionRegistry);
+  evaluator.fireLoadActions();
 
   const navigator = new FormNavigator(definition, tree, evaluator);
 
