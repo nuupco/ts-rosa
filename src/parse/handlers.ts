@@ -10,7 +10,7 @@ import type { FormElement, ChoiceItem, ItemsetDef } from '../model/def/FormEleme
 import type { DataBinding } from '../model/def/DataBinding.ts';
 import { controlTypeFromTag } from '../model/def/controlType.ts';
 import { parseAbsoluteRef } from '../model/instance/TreeReference.ts';
-import { childElementsByLocalName, firstByLocalName, textContent, labelInnerText } from './domHelpers.ts';
+import { childElementsByLocalName, firstByLocalName, textContent, parseTextParts } from './domHelpers.ts';
 
 /** Build context passed to each handler */
 export type BuildCtx = {
@@ -169,15 +169,21 @@ function questionHandler(el: Element, ctx: BuildCtx): FormElement {
   const binding = ctx.bindings.get(refAttr) ?? null;
   const labelEl = firstByLocalName(el, 'label');
   const labelText = labelEl ? textContent(labelEl) : null;
-  const innerText = labelEl ? labelInnerText(labelEl) : null;
+  const labelParts = labelEl ? parseTextParts(labelEl) : null;
+  const innerText = labelParts?.text ?? null;
+  const labelOutputs = labelParts?.outputs ?? [];
   const labelItextId = getItextRefId(labelEl);
   const itemset = getItemset(el);
   // When itemset is present, choices = [] (itemset takes precedence)
   const choices = itemset !== null ? [] : getChoices(el);
   const appearance = el.getAttribute('appearance') ?? null;
   const mediatype = el.getAttribute('mediatype') ?? null;
+  const hintEl = firstByLocalName(el, 'hint');
   const hintText = getHintText(el);
-  const hintItextId = getItextRefId(firstByLocalName(el, 'hint'));
+  const hintParts = hintEl ? parseTextParts(hintEl) : null;
+  const hintInnerText = hintParts?.text ?? null;
+  const hintOutputs = hintParts?.outputs ?? [];
+  const hintItextId = getItextRefId(hintEl);
 
   // Range bounds — only for <range> elements
   let rangeStart: number | undefined;
@@ -208,11 +214,14 @@ function questionHandler(el: Element, ctx: BuildCtx): FormElement {
     binding,
     labelText,
     labelInnerText: innerText,
+    labelOutputs,
     choices,
     itemset,
     appearance,
     mediatype,
     hintText,
+    hintInnerText,
+    hintOutputs,
     labelItextId,
     hintItextId,
     ...(rangeStart !== undefined ? { rangeStart } : {}),

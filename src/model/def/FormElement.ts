@@ -65,11 +65,31 @@ export type FormElement =
        * Null when no label is present.
        */
       readonly labelInnerText: string | null;
+      /**
+       * Raw XPath `value` expression of each `<output>` found in the label,
+       * index-aligned with the `${n}` placeholders in labelInnerText.
+       * Empty array when the label has no `<output>` children or no label.
+       * Added in output-label-substitution PR2 (parse-time output capture).
+       */
+      readonly labelOutputs?: readonly string[];
       readonly choices: readonly ChoiceItem[];
       readonly itemset: ItemsetDef | null;
       readonly appearance?: string | null;
       readonly mediatype?: string | null;
       readonly hintText?: string | null;
+      /**
+       * Hint inner text with <output> elements replaced by ${index}
+       * placeholders, mirroring labelInnerText. Null when no hint is present.
+       * Added in output-label-substitution PR2.
+       */
+      readonly hintInnerText?: string | null;
+      /**
+       * Raw XPath `value` expression of each `<output>` found in the hint,
+       * index-aligned with the `${n}` placeholders in hintInnerText.
+       * Empty array when the hint has no `<output>` children or no hint.
+       * Added in output-label-substitution PR2.
+       */
+      readonly hintOutputs?: readonly string[];
       /**
        * The extracted itext id when the question's <label> is driven by
        * jr:itext('id') rather than literal text, e.g.

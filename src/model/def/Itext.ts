@@ -17,6 +17,13 @@ export type ItextForm = string;
 export interface ItextValue {
   readonly form: ItextForm | null; // null = default / long form
   readonly text: string;
+  /**
+   * Raw XPath `value` expression of each `<output>` found in this value's
+   * source `<value>`/`<text>` element, index-aligned with the `${n}`
+   * placeholders in `text`. Empty array when there are no outputs.
+   * Added in output-label-substitution PR2 (parse-time output capture).
+   */
+  readonly outputs: readonly string[];
 }
 
 /** Per-language map: itext id → its <value> entries (one per form). */
@@ -43,6 +50,12 @@ export interface ItextResolver {
   setActiveLanguage(lang: ItextLanguage | null): ItextLanguage | null;
   /** Resolve active-language value for id + optional form; returns null when id absent in all languages. */
   resolve(id: ItextId, form?: ItextForm): string | null;
+  /**
+   * Resolve active-language {text, outputs} pair for id + optional form.
+   * Same fallback semantics as resolve(); returns null when id absent in all
+   * languages. Added in output-label-substitution PR2.
+   */
+  resolveWithOutputs(id: ItextId, form?: ItextForm): { text: string; outputs: readonly string[] } | null;
 }
 
 /**
@@ -61,11 +74,11 @@ export function makeItextResolver(t: ItextTranslations): ItextResolver {
   let activeLanguage: ItextLanguage | null =
     t.explicitDefaultLanguage ?? t.languages[0] ?? null;
 
-  function resolveValue(
+  function resolveEntry(
     translation: ItextTranslation | undefined,
     id: ItextId,
     form?: ItextForm,
-  ): string | null {
+  ): ItextValue | null {
     if (translation === undefined) return null;
     const values = translation.get(id);
     if (values === undefined || values.length === 0) return null;
@@ -73,15 +86,23 @@ export function makeItextResolver(t: ItextTranslations): ItextResolver {
     // Requested form match
     if (form !== undefined) {
       const match = values.find((v) => v.form === form);
-      if (match !== undefined) return match.text;
+      if (match !== undefined) return match;
     }
 
     // Default/null form fallback
     const defaultMatch = values.find((v) => v.form === null);
-    if (defaultMatch !== undefined) return defaultMatch.text;
+    if (defaultMatch !== undefined) return defaultMatch;
 
     // First available value
-    return values[0]?.text ?? null;
+    return values[0] ?? null;
+  }
+
+  function resolveValue(
+    translation: ItextTranslation | undefined,
+    id: ItextId,
+    form?: ItextForm,
+  ): string | null {
+    return resolveEntry(translation, id, form)?.text ?? null;
   }
 
   return {
@@ -121,6 +142,25 @@ export function makeItextResolver(t: ItextTranslations): ItextResolver {
         const trans = t.byLanguage.get(lang);
         const result = resolveValue(trans, id, form);
         if (result !== null) return result;
+      }
+
+      return null;
+    },
+
+    resolveWithOutputs(id: ItextId, form?: ItextForm): { text: string; outputs: readonly string[] } | null {
+      // 1. Try active language
+      if (activeLanguage !== null) {
+        const activeTrans = t.byLanguage.get(activeLanguage);
+        const entry = resolveEntry(activeTrans, id, form);
+        if (entry !== null) return { text: entry.text, outputs: entry.outputs };
+      }
+
+      // 2. Fallback: first language in declaration order that has the id
+      for (const lang of t.languages) {
+        if (lang === activeLanguage) continue; // already tried
+        const trans = t.byLanguage.get(lang);
+        const entry = resolveEntry(trans, id, form);
+        if (entry !== null) return { text: entry.text, outputs: entry.outputs };
       }
 
       return null;

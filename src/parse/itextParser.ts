@@ -15,7 +15,7 @@
  */
 
 import type { ItextTranslations, ItextTranslation, ItextValue, ItextLanguage, ItextId } from '../model/def/Itext.ts';
-import { childElementsByLocalName, firstByLocalName, textContent } from './domHelpers.ts';
+import { childElementsByLocalName, firstByLocalName, textContent, parseTextParts } from './domHelpers.ts';
 
 /**
  * Parse the <itext> child of a <model> element.
@@ -57,16 +57,17 @@ export function parseItext(modelEl: Element | null): ItextTranslations | null {
       const values: ItextValue[] = [];
 
       if (valueEls.length === 0) {
-        // No <value> children — treat the text content of <text> itself as default value
-        const text = textContent(textEl);
-        if (text !== null) {
-          values.push({ form: null, text });
+        // No <value> children — treat the text content of <text> itself as default value,
+        // including any <output> elements directly under <text>.
+        const parts = parseTextParts(textEl);
+        if (parts !== null) {
+          values.push({ form: null, text: parts.text, outputs: parts.outputs });
         }
       } else {
         for (const valueEl of valueEls) {
           const form = valueEl.getAttribute('form') ?? null; // null = default/long form
-          const text = textContent(valueEl) ?? '';
-          values.push({ form, text });
+          const parts = parseTextParts(valueEl);
+          values.push({ form, text: parts?.text ?? '', outputs: parts?.outputs ?? [] });
         }
       }
 

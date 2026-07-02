@@ -79,6 +79,55 @@ describe('input handler', () => {
 });
 
 // ---------------------------------------------------------------------------
+// output-label-substitution PR2 — parse-time output expression capture
+// ---------------------------------------------------------------------------
+
+describe('input handler — label/hint output capture', () => {
+  it('captures labelOutputs aligned with the ${n} placeholders in labelInnerText', () => {
+    const el = parseElement(
+      '<input ref="/data/name"><label>Hello, <output value="/data/name"/></label></input>',
+    );
+    const handler = bodyHandlers.get('input')!;
+    const fe = handler(el, emptyCtx);
+    if (fe.kind === 'question') {
+      expect(fe.labelInnerText).toBe('Hello, ${0}');
+      expect(fe.labelOutputs).toEqual(['/data/name']);
+    }
+  });
+
+  it('labelOutputs is an empty array when the label has no <output>', () => {
+    const el = parseElement('<input ref="/data/name"><label>Your Name</label></input>');
+    const handler = bodyHandlers.get('input')!;
+    const fe = handler(el, emptyCtx);
+    if (fe.kind === 'question') {
+      expect(fe.labelOutputs).toEqual([]);
+    }
+  });
+
+  it('captures hintInnerText and hintOutputs for a hint with an <output>', () => {
+    const el = parseElement(
+      '<input ref="/data/x"><label>X</label><hint>Value is <output value="/data/x"/></hint></input>',
+    );
+    const handler = bodyHandlers.get('input')!;
+    const fe = handler(el, emptyCtx);
+    if (fe.kind === 'question') {
+      expect(fe.hintInnerText).toBe('Value is ${0}');
+      expect(fe.hintOutputs).toEqual(['/data/x']);
+    }
+  });
+
+  it('hintOutputs is an empty array when there is no hint element', () => {
+    const el = parseElement('<input ref="/data/name"><label>Your Name</label></input>');
+    const handler = bodyHandlers.get('input')!;
+    const fe = handler(el, emptyCtx);
+    if (fe.kind === 'question') {
+      expect(fe.hintOutputs).toEqual([]);
+      expect(fe.hintInnerText).toBeNull();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // select1 handler
 // ---------------------------------------------------------------------------
 
