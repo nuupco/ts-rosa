@@ -91,6 +91,9 @@ describe("DataType", () => {
     it("maps unknown xsd type to 'unsupported'", () => {
       expect(dataTypeFromXsdName("xsd:fooBar")).toBe("unsupported");
     });
+    it("maps odk:rank to 'selectMulti' (pyxform's rank bind type)", () => {
+      expect(dataTypeFromXsdName("odk:rank")).toBe("selectMulti");
+    });
   });
 });
 

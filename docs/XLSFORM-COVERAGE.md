@@ -72,4 +72,4 @@ All other columns are covered.
 | `secret` | `secret` | Password |
 | `note` | `input` (readonly) | Label only |
 | `trigger` | `trigger` | Button |
-| `rank` | Not yet | Not yet |
+| `rank` | `rank` (reuses `select`'s selectMulti codec/DataType) | Not yet (drag-to-reorder UI is a consumer concern; permutation validation deferred) |

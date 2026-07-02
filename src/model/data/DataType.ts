@@ -38,6 +38,11 @@ export type DataType =
  *   xsd:dateTime      -> "dateTime"
  *   select1           -> "selectOne"
  *   select            -> "selectMulti"
+ *   odk:rank          -> "selectMulti" (pyxform's rank bind type; reuses the
+ *                        selectMulti codec, per ADR Decision 2 in
+ *                        sdd/rank-control/design — verified against pyxform
+ *                        3.0.1 source: question_type_dictionary.py maps
+ *                        "rank" -> {"control": {"tag": "odk:rank"}, "bind": {"type": "odk:rank"}})
  *   geopoint          -> "geopoint"
  *   binary            -> "binary"
  *   null | anything else -> "unsupported" (unless null/"" -> "string")
@@ -61,6 +66,7 @@ export function dataTypeFromXsdName(xsd: string | null): DataType {
     case "select1":
       return "selectOne";
     case "select":
+    case "odk:rank":
       return "selectMulti";
     case "geopoint":
       return "geopoint";

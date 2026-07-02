@@ -269,6 +269,7 @@ const handlers: Map<string, BodyHandler> = new Map([
   ['input', questionHandler],
   ['select1', questionHandler],
   ['select', questionHandler],
+  ['rank', questionHandler],
   ['trigger', questionHandler],
   ['upload', questionHandler],
   ['range', questionHandler],

@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
-import { bodyHandlers } from '../../src/parse/handlers.ts';
+import { bodyHandlers, buildFormElements } from '../../src/parse/handlers.ts';
 import type { BuildCtx } from '../../src/parse/handlers.ts';
 
 // ---------------------------------------------------------------------------
@@ -41,6 +41,10 @@ describe('bodyHandlers map', () => {
 
   it('has "repeat" key', () => {
     expect(bodyHandlers.has('repeat')).toBe(true);
+  });
+
+  it('has "rank" key', () => {
+    expect(bodyHandlers.has('rank')).toBe(true);
   });
 });
 
@@ -220,6 +224,84 @@ describe('range handler', () => {
       expect(fe.rangeStart).toBeUndefined();
       expect(fe.rangeEnd).toBe(10);
       expect(fe.rangeStep).toBeUndefined();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rank handler
+// ---------------------------------------------------------------------------
+
+describe('rank handler', () => {
+  it('returns kind=question, controlType=rank for an itemset-based rank question', () => {
+    const el = parseElement(
+      '<rank ref="/data/ordered">' +
+        '<itemset nodeset="instance(\'fruits\')/root/item">' +
+        '<value ref="name"/><label ref="label"/>' +
+        '</itemset>' +
+        '</rank>',
+    );
+    const handler = bodyHandlers.get('rank')!;
+    const fe = handler(el, emptyCtx);
+    expect(fe.kind).toBe('question');
+    if (fe.kind === 'question') {
+      expect(fe.controlType).toBe('rank');
+      expect(fe.itemset).not.toBeNull();
+    }
+  });
+
+  it('resolves static <item> children identically to select (no <itemset>)', () => {
+    const el = parseElement(
+      '<rank ref="/data/ordered">' +
+        '<item><value>a</value><label>A</label></item>' +
+        '<item><value>b</value><label>B</label></item>' +
+        '</rank>',
+    );
+    const handler = bodyHandlers.get('rank')!;
+    const fe = handler(el, emptyCtx);
+    expect(fe.kind).toBe('question');
+    if (fe.kind === 'question') {
+      expect(fe.controlType).toBe('rank');
+      expect(fe.choices.length).toBe(2);
+      expect(fe.choices[0]?.value).toBe('a');
+      expect(fe.choices[0]?.labelText).toBe('A');
+      expect(fe.choices[1]?.value).toBe('b');
+      expect(fe.choices[1]?.labelText).toBe('B');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildFormElements — silent-skip masking for unregistered tags (regression
+// guard for the bug class that would have affected 'rank' pre-fix: handlers.ts
+// buildFormElements silently drops any body element whose localName is not in
+// the handler map, with no error/warning). This proves the drop mechanism
+// exists in general, and the 'rank' tests above prove rank itself is no
+// longer subject to it now that ['rank', questionHandler] is registered.
+// ---------------------------------------------------------------------------
+
+describe('buildFormElements — unregistered tags are silently skipped', () => {
+  it('drops a body element with an unrecognized localName, producing no FormElement and no error', () => {
+    const doc = new DOMParser().parseFromString(
+      '<body><totally-unknown-tag ref="/data/x"/></body>',
+      'text/xml',
+    );
+    const bodyEl = doc.documentElement as unknown as Element;
+    const elements = buildFormElements(bodyEl, emptyCtx);
+    expect(elements.length).toBe(0);
+  });
+
+  it('does NOT drop <rank> — it is registered and produces a question FormElement', () => {
+    const doc = new DOMParser().parseFromString(
+      '<body><rank ref="/data/ordered"><item><value>a</value><label>A</label></item></rank></body>',
+      'text/xml',
+    );
+    const bodyEl = doc.documentElement as unknown as Element;
+    const elements = buildFormElements(bodyEl, emptyCtx);
+    expect(elements.length).toBe(1);
+    expect(elements[0]?.kind).toBe('question');
+    if (elements[0]?.kind === 'question') {
+      expect(elements[0].controlType).toBe('rank');
     }
   });
 });
