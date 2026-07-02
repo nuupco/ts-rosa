@@ -15,8 +15,8 @@ import type { InstanceXPathNode } from '../adapter/instance/InstanceXPathNode.ts
 import { PureJSExpressionParser } from '../parser/PureJSExpressionParser.ts';
 import type { ExpressionParser } from '../vendor/xpath/static/grammar/ExpressionParser.ts';
 import { defaultFunctions } from '../functions/index.ts';
-import type { XPathValue } from '../seam/XPathSeam.ts';
 import { getPlatformTimeZoneId } from '../../platform/PlatformConfig.ts';
+import type { XPathVariableValue } from './XPathVariableValue.ts';
 
 export type { InstanceXPathNode };
 
@@ -36,7 +36,7 @@ export interface InstanceEvaluationContext {
   readonly instanceRoot: InstanceXPathNode;
   readonly contextNode: InstanceXPathNode;
   readonly secondaryInstances?: ReadonlyMap<string, InstanceXPathNode>;
-  readonly variables?: ReadonlyMap<string, XPathValue>;
+  readonly variables?: ReadonlyMap<string, XPathVariableValue>;
   readonly relevanceOf?: (node: InstanceXPathNode) => boolean;
 }
 

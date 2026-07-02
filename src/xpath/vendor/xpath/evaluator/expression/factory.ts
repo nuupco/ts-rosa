@@ -17,6 +17,7 @@ import { RelativeLocationPathExpressionEvaluator } from './RelativeLocationPathE
 import { StringLiteralExpressionEvaluator } from './StringLiteralExpressionEvaluator.ts';
 import { UnaryExpressionEvaluator } from './UnaryExpressionEvaluator.ts';
 import { UnionExpressionEvaluator } from './UnionExpressionEvaluator.ts';
+import { VariableReferenceExpressionEvaluator } from './VariableReferenceExpressionEvaluator.ts';
 
 // FilterExprNode can appear as a runtime child where the grammar type says ExprNode
 // (tree-sitter grammar wrapping); it is handled as a transparent passthrough.
@@ -93,6 +94,9 @@ export const createExpression = (syntaxNode: EvaluableExprNode): ExpressionEvalu
 
 		case 'string_literal':
 			return new StringLiteralExpressionEvaluator(syntaxNode);
+
+		case 'variable_reference':
+			return new VariableReferenceExpressionEvaluator(syntaxNode);
 
 		default:
 			throw new UnreachableError(syntaxNode);

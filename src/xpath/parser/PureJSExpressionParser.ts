@@ -703,6 +703,21 @@ class Parser {
 			return this.parseFunctionCall();
 		}
 
+		// Variable reference: $name or $prefix:name (QName combined into one
+		// NAME token by the tokenizer — see Tokenizer.ts QName scanning).
+		if (k === TokenKind.DOLLAR) {
+			const dollarTok = this.advance();
+			const nameTok = this.expect(TokenKind.NAME);
+			const text = `$${nameTok.text}`;
+			return makeSyntaxNode(
+				'variable_reference',
+				text,
+				[],
+				dollarTok.start,
+				nameTok.start + nameTok.text.length
+			);
+		}
+
 		// FUNCTION_NAME-like names that aren't in step position (e.g. some names
 		// that could be function calls). NAME tokens in a non-step context are
 		// likely function calls too if followed by (.

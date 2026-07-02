@@ -20,4 +20,5 @@ export {
 	type CompiledExpression,
 	type EvaluationContext,
 	type XPathValue,
+	type XPathVariableValue,
 } from './seam/XPathSeam.ts';

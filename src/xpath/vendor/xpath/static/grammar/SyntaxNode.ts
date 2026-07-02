@@ -173,11 +173,11 @@ export type AnyBinaryExprNode =
  */
 
 export type FilterExprNodes =
-	// | VariableReferenceNode
 	| readonly [ExprNode]
 	| readonly [FunctionCallNode]
 	| readonly [LiteralNode]
-	| readonly [NumberNode];
+	| readonly [NumberNode]
+	| readonly [VariableReferenceNode];
 
 export interface FilterExprNode extends SyntaxNode<FilterExprType, FilterExprNodes> {}
 
@@ -417,7 +417,8 @@ export type AnyExprNode =
 	| OrExprNode
 	| SubtractionExprNode
 	| UnaryExprNode
-	| UnionExprNode;
+	| UnionExprNode
+	| VariableReferenceNode;
 
 /**
  * @alias {@link LiteralNode}

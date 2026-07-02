@@ -32,6 +32,10 @@ import {
 	wrapInstanceNode,
 	setActiveRelevanceCheck,
 } from '../adapter/instance/InstanceNodeXPathAdapter.ts';
+import { setActiveVariables } from '../evaluator/VariableScope.ts';
+import { assertXPathVariableValue, type XPathVariableValue } from '../evaluator/XPathVariableValue.ts';
+
+export type { XPathVariableValue } from '../evaluator/XPathVariableValue.ts';
 
 export type { InstanceEvaluationContext } from '../evaluator/InstanceEvaluator.ts';
 
@@ -60,6 +64,8 @@ export interface EvaluationContext {
 	readonly contextNode: XmldomNode;
 	/** Secondary instances, keyed by instance id (jr:instance). */
 	readonly secondaryInstances?: ReadonlyMap<string, XmldomNode>;
+	/** XPath `$name` variable bindings (read-side only; no setvalue source yet). */
+	readonly variables?: ReadonlyMap<string, XPathVariableValue>;
 }
 
 /**
@@ -76,6 +82,24 @@ export type XPathValue =
 // ---------------------------------------------------------------------------
 // Minimal stub document — used when no context is provided
 // ---------------------------------------------------------------------------
+
+/**
+ * Validate and normalize caller-supplied variable bindings into the
+ * ReadonlyMap<string, XPathVariableValue> shape VariableScope expects.
+ * Throws (bind time) if any value is not a supported primitive
+ * (design Decision 5 — node-set/array/object values are out of scope).
+ */
+function toActiveVariableMap(
+	variables: ReadonlyMap<string, XPathVariableValue> | undefined
+): ReadonlyMap<string, XPathVariableValue> {
+	if (variables === undefined) return EMPTY_VARIABLES;
+	for (const [name, value] of variables) {
+		assertXPathVariableValue(value, name);
+	}
+	return variables;
+}
+
+const EMPTY_VARIABLES: ReadonlyMap<string, XPathVariableValue> = new Map();
 
 let stubDocument: XmldomNode | null = null;
 
@@ -110,12 +134,10 @@ function getStubDocument(): XmldomNode {
  */
 export function evaluateXPathTyped(expr: string, context?: EvaluationContext): XPathValue {
 	const contextNode = context?.contextNode ?? getStubDocument();
+	const variables = toActiveVariableMap(context?.variables);
 
-	const result = xmldomEvaluator.evaluate(
-		expr,
-		contextNode,
-		null,
-		XPATH_EVALUATION_RESULT.ANY_TYPE
+	const result = setActiveVariables(variables, () =>
+		xmldomEvaluator.evaluate(expr, contextNode, null, XPATH_EVALUATION_RESULT.ANY_TYPE)
 	);
 
 	switch (result.resultType) {
@@ -263,28 +285,33 @@ export function compileInstanceXPath(expr: string): CompiledInstanceExpression {
 		source: expr,
 
 		evaluateTyped(context?: InstanceEvaluationContext): InstanceXPathValue {
+			const variables = toActiveVariableMap(context?.variables);
 			const contextNode = context?.contextNode;
 			if (contextNode === undefined) {
 				// No context — evaluate as constant; result is usually a string/number/boolean
-				const result = instanceEvaluator.evaluate(
-					expr,
-					// Use a minimal stub: we need some node to pass; create a simple doc
-					// by evaluating with the xmldom evaluator's context mechanism.
-					// For constant expressions (no node access) the context node is irrelevant.
-					// We re-use the same trick as the xmldom path: pass contextNode as undefined
-					// will fail type-check, so we fall back to an exception for now —
-					// callers SHOULD provide a context.
-					null as unknown as InstanceXPathNode,
-					null,
-					XPATH_EVALUATION_RESULT.ANY_TYPE,
+				const result = setActiveVariables(variables, () =>
+					instanceEvaluator.evaluate(
+						expr,
+						// Use a minimal stub: we need some node to pass; create a simple doc
+						// by evaluating with the xmldom evaluator's context mechanism.
+						// For constant expressions (no node access) the context node is irrelevant.
+						// We re-use the same trick as the xmldom path: pass contextNode as undefined
+						// will fail type-check, so we fall back to an exception for now —
+						// callers SHOULD provide a context.
+						null as unknown as InstanceXPathNode,
+						null,
+						XPATH_EVALUATION_RESULT.ANY_TYPE,
+					)
 				);
 				return decodeInstanceResult(result);
 			}
-			const result = instanceEvaluator.evaluate(
-				expr,
-				contextNode,
-				null,
-				XPATH_EVALUATION_RESULT.ANY_TYPE,
+			const result = setActiveVariables(variables, () =>
+				instanceEvaluator.evaluate(
+					expr,
+					contextNode,
+					null,
+					XPATH_EVALUATION_RESULT.ANY_TYPE,
+				)
 			);
 			return decodeInstanceResult(result);
 		},
@@ -315,11 +342,14 @@ export function evaluateInstanceXPath(
 	compiled: CompiledInstanceExpression,
 	ctx: InstanceEvaluationContext,
 ): ReturnType<typeof instanceEvaluator.evaluate> {
-	return instanceEvaluator.evaluate(
-		compiled.source,
-		ctx.contextNode,
-		null,
-		XPATH_EVALUATION_RESULT.ANY_TYPE,
+	const variables = toActiveVariableMap(ctx.variables);
+	return setActiveVariables(variables, () =>
+		instanceEvaluator.evaluate(
+			compiled.source,
+			ctx.contextNode,
+			null,
+			XPATH_EVALUATION_RESULT.ANY_TYPE,
+		)
 	);
 }
 
@@ -339,7 +369,9 @@ export function evaluateInstanceExpr(
 	ctxNode: InstanceXPathNode,
 	resultType: XPathEvaluationResultType,
 ): ReturnType<typeof instanceEvaluator.evaluate> {
-	return instanceEvaluator.evaluate(expr, ctxNode, null, resultType);
+	return setActiveVariables(EMPTY_VARIABLES, () =>
+		instanceEvaluator.evaluate(expr, ctxNode, null, resultType)
+	);
 }
 
 function decodeInstanceResult(result: ReturnType<typeof instanceEvaluator.evaluate>): InstanceXPathValue {

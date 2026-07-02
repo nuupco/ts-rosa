@@ -18,7 +18,6 @@
  *   - Geo functions (geofence) — not in core XPath scope for Phase 2.
  *   - Locale-sensitive round() variants (Polish locale) — multi-locale harness
  *     not yet set up.
- *   - Variable ($var_float_five, etc.) bindings via EvaluationContext.
  *   - indexed-repeat() with live repeat instance traversal.
  *   - crypto functions (digest, base64).
  */
@@ -676,5 +675,57 @@ describe("XPath eval — boolean-from-string()", () => {
 
   it("boolean-from-string(1.0001) → false (not exactly 1)", () => {
     expect(evaluateXPath("boolean-from-string(1.0001)")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Variable references ($name) — XPath variable-references change
+// Source: XPathEvalTest.java variables() — bound number, bound string,
+// arithmetic coercion, unbound throws. These are NEW cases (previously
+// backlogged, not converted from any existing it.fails()).
+// ---------------------------------------------------------------------------
+describe("XPath eval — variable references ($name)", () => {
+  it("$var_float_five resolves a bound numeric variable to its value", () => {
+    expect(
+      evaluateXPath("$var_float_five", {
+        variables: new Map([["var_float_five", 5.0]]),
+      } as never),
+    ).toBe(5.0);
+  });
+
+  it("$var_float_five + 1 applies automatic XPath coercion in arithmetic", () => {
+    expect(
+      evaluateXPath("$var_float_five + 1", {
+        variables: new Map([["var_float_five", 5.0]]),
+      } as never),
+    ).toBe(6.0);
+  });
+
+  it("$var_name resolves a bound string variable to its value", () => {
+    expect(
+      evaluateXPath("$var_name", {
+        variables: new Map([["var_name", "hello"]]),
+      } as never),
+    ).toBe("hello");
+  });
+
+  it("$count + 1 coerces a bound string variable to a number", () => {
+    expect(
+      evaluateXPath("$count + 1", {
+        variables: new Map([["count", "5"]]),
+      } as never),
+    ).toBe(6);
+  });
+
+  it("referencing an unbound variable throws", () => {
+    expect(() => evaluateXPath("$unknown_var")).toThrow();
+  });
+
+  it("a partially-bound expression fails on the unbound reference, not masked by the bound one", () => {
+    expect(() =>
+      evaluateXPath("$bound_var + $unbound_var", {
+        variables: new Map([["bound_var", 1]]),
+      } as never),
+    ).toThrow(/unbound_var/);
   });
 });
