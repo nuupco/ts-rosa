@@ -342,6 +342,23 @@ export class FormEvaluator {
   }
 
   /**
+   * @experimental
+   * Fully clears the choice cache.
+   *
+   * Used by FormNavigator.deleteRepeat: after a repeat instance is removed,
+   * remaining sibling instances are re-indexed (shifted down), so a cache
+   * entry keyed by a concrete ref may now describe a DIFFERENT instance than
+   * the one it was computed for. getChoices' triggerSig check does not catch
+   * this when two instances happen to share the same trigger value(s), so an
+   * explicit full-clear is required for correctness. Full-clear (rather than
+   * subtree-scoped) is the simplest correct option and is consistent with the
+   * already-accepted full-DAG-rerun cost model for repeat removal.
+   */
+  invalidateChoiceCache(): void {
+    this.choiceCache.clear();
+  }
+
+  /**
    * Resolve a choice label for one itemset result node.
    *
    * This is the single coordination point between 5a (itext) and 5c (itemset).

@@ -38,8 +38,9 @@ import {
   parseAbsoluteRef,
   genericize,
   refEquals,
+  refToString,
 } from '../model/instance/TreeReference.ts';
-import { resolveReference, countRepeatInstances, addRepeatInstance } from '../model/instance/InstanceTree.ts';
+import { resolveReference, countRepeatInstances, addRepeatInstance, removeRepeatInstance } from '../model/instance/InstanceTree.ts';
 import { level } from '../model/instance/TreeReferenceLevel.ts';
 import { INDEX_TEMPLATE } from '../model/instance/multiplicity.ts';
 
@@ -674,6 +675,151 @@ export class FormNavigator {
 
     // Not at a repeat — no-op
     return this.eventAt(this.currentIndex);
+  }
+
+  /**
+   * @experimental
+   * Deletes the repeat instance referenced by `idx` (defaults to the current
+   * cursor) and returns the FormEntryEvent for the post-removal cursor
+   * position. Mirrors JavaRosa FormEntryController.deleteRepeat(FormIndex) /
+   * FormDef.deleteRepeat, composed from two existing, unchanged primitives:
+   *
+   *   1. removeRepeatInstance(tree, ref) — splices the instance and
+   *      re-indexes sibling multiplicities (data layer, unchanged).
+   *   2. evaluator.triggerRepeatRemoval(genericRef) — re-runs the DAG
+   *      cascade so relevant/required/calculate/constraint are recomputed
+   *      (unchanged; full-DAG-rerun cost is a known, accepted limitation).
+   *
+   * No new recomputation logic is introduced.
+   *
+   * Cursor re-mapping (design decision 3, JavaRosa-pinned): let `m` be the
+   * removed instance's multiplicity. The cursor is rebuilt via
+   * buildFormIndex + eventAt reclassification in every case, never reused
+   * as-is:
+   *   (a) cursor was AT or inside the removed instance (multiplicity === m)
+   *       -> truncated to the repeat level at multiplicity m (now the
+   *       shifted-down sibling, or empty -> PROMPT_NEW_REPEAT).
+   *   (b) cursor was in a later sibling (multiplicity > m) -> same logical
+   *       node, multiplicity decremented by 1 to track the re-index.
+   *   (c) cursor was in an earlier sibling, outside the repeat entirely, or
+   *       otherwise unrelated -> unchanged position, ref regenerated fresh.
+   *
+   * Throws (fail loudly, no silent no-op / soft-result object) when:
+   *   - idx is BOF/EOF (not resolvable)
+   *   - idx's path has no repeat ancestor
+   *   - the resolved repeat's countExpr is non-null (jr:count-bound; count
+   *     is engine-controlled, matches JavaRosa/Collect semantics)
+   *   - removeRepeatInstance returns null (out-of-range multiplicity / no
+   *     backing instance, e.g. a PROMPT_NEW_REPEAT slot)
+   * All validation throws happen BEFORE removeRepeatInstance / cascade /
+   * cache invalidation are called — no partial mutation on rejection.
+   *
+   * Zero XPath imports (firewall preserved) — reuses genericize, buildRef,
+   * buildFormIndex, elementAt, eventAt already available in this module.
+   */
+  deleteRepeat(idx?: FormIndex): FormEntryEvent {
+    const target = idx ?? this.currentIndex;
+    if (!isAt(target)) {
+      throw new Error(`deleteRepeat: index is not resolvable: ${target.kind}`);
+    }
+
+    const path = target.path;
+
+    // Leaf→root walk to find the innermost repeat level (mirrors jumpToNewRepeatPrompt).
+    let repeatLevel = -1;
+    for (let i = path.length - 1; i >= 0; i--) {
+      const el = this.elementAt(
+        path.slice(0, i + 1).map((l) => ({ elementIndex: l.elementIndex, multiplicity: l.multiplicity })),
+      );
+      if (el !== null && el.kind === 'repeat') {
+        repeatLevel = i;
+        break;
+      }
+    }
+    if (repeatLevel === -1) {
+      throw new Error(`deleteRepeat: index does not reference a repeat instance: ${refToString(target.ref)}`);
+    }
+
+    const levels: MutableLevel[] = path
+      .slice(0, repeatLevel + 1)
+      .map((l) => ({ elementIndex: l.elementIndex, multiplicity: l.multiplicity }));
+    const repeatRef = this.buildRef(levels);
+    const repeatElement = this.elementAt(levels); // known to be kind === 'repeat'
+
+    if (repeatElement !== null && repeatElement.kind === 'repeat' && repeatElement.countExpr != null) {
+      throw new Error(`deleteRepeat: repeat is count-bound (jr:count) and cannot be manually deleted: ${refToString(repeatRef)}`);
+    }
+
+    const removed = removeRepeatInstance(this.tree, repeatRef);
+    if (removed === null) {
+      throw new Error(`deleteRepeat: no repeat instance exists at index: ${refToString(repeatRef)}`);
+    }
+
+    this.evaluator.triggerRepeatRemoval(genericize(repeatRef));
+    this.evaluator.invalidateChoiceCache();
+
+    const removedMultiplicity = levels[levels.length - 1]!.multiplicity;
+    const newIndex = this.remapCursorAfterRemoval(levels, repeatLevel, removedMultiplicity);
+    this.currentIndex = newIndex;
+    return this.eventAt(newIndex);
+  }
+
+  /**
+   * Rebuild `this.currentIndex` after a repeat instance removal, per design
+   * decision 3 (cases a-d). ALWAYS rebuilds through buildFormIndex (never
+   * reuses the old immutable ref) and classifies via eventAt at the call
+   * site (deleteRepeat).
+   */
+  private remapCursorAfterRemoval(
+    removedAncestorLevels: readonly MutableLevel[],
+    repeatLevel: number,
+    removedMultiplicity: number,
+  ): FormIndex {
+    if (!isAt(this.currentIndex)) {
+      // BOF/EOF cursor is unaffected by a repeat removal elsewhere in the form.
+      return this.currentIndex;
+    }
+
+    const curPath = this.currentIndex.path;
+    const sameFamily = curPath.length > repeatLevel
+      && this.pathPrefixMatches(curPath, removedAncestorLevels, repeatLevel)
+      && curPath[repeatLevel]!.elementIndex === removedAncestorLevels[repeatLevel]!.elementIndex;
+
+    if (!sameFamily) {
+      // (c) unrelated — regenerate the ref fresh but keep the same logical position.
+      const unchangedLevels: MutableLevel[] = curPath.map((l) => ({ elementIndex: l.elementIndex, multiplicity: l.multiplicity }));
+      return this.buildFormIndex(unchangedLevels);
+    }
+
+    const curMultiplicity = curPath[repeatLevel]!.multiplicity;
+    if (curMultiplicity === removedMultiplicity) {
+      // (a) cursor was at/inside the removed instance — truncate to the repeat
+      // level at the same multiplicity slot (now the shifted sibling, or empty).
+      return this.buildFormIndex(removedAncestorLevels.map((l) => ({ ...l })));
+    }
+    if (curMultiplicity > removedMultiplicity) {
+      // (b) sibling after the removed one — same logical node, shifted down by 1.
+      const shiftedLevels: MutableLevel[] = curPath.map((l) => ({ elementIndex: l.elementIndex, multiplicity: l.multiplicity }));
+      shiftedLevels[repeatLevel]!.multiplicity -= 1;
+      return this.buildFormIndex(shiftedLevels);
+    }
+    // (c) sibling before the removed one — unaffected, regenerate ref fresh.
+    const unchangedLevels: MutableLevel[] = curPath.map((l) => ({ elementIndex: l.elementIndex, multiplicity: l.multiplicity }));
+    return this.buildFormIndex(unchangedLevels);
+  }
+
+  /** Returns true when curPath[0..upTo-1] equals ancestorLevels[0..upTo-1] (elementIndex + multiplicity). */
+  private pathPrefixMatches(
+    curPath: readonly FormIndexLevel[],
+    ancestorLevels: readonly MutableLevel[],
+    upTo: number,
+  ): boolean {
+    for (let i = 0; i < upTo; i++) {
+      if (curPath[i]!.elementIndex !== ancestorLevels[i]!.elementIndex || curPath[i]!.multiplicity !== ancestorLevels[i]!.multiplicity) {
+        return false;
+      }
+    }
+    return true;
   }
 
   // ---------------------------------------------------------------------------

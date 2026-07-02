@@ -22,7 +22,7 @@ import type { XFormsElement } from "./XFormsElement.ts";
 import type { AnswerValue } from "../../src/model/data/AnswerValue.ts";
 import type { FormDefinition } from "../../src/model/def/FormDefinition.ts";
 import { cast, stringValue } from "../../src/model/data/codecs.ts";
-import { parseAbsoluteRef, refToString, genericize } from "../../src/model/instance/TreeReference.ts";
+import { parseAbsoluteRef, refToString } from "../../src/model/instance/TreeReference.ts";
 import type { TreeReference } from "../../src/model/instance/TreeReference.ts";
 import type { PreloadProvider } from "../../src/session/PreloadProvider.ts";
 import { frozenPreloadProvider } from "../../src/session/PreloadProvider.ts";
@@ -32,7 +32,6 @@ const FIXTURES = resolve(dirname(fileURLToPath(import.meta.url)), '../fixtures')
 import {
   resolveReference,
   addRepeatInstance,
-  removeRepeatInstance,
   countRepeatInstances,
 } from "../../src/model/instance/InstanceTree.ts";
 import { parseForm } from "../../src/parse/XFormParser.ts";
@@ -512,15 +511,20 @@ export class Scenario {
     return this;
   }
 
+  /**
+   * Removes the repeat instance at `xPath`. Delegates to the public
+   * FormNavigator.deleteRepeat API (sdd/repeat-removal-wiring, task T6):
+   * resolve the instance's FormIndex via navigator.indexOf, then call
+   * navigator.deleteRepeat(idx), which composes removeRepeatInstance +
+   * triggerRepeatRemoval + choiceCache invalidation + cursor re-mapping.
+   */
   removeRepeat(xPath: string): Scenario {
-    const ref = parseAbsoluteRef(xPath);
-    const removed = removeRepeatInstance(this.def.mainInstance, ref);
-    if (removed === null) throw new Error(`removeRepeat: could not remove instance at ${xPath}`);
-
-    if (this.def.dag !== null) {
-      // Trigger cascade on the generic ref so count() etc. update
-      const genericRef = genericize(ref);
-      this.session.evaluator.triggerRepeatRemoval(genericRef);
+    const idx = this.session.navigator.indexOf(xPath);
+    try {
+      this.session.navigator.deleteRepeat(idx);
+    } catch (e) {
+      // Preserve the pre-migration error contract for existing callers.
+      throw new Error(`removeRepeat: could not remove instance at ${xPath}`);
     }
     return this;
   }
