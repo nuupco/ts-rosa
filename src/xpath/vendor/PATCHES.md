@@ -212,6 +212,36 @@ is unchanged.
 
 ---
 
+## Patch 12 — VariableReference ($name) support
+
+**Files**:
+- `src/xpath/vendor/xpath/static/grammar/SyntaxNode.ts`
+- `src/xpath/vendor/xpath/evaluator/expression/factory.ts`
+- `src/xpath/vendor/xpath/error/UnboundVariableError.ts` (new)
+- `src/xpath/vendor/xpath/evaluator/expression/VariableReferenceExpressionEvaluator.ts` (new)
+
+**Applied in**: xpath-variable-references change
+
+**Change**:
+- Added `VariableReferenceNode` to the `FilterExprNodes`/`AnyExprNode` type
+  unions in `SyntaxNode.ts` (purely additive).
+- Added a `variable_reference` case to the expression factory switch in
+  `factory.ts`, dispatching to a new `VariableReferenceExpressionEvaluator`.
+- Added `UnboundVariableError` (extends `JRCompatibleError`) and
+  `VariableReferenceExpressionEvaluator`, which resolves `$name` against a
+  module-level active-variable slot (`src/xpath/evaluator/VariableScope.ts`,
+  outside vendor/) rather than the upstream `EvaluationContext`'s own
+  variable-binding mechanism, which is marked broken upstream.
+
+**Reason**: Upstream's own VariableReference handling is non-functional; ts-rosa
+implements read-side XPath 1.0 `$name` support independently to avoid
+inheriting upstream's broken variable-binding code, while still needing to
+route the AST node type and expression-factory dispatch through the vendored
+grammar/factory layer. All changes are additive; no existing case routing or
+type is altered.
+
+---
+
 ## Native shims (Phase 5 PREREQ — commit b1cebc4)
 
 **Files**: `src/xpath/functions/instance-fn.ts`, `src/xpath/functions/itext-fn.ts`
