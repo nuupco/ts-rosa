@@ -185,7 +185,22 @@ function questionHandler(el: Element, ctx: BuildCtx): FormElement {
     }
   }
 
-  return { kind: 'question', ref, controlType, binding, labelText, labelInnerText: innerText, choices, itemset, appearance, mediatype, hintText, rangeStart, rangeEnd, rangeStep };
+  return {
+    kind: 'question',
+    ref,
+    controlType,
+    binding,
+    labelText,
+    labelInnerText: innerText,
+    choices,
+    itemset,
+    appearance,
+    mediatype,
+    hintText,
+    ...(rangeStart !== undefined ? { rangeStart } : {}),
+    ...(rangeEnd !== undefined ? { rangeEnd } : {}),
+    ...(rangeStep !== undefined ? { rangeStep } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------
