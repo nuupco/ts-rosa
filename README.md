@@ -6,12 +6,29 @@
 
 `@nuup/ts-rosa` is a pure TypeScript XForms engine that parses ODK XForms XML and runs them programmatically. It's a faithful port of JavaRosa (the engine that powers ODK Collect, Enketo, and ODK Central), designed for React Native / Hermes.
 
-**1016 tests. Zero runtime dependencies.** No DOM, no WASM, no Node-specific APIs.
+**1073+ tests.** No DOM, no WASM, no Node-specific APIs. Runtime dependencies are limited to `@xmldom/xmldom`, `crypto-js`, and `temporal-polyfill` — the same three packages are declared under `dependencies` and marked `external` in the build, so they resolve from your project's `node_modules` instead of being duplicated inside the bundle.
 
 ## Quick Start
 
 ```bash
 npm install @nuup/ts-rosa
+```
+
+Register an `XmlParser` provider once at bootstrap (the engine never calls
+`new DOMParser()` internally — see [Platform Setup](#platform-setup)):
+
+```ts
+import { registerXmlParser } from '@nuup/ts-rosa';
+import { DOMParser, DOMImplementation } from '@xmldom/xmldom';
+
+registerXmlParser({
+  parse(xml) {
+    return new DOMParser().parseFromString(xml, 'text/xml');
+  },
+  createDocument(rootTagName) {
+    return new DOMImplementation().createDocument(null, rootTagName, null);
+  },
+});
 ```
 
 ```ts
@@ -62,6 +79,23 @@ XForm XML
 | Validation (required + constraint sweep) | ✅ |
 
 See [docs/XLSFORM-COVERAGE.md](docs/XLSFORM-COVERAGE.md) for detailed column mapping.
+
+## Platform Setup
+
+`ts-rosa` never imports DOM/WASM/Node globals directly — consumers wire an
+environment-specific provider through two seams at bootstrap, before parsing
+or evaluating any form:
+
+| Export | Description |
+|--------|-------------|
+| `registerXmlParser(provider)` | Register the `XmlParser` used for `parse()` and, if implemented, stub-document creation for context-free XPath evaluation. |
+| `getXmlParser()` | Retrieve the registered provider. Throws a clear error if called before `registerXmlParser`. |
+| `registerPlatformConfig({ timeZoneId })` | Optional. Overrides the IANA time zone (default `"UTC"`) used by date/time-dependent XPath evaluation — call before any XPath evaluation runs. |
+
+`XmlParser.createDocument(rootTagName)` is optional but required in practice:
+the XPath seam needs a stub document when evaluating expressions without a
+context node, and throws a descriptive error if the registered provider
+doesn't implement it.
 
 ## API Reference
 
@@ -121,7 +155,8 @@ See [docs/XLSFORM-COVERAGE.md](docs/XLSFORM-COVERAGE.md) for detailed column map
 
 ```bash
 bun install
-bun run test        # 1016 tests
+bun run test        # unit + equivalence suite
+bun run test:e2e    # builds dist/ then runs the published-entry-point E2E test
 bun run typecheck   # strict TypeScript
 bun run build       # tsup → dist/
 ```
