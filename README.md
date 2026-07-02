@@ -70,6 +70,68 @@ Semantics:
 `hydrateInstance(definition, instanceXml)` is also exported standalone for
 building an `InstanceTree` without going through `createFormSession`.
 
+## External Secondary Instances (`jr://file-csv/*.csv`)
+
+Forms may declare a secondary instance whose content lives outside the form
+XML, referenced by a `jr://` URI:
+
+```xml
+<instance id="cities" src="jr://file-csv/cities.csv"/>
+```
+
+`parseForm` stays synchronous and never does I/O: it records `{ id, src }`
+markers on `FormDefinition.externalInstances` instead of loading content.
+Hydration is a separate, explicit async step the host calls before creating
+a session:
+
+```ts
+import {
+  parseForm,
+  registerExternalInstanceResolver,
+  resolveExternalInstances,
+  createFormSession,
+} from '@nuup/ts-rosa';
+
+// 1. Register a resolver once at bootstrap — the engine never fetches files
+//    or network resources itself.
+registerExternalInstanceResolver({
+  async resolve(uri) {
+    // e.g. read from the form's media attachments folder
+    return readCsvFile(uri);
+  },
+});
+
+// 2. Parse (sync, pure — no I/O yet)
+const def = parseForm(formXml);
+
+// 3. Hydrate external instances (async — fetches + parses CSV)
+const resolved = await resolveExternalInstances(def);
+
+// 4. Create the session as usual, from the resolved definition
+const session = createFormSession(resolved);
+```
+
+CSV content is parsed into the exact same `root`/`item`/`{column}` shape as
+an inline secondary instance, so `instance()`, `pulldata()`, `search()`, and
+`<itemset>` all work with **zero changes** — a CSV-hydrated instance is
+indistinguishable in shape from an equivalent inline one.
+
+**Fail-loud behavior:**
+
+- `getExternalInstanceResolver()` throws if no resolver was registered.
+- A rejecting `resolve()` call throws `resolveExternalInstances: failed to resolve external instance '<id>' (<src>): <cause>`.
+- Malformed CSV throws `resolveExternalInstances: external instance '<id>' (<src>) has malformed CSV: <detail>`.
+- Calling `createFormSession(def)` with a declared-but-unresolved external instance throws `createFormSession: external instance '<id>' is declared but not resolved. Call resolveExternalInstances(definition) before createFormSession().` — this prevents an unresolved external from silently behaving as an absent/empty instance.
+
+**Out of scope (deferred, not implemented):**
+
+- XML-shaped externals (`jr://file/*.xml`) — parser detection is
+  src-format-agnostic (it records the URI regardless of extension), but only
+  CSV content-parsing exists today. Adding XML support is a hydration-layer
+  extension, not a parser change.
+- Last-saved instances (`jr://instance/last-saved`) — no plumbing exists for
+  this source yet.
+
 ## Architecture
 
 ```
@@ -111,6 +173,8 @@ or evaluating any form:
 | `registerXmlParser(provider)` | Register the `XmlParser` used for `parse()` and, if implemented, stub-document creation for context-free XPath evaluation. |
 | `getXmlParser()` | Retrieve the registered provider. Throws a clear error if called before `registerXmlParser`. |
 | `registerPlatformConfig({ timeZoneId })` | Optional. Overrides the IANA time zone (default `"UTC"`) used by date/time-dependent XPath evaluation — call before any XPath evaluation runs. |
+| `registerExternalInstanceResolver(provider)` | Optional — only required for forms using `jr://` external secondary instances. Register the resolver used by `resolveExternalInstances()` to fetch raw external instance content. See [External Secondary Instances](#external-secondary-instances-jrfile-csvcsv). |
+| `getExternalInstanceResolver()` | Retrieve the registered provider. Throws a clear error if called before `registerExternalInstanceResolver`. |
 
 `XmlParser.createDocument(rootTagName)` is optional but required in practice:
 the XPath seam needs a stub document when evaluating expressions without a
@@ -124,6 +188,7 @@ doesn't implement it.
 | Export | Description |
 |--------|-------------|
 | `parseForm(xml: string)` | Parse XForm XML → `FormDefinition` |
+| `resolveExternalInstances(def)` | Async. Fetches and parses declared `jr://` external secondary instances (via the registered `ExternalInstanceResolver`), returning a new `FormDefinition` with them merged into `secondaryInstances`. See [External Secondary Instances](#external-secondary-instances-jrfile-csvcsv). |
 
 ### Session
 

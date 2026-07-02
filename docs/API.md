@@ -19,6 +19,69 @@ const def = parseForm(xmlString);
 // def.dag         — TriggerableDag | null (null for forms without bindings)
 ```
 
+### `resolveExternalInstances(def): Promise<FormDefinition>`
+
+Fetches and parses `jr://` external secondary instances declared on
+`def.externalInstances` (e.g. `<instance id="cities" src="jr://file-csv/cities.csv"/>`),
+merging the result into `secondaryInstances`. `parseForm` itself stays
+synchronous/pure and never does I/O — this is the only async, host-I/O-driven
+step in the pipeline.
+
+```ts
+import {
+  parseForm,
+  registerExternalInstanceResolver,
+  resolveExternalInstances,
+  createFormSession,
+} from '@nuup/ts-rosa';
+
+registerExternalInstanceResolver({
+  resolve: (uri) => fetchCsvText(uri), // returns Promise<string>
+});
+
+const def = parseForm(xmlString);
+const resolved = await resolveExternalInstances(def);
+const session = createFormSession(resolved);
+```
+
+CSV content is parsed into the same `root`/`item`/`{column}` shape as inline
+secondary instances, so `instance()`, `pulldata()`, `search()`, and
+`<itemset>` resolve identically with no special-casing.
+
+Call order matters: `parseForm` → `registerExternalInstanceResolver` (once,
+at bootstrap) → `resolveExternalInstances` → `createFormSession`.
+
+Fail-loud error contract:
+
+| Condition | Error |
+|-----------|-------|
+| No resolver registered | `ExternalInstanceResolver provider is not registered. Call registerExternalInstanceResolver() before resolving external instances.` |
+| `resolve()` rejects | `resolveExternalInstances: failed to resolve external instance '<id>' (<src>): <cause>` |
+| Malformed CSV | `resolveExternalInstances: external instance '<id>' (<src>) has malformed CSV: <detail>` |
+| `createFormSession` called with an unresolved external instance still declared | `createFormSession: external instance '<id>' is declared but not resolved. Call resolveExternalInstances(definition) before createFormSession().` |
+
+`def.externalInstances` is a `ReadonlyMap<string, { src: string }>` of
+declared-but-not-yet-resolved external instances; `resolveExternalInstances`
+returns a new `FormDefinition` and never mutates the one it's given.
+
+**Out of scope / deferred:**
+
+- `jr://file/*.xml` (XML-shaped externals) — the parser records the `src`
+  URI regardless of extension, but only CSV content-parsing is implemented.
+- `jr://instance/last-saved` — not implemented.
+
+### `registerExternalInstanceResolver(provider)` / `getExternalInstanceResolver()`
+
+```ts
+interface ExternalInstanceResolver {
+  resolve(uri: string): Promise<string>; // raw UTF-8 file text
+}
+```
+
+Environment-injection seam (mirrors `registerXmlParser`/`getXmlParser`
+exactly). The engine never fetches files or performs network I/O directly;
+hosts register a provider that does, before calling `resolveExternalInstances`.
+
 ## Session
 
 ### `createFormSession(def, opts?): FormSession`

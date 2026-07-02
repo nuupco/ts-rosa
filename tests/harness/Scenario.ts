@@ -171,6 +171,23 @@ export class Scenario {
     return notImplemented("createFormDef");
   }
 
+  /**
+   * Initializes a Scenario from an already-parsed (and, e.g., externally
+   * hydrated) FormDefinition, instead of re-parsing XML.
+   *
+   * ts-rosa-original — no direct JavaRosa counterpart. Added for
+   * sdd/external-secondary-instances so integration tests can call
+   * `resolveExternalInstances(def)` before wiring up a Scenario, without
+   * needing a second raw-XML entry point.
+   */
+  static fromDefinition(def: FormDefinition, opts?: { preloadProvider?: PreloadProvider }): Scenario {
+    const provider = opts?.preloadProvider ?? frozenPreloadProvider();
+    const s = new Scenario();
+    s.def = def;
+    s.session = createFormSession(def, { preloadProvider: provider });
+    return s;
+  }
+
   // -------------------------------------------------------------------------
   // Constructor (non-throwing — allows new Scenario() for test setup)
   // -------------------------------------------------------------------------

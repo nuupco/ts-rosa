@@ -80,6 +80,19 @@ export function createFormSession(
   definition: FormDefinition,
   opts?: CreateFormSessionOpts,
 ): FormSession {
+  // Fail-loud guard (sdd/external-secondary-instances, spec R4): a declared
+  // external instance must be hydrated via resolveExternalInstances(def)
+  // before a session is created, or XPath consumers would silently see it
+  // as absent. Forms with no externalInstances are unaffected (no-op loop).
+  for (const id of definition.externalInstances.keys()) {
+    if (!definition.secondaryInstances.has(id)) {
+      throw new Error(
+        `createFormSession: external instance '${id}' is declared but not resolved. ` +
+          'Call resolveExternalInstances(definition) before createFormSession().',
+      );
+    }
+  }
+
   const provider = opts?.preloadProvider ?? defaultPreloadProvider;
 
   const tree =

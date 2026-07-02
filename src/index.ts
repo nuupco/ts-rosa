@@ -13,3 +13,4 @@ export {
   getExternalInstanceResolver,
   type ExternalInstanceResolver,
 } from './platform/ExternalInstanceResolver.ts';
+export { resolveExternalInstances } from './parse/resolveExternalInstances.ts';
