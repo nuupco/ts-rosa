@@ -12,3 +12,4 @@ export { isBof, isEof, isAt, beginningOfForm, endOfForm, atIndex } from './FormI
 export type { PreloadProvider } from './PreloadProvider.ts';
 export { defaultPreloadProvider, frozenPreloadProvider } from './PreloadProvider.ts';
 export type { FrozenPreloadOptions } from './PreloadProvider.ts';
+export { hydrateInstance, HydrationError } from '../model/instance/InstanceHydrator.ts';

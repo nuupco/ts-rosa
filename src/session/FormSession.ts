@@ -15,6 +15,7 @@ import { serializeInstance } from '../model/instance/InstanceSerializer.ts';
 import type { PreloadProvider } from './PreloadProvider.ts';
 import { defaultPreloadProvider } from './PreloadProvider.ts';
 import { applyPreloads } from './preload/applyPreloads.ts';
+import { hydrateInstance } from '../model/instance/InstanceHydrator.ts';
 
 export interface FormSession {
   /** The full form definition (immutable defs + compiled bindings + DAG). */
@@ -46,6 +47,19 @@ export interface FormSession {
 export interface CreateFormSessionOpts {
   /** Injectable preload provider. Defaults to defaultPreloadProvider (live wall-clock). */
   preloadProvider?: PreloadProvider;
+  /**
+   * Previously-submitted ODK instance XML to hydrate the session from, for
+   * editing an existing submission (sdd/instance-editing-hydration).
+   *
+   * Additive, opt-in: when absent, session creation is 100% unchanged from
+   * the template-defaults path. When present, the session's working tree is
+   * built via `hydrateInstance(definition, instanceXml)` instead of using
+   * `definition.mainInstance` directly, and `applyPreloads` is skipped
+   * (ADR-C) so original submission timestamps/uids are preserved. The DAG
+   * cascade still runs unconditionally afterwards (calculate always wins
+   * over loaded values, per design decision 1).
+   */
+  instanceXml?: string;
 }
 
 /**
@@ -56,6 +70,11 @@ export interface CreateFormSessionOpts {
  *
  * Phase 7: applyPreloads runs BEFORE initializeInstance so preloaded
  * dates/uids are visible to calculate expressions (T-VAL-2 ordering).
+ *
+ * sdd/instance-editing-hydration: when `opts.instanceXml` is provided, the
+ * working tree is hydrated from it instead of using `definition.mainInstance`
+ * directly, and `applyPreloads` is skipped (ADR-C). When absent, behavior is
+ * unchanged from before this change.
  */
 export function createFormSession(
   definition: FormDefinition,
@@ -63,30 +82,41 @@ export function createFormSession(
 ): FormSession {
   const provider = opts?.preloadProvider ?? defaultPreloadProvider;
 
-  const evaluator = new FormEvaluator(definition.mainInstance, {
+  const tree =
+    opts?.instanceXml !== undefined
+      ? hydrateInstance(definition, opts.instanceXml)
+      : definition.mainInstance;
+
+  const evaluator = new FormEvaluator(tree, {
     itext: definition.itext ?? null,
     secondaryInstances: definition.secondaryInstances,
     body: definition.body,
   });
 
-  // Phase 7: apply preloads BEFORE cascade so calculates can reference them
-  applyPreloads(definition.mainInstance, provider);
+  // Phase 7: apply preloads BEFORE cascade so calculates can reference them.
+  // ADR-C: skipped on the hydration path so loaded preload values (e.g.
+  // original submission timestamps/uids) are not clobbered.
+  if (opts?.instanceXml === undefined) {
+    applyPreloads(tree, provider);
+  }
 
   // Slice 3.4: evaluate all Recalculates in DAG order (initial steady state)
   // Slice 3.6: also pass constraint bindings for validation
+  // Runs unconditionally on both paths: calculate always wins over loaded
+  // values when relevant (design decision 1) — no special-casing here.
   if (definition.dag !== null) {
     evaluator.initializeInstance(definition.dag, definition.constraintBindings);
   }
 
-  const navigator = new FormNavigator(definition, definition.mainInstance, evaluator);
+  const navigator = new FormNavigator(definition, tree, evaluator);
 
   return {
     definition,
-    tree: definition.mainInstance,
+    tree,
     evaluator,
     navigator,
     serializeToXml: () =>
-      serializeInstance(definition.mainInstance, {
+      serializeInstance(tree, {
         isRelevant: (node) => evaluator.isNodeRelevant(node),
       }),
   };
