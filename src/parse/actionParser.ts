@@ -31,8 +31,8 @@ const sharedParser = new PureJSExpressionParser();
  * Resolves a `<setvalue ref="...">` attribute to an absolute TreeReference.
  *
  * v1 scope: only absolute refs (starting with '/') and simple host-relative
- * refs (a bare relative path, no `..` parent navigation, resolved by
- * appending to the host control's parent ref) are supported. Anything else
+ * refs (a bare relative path, no `..` parent navigation, resolved as a child
+ * of the host control's own ref) are supported. Anything else
  * (relative refs with no host context, or refs using `..` navigation) would
  * require repeat-instance-aware resolution that FormDefinition — a static,
  * parse-time record — cannot express, so it is rejected fail-loud.
@@ -56,11 +56,13 @@ function resolveTargetRef(rawRef: string, hostRef: TreeReference | null, sourceL
     );
   }
 
-  // Host-relative: resolve by taking the host's parent path and appending the
-  // relative segments (no repeat-instance resolution needed for a bare path).
+  // Host-relative: resolve by appending the relative segments to the host's
+  // own path (standard XForms/XPath relative-path semantics evaluate a
+  // relative ref against the context node itself, i.e. as a child of the
+  // host, not a sibling of it — no repeat-instance resolution needed for a
+  // bare path).
   const hostPath = hostRef.levels.map((lvl) => lvl.name).join('/');
-  const parentPath = hostRef.levels.slice(0, -1).map((lvl) => lvl.name).join('/');
-  const base = parentPath.length > 0 ? `/${parentPath}` : (hostPath.length > 0 ? '/' : '');
+  const base = hostPath.length > 0 ? `/${hostPath}` : '';
   return parseAbsoluteRef(`${base}/${rawRef}`);
 }
 

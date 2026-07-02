@@ -389,6 +389,35 @@ describe("setvalue action parsing", () => {
   });
 });
 
+describe("setvalue action parsing: host-relative ref resolution", () => {
+  it("resolves a bare relative ref nested in a group as a child of the group's own node (not the group's parent)", () => {
+    const def = parseForm(
+      html(
+        head(
+          model(
+            mainInstance(t('data id="svhostrel"', t("g", t("a"), t("b")))),
+            bind("/data/g/a").type("string"),
+            bind("/data/g/b").type("string")
+          )
+        ),
+        body(
+          t(
+            'group ref="/data/g"',
+            input("/data/g/a"),
+            t('setvalue event="xforms-value-changed" ref="b" value="1"')
+          )
+        )
+      ).asXml()
+    );
+    expect(def.actions).toHaveLength(1);
+    const target = def.actions[0]!.target;
+    const targetPath = target.levels.map((l) => l.name).join("/");
+    // Child-of-host resolution: relative ref "b" under host /data/g resolves
+    // to /data/g/b, NOT /data/b (sibling-of-host, which would be wrong).
+    expect(targetPath).toBe("data/g/b");
+  });
+});
+
 describe("setvalue action parsing: fail-loud on unsupported event", () => {
   it("throws naming the unsupported event and ref for a single unsupported event", () => {
     const xml = html(
@@ -445,6 +474,21 @@ describe("setvalue action parsing: fail-loud on unsupported event", () => {
       body(input("/data/a"))
     ).asXml();
     expect(() => parseForm(xml)).toThrow(/odk-new-repeat/);
+  });
+
+  it("throws when multiple space-separated events are all individually valid but distinct (fail-loud, not silently picking one)", () => {
+    const xml = html(
+      head(
+        model(
+          mainInstance(t('data id="svmultivalid"', t("a"))),
+          bind("/data/a").type("string"),
+          t('setvalue event="odk-instance-first-load xforms-value-changed" ref="/data/a" value="1"')
+        )
+      ),
+      body(input("/data/a"))
+    ).asXml();
+    expect(() => parseForm(xml)).toThrow(/multiple events/);
+    expect(() => parseForm(xml)).toThrow(/odk-instance-first-load xforms-value-changed/);
   });
 });
 
