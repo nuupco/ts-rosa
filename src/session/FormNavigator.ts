@@ -519,6 +519,7 @@ export class FormNavigator {
     const resolved = this.resolvePath(target.path);
     if (resolved === null || resolved.element.kind !== 'question') return null;
     const element = resolved.element;
+    const contextRef = resolved.ref;
     const evaluator = this.evaluator;
     return {
       getLabelInnerText(): string | null {
@@ -534,33 +535,41 @@ export class FormNavigator {
         return element.hintText ?? null;
       },
       /**
-       * @experimental output-label-substitution PR1
        * Resolves the question label through itext (when driven by
        * <label ref="jr:itext('id')"/>) in the currently active language,
-       * falling back to the raw label text otherwise.
-       * NOTE: does NOT yet perform <output> placeholder substitution — that
-       * lands in a later slice (parse-time output capture + evaluator wiring).
+       * falling back to the raw label placeholder template otherwise, then
+       * substitutes every <output> placeholder against the current instance
+       * data using this question's own context node (repeat-relative
+       * outputs resolve per-instance). Evaluated fresh on every read — no
+       * caching (JavaRosa FormEntryPrompt#getQuestionText parity).
+       * Added in output-label-substitution PR1 (itext-only); extended with
+       * substitution in PR3.
        */
       getQuestionText(): string | null {
         if (element.labelItextId != null) {
-          const resolved = evaluator.resolveItext(element.labelItextId);
-          if (resolved !== null) return resolved;
+          const resolved = evaluator.resolveItextWithOutputs(element.labelItextId);
+          if (resolved !== null) {
+            return evaluator.substituteText(resolved.text, resolved.outputs, contextRef);
+          }
         }
-        return element.labelInnerText;
+        return evaluator.substituteText(element.labelInnerText, element.labelOutputs ?? [], contextRef);
       },
       /**
-       * @experimental output-label-substitution PR1
        * Resolves the question hint through itext (when driven by
        * <hint ref="jr:itext('id')"/>) in the currently active language,
-       * falling back to the raw hint text otherwise.
-       * NOTE: does NOT yet perform <output> placeholder substitution.
+       * falling back to the raw hint placeholder template otherwise, then
+       * substitutes every <output> placeholder the same way as
+       * getQuestionText(). Added in output-label-substitution PR1
+       * (itext-only); extended with substitution in PR3.
        */
       getSubstitutedHintText(): string | null {
         if (element.hintItextId != null) {
-          const resolved = evaluator.resolveItext(element.hintItextId);
-          if (resolved !== null) return resolved;
+          const resolved = evaluator.resolveItextWithOutputs(element.hintItextId);
+          if (resolved !== null) {
+            return evaluator.substituteText(resolved.text, resolved.outputs, contextRef);
+          }
         }
-        return element.hintText ?? null;
+        return evaluator.substituteText(element.hintInnerText ?? element.hintText ?? null, element.hintOutputs ?? [], contextRef);
       },
       getRangeBounds(): { start?: number; end?: number; step?: number } | null {
         if (element.rangeStart === undefined && element.rangeEnd === undefined && element.rangeStep === undefined) {

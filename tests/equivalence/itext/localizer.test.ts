@@ -336,3 +336,188 @@ describe('Phase 1 — question label/hint itext wiring', () => {
     expect(question!.getHintText()).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3 — read-time output substitution (PR3)
+//
+// Wires FormEvaluator.substituteText into getQuestionText() /
+// getSubstitutedHintText(), for both plain labels/hints and itext-driven
+// ones, using the parse-time labelOutputs/hintOutputs/ItextValue.outputs
+// captured in PR2. Reuses evaluateRelativeOnNode (no new eval engine).
+// original ts-rosa behavioral tests (no direct JavaRosa counterpart).
+// ---------------------------------------------------------------------------
+
+function formWithPlainOutput(labelBody: string, hintBody = ''): string {
+  return `<?xml version="1.0"?>
+<h:html xmlns="http://www.w3.org/2002/xforms"
+        xmlns:h="http://www.w3.org/1999/xhtml">
+  <h:head>
+    <h:title>Plain Output</h:title>
+    <model>
+      <instance>
+        <data id="plain-output">
+          <name/>
+          <q1/>
+        </data>
+      </instance>
+      <bind nodeset="/data/q1" type="string"/>
+    </model>
+  </h:head>
+  <h:body>
+    <input ref="/data/name"><label>Name</label></input>
+    <input ref="/data/q1">${labelBody}${hintBody}</input>
+  </h:body>
+</h:html>`;
+}
+
+describe('Phase 3 — output substitution', () => {
+  it('getQuestionText() substitutes a single output in a plain label', () => {
+    const xml = formWithPlainOutput('<label>Hello, <output value="/data/name"/></label>');
+    const scenario = Scenario.init(xml);
+    scenario.answer('/data/name', 'Ana');
+    scenario.next('/data/q1');
+    const q = scenario.getQuestionAtIndex();
+    expect(q).not.toBeNull();
+    expect(q!.getQuestionText()).toBe('Hello, Ana');
+    // Raw accessor keeps the placeholder.
+    expect(q!.getLabelInnerText()).toBe('Hello, ${0}');
+  });
+
+  it('getSubstitutedHintText() substitutes a single output in a plain hint', () => {
+    const xml = formWithPlainOutput(
+      '<label>Q1</label>',
+      '<hint>Value is <output value="/data/name"/></hint>',
+    );
+    const scenario = Scenario.init(xml);
+    scenario.answer('/data/name', '42');
+    scenario.next('/data/q1');
+    const q = scenario.getQuestionAtIndex();
+    expect(q).not.toBeNull();
+    expect(q!.getSubstitutedHintText()).toBe('Value is 42');
+    // Raw getHintText() is unaffected by this feature — it predates
+    // hintInnerText/hintOutputs and uses plain textContent semantics.
+    expect(q!.getHintText()).toBe('Value is');
+  });
+
+  it('getQuestionText() substitutes multiple outputs in document order', () => {
+    const xml = `<?xml version="1.0"?>
+<h:html xmlns="http://www.w3.org/2002/xforms"
+        xmlns:h="http://www.w3.org/1999/xhtml">
+  <h:head>
+    <h:title>Multi Output</h:title>
+    <model>
+      <instance>
+        <data id="multi-output">
+          <first_name/>
+          <last_name/>
+          <q1/>
+        </data>
+      </instance>
+      <bind nodeset="/data/q1" type="string"/>
+    </model>
+  </h:head>
+  <h:body>
+    <input ref="/data/first_name"><label>First</label></input>
+    <input ref="/data/last_name"><label>Last</label></input>
+    <input ref="/data/q1"><label>Full name: <output value="/data/first_name"/> <output value="/data/last_name"/></label></input>
+  </h:body>
+</h:html>`;
+    const scenario = Scenario.init(xml);
+    scenario.answer('/data/first_name', 'Ada');
+    scenario.answer('/data/last_name', 'Lovelace');
+    scenario.next('/data/q1');
+    const q = scenario.getQuestionAtIndex();
+    expect(q!.getQuestionText()).toBe('Full name: Ada Lovelace');
+  });
+
+  it('substituted value reflects updated instance data on next read (no caching)', () => {
+    const xml = formWithPlainOutput('<label>Hello, <output value="/data/name"/></label>');
+    const scenario = Scenario.init(xml);
+    scenario.answer('/data/name', 'Ana');
+    scenario.next('/data/q1');
+    const q = scenario.getQuestionAtIndex();
+    expect(q!.getQuestionText()).toBe('Hello, Ana');
+    scenario.answer('/data/name', 'Beto');
+    expect(q!.getQuestionText()).toBe('Hello, Beto');
+  });
+
+  it('output referencing a non-existent node substitutes as empty string', () => {
+    const xml = formWithPlainOutput('<label>Hello, <output value="/data/missing"/></label>');
+    const scenario = Scenario.init(xml);
+    scenario.next('/data/q1');
+    const q = scenario.getQuestionAtIndex();
+    expect(q!.getQuestionText()).toBe('Hello, ');
+  });
+
+  it('output with a malformed XPath expression resolves to empty string without throwing', () => {
+    const xml = formWithPlainOutput('<label>Hello, <output value="((("/></label>');
+    const scenario = Scenario.init(xml);
+    expect(() => scenario.next('/data/q1')).not.toThrow();
+    const q = scenario.getQuestionAtIndex();
+    expect(() => q!.getQuestionText()).not.toThrow();
+    expect(q!.getQuestionText()).toBe('Hello, ');
+  });
+
+  it('itext-driven label substitutes outputs against the currently active language template', () => {
+    const xml = formWithItext(
+      `<translation lang="en">
+         <text id="q1:label"><value>Hello, <output value="/data/fruit"/></value></text>
+       </translation>
+       <translation lang="es">
+         <text id="q1:label"><value>Hola, <output value="/data/fruit"/></value></text>
+       </translation>`,
+      `<input ref="/data/fruit"><label>Fruit</label></input>
+       <input ref="/data/q1"><label ref="jr:itext('q1:label')"/></input>`,
+    );
+    const scenario = Scenario.init(xml);
+    scenario.answer('/data/fruit', 'apple');
+    scenario.next('/data/q1');
+    const q = scenario.getQuestionAtIndex();
+    expect(q!.getQuestionText()).toBe('Hello, apple');
+
+    scenario.setLanguage('es');
+    expect(q!.getQuestionText()).toBe('Hola, apple');
+  });
+
+  it('repeat-relative output resolves against the current repeat instance, not the primary root', () => {
+    const xml = `<?xml version="1.0"?>
+<h:html xmlns="http://www.w3.org/2002/xforms"
+        xmlns:h="http://www.w3.org/1999/xhtml"
+        xmlns:jr="http://openrosa.org/javarosa">
+  <h:head>
+    <h:title>Repeat Output</h:title>
+    <model>
+      <instance>
+        <data id="repeat-output">
+          <rep jr:template="">
+            <name/>
+            <greeting/>
+          </rep>
+        </data>
+      </instance>
+      <bind nodeset="/data/rep/name" type="string"/>
+      <bind nodeset="/data/rep/greeting" type="string"/>
+    </model>
+  </h:head>
+  <h:body>
+    <repeat nodeset="/data/rep">
+      <input ref="/data/rep/name"><label>Name</label></input>
+      <input ref="/data/rep/greeting"><label>Hi <output value="../name"/></label></input>
+    </repeat>
+  </h:body>
+</h:html>`;
+    const scenario = Scenario.init(xml);
+    scenario.createNewRepeat('/data/rep');
+    scenario.createNewRepeat('/data/rep');
+    scenario.answer('/data/rep[1]/name', 'Ana');
+    scenario.answer('/data/rep[2]/name', 'Beto');
+
+    scenario.next('/data/rep[1]/greeting');
+    const first = scenario.getQuestionAtIndex();
+    expect(first!.getQuestionText()).toBe('Hi Ana');
+
+    scenario.next('/data/rep[2]/greeting');
+    const second = scenario.getQuestionAtIndex();
+    expect(second!.getQuestionText()).toBe('Hi Beto');
+  });
+});

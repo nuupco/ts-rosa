@@ -203,6 +203,68 @@ export class FormEvaluator {
     return this.itextResolver?.resolve(id) ?? null;
   }
 
+  /**
+   * Resolve an itext id to its {text, outputs} pair in the active language.
+   * Returns null when the id is absent in all languages, or when the form
+   * has no itext. Added in output-label-substitution PR3.
+   */
+  resolveItextWithOutputs(id: string): { text: string; outputs: readonly string[] } | null {
+    return this.itextResolver?.resolveWithOutputs(id) ?? null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // output-label-substitution PR3 — read-time <output> substitution
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Replace each `${n}` placeholder in `template` with the string result of
+   * evaluating `outputs[n]` against `node` (the question's context node).
+   * Reuses the same relative-context XPath evaluator as itemset value/label
+   * resolution (evaluateRelativeOnNode) — no new evaluation mechanism.
+   *
+   * Invalid/empty XPath results substitute as an empty string (JavaRosa
+   * parity for FormEntryPrompt#substituteStringArgs); evaluation errors are
+   * caught and never propagate to the caller.
+   */
+  private substituteOutputs(
+    template: string,
+    outputs: readonly string[],
+    node: InstanceXPathNode,
+  ): string {
+    if (outputs.length === 0) return template;
+    return template.replace(/\$\{(\d+)\}/g, (_match, idxStr: string) => {
+      const output = outputs[Number(idxStr)];
+      if (output === undefined) return '';
+      try {
+        return this.evaluateRelativeOnNode(output, node);
+      } catch {
+        return '';
+      }
+    });
+  }
+
+  /**
+   * Read-time substitution entry point for question label/hint text.
+   *
+   * Resolves `contextRef`'s InstanceNode (the question's own ref — repeat-
+   * relative outputs like `../name` resolve against THIS specific instance,
+   * not the primary instance root) and substitutes every `${n}` placeholder
+   * in `template` using `outputs`. Returns `template` unchanged when there
+   * are no outputs (cheap no-op path). Returns `null` when `template` is
+   * `null`. Never throws.
+   */
+  substituteText(
+    template: string | null,
+    outputs: readonly string[],
+    contextRef: TreeReference,
+  ): string | null {
+    if (template === null) return null;
+    if (outputs.length === 0) return template;
+    const contextNode = resolveReference(this.tree, contextRef);
+    const ctx = this.makeContext(contextNode);
+    return this.substituteOutputs(template, outputs, ctx.contextNode);
+  }
+
   // ---------------------------------------------------------------------------
   // Slice 5c — dynamic choice resolution
   // ---------------------------------------------------------------------------

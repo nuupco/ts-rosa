@@ -6,8 +6,8 @@ Mapping of XLSForm survey columns to ts-rosa engine support.
 |---|--------|---------------|---------|-------|
 | 1 | `type` | `bind type` | ✅ | `DataBinding.dataType` |
 | 2 | `name` | `nodeset` ref | ✅ | `FormElement.ref` |
-| 3 | `label` | `<label>` body element | ✅ | `FormElement.labelText` + `labelInnerText` |
-| 4 | `hint` | `<hint>` body element | ✅ | `FormElement.hintText` |
+| 3 | `label` | `<label>` body element | ✅ | `FormElement.labelText` + `labelInnerText`; itext-driven labels and embedded `<output>` placeholders are substituted at read time via `getQuestionAtIndex().getQuestionText()` |
+| 4 | `hint` | `<hint>` body element | ✅ | `FormElement.hintText`; itext-driven hints and embedded `<output>` placeholders are substituted at read time via `getQuestionAtIndex().getSubstitutedHintText()` |
 | 5 | `required` | `bind required` | ✅ | `DataBinding.required` |
 | 6 | `relevant` | `bind relevant` | ✅ | `DataBinding.relevant` |
 | 7 | `appearance` | `appearance` attribute | ✅ | `FormElement.appearance` |
