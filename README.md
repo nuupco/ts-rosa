@@ -143,6 +143,10 @@ XForm XML
   → serializeToXml()   → string XML
 ```
 
+## API Stability
+
+`@nuup/ts-rosa` is at `0.x`. Per semver, breaking changes may land in **minor** releases until `1.0.0`. The exported surface of the package entry point is frozen by a contract test, so additions and removals are always intentional and recorded in [CHANGELOG.md](CHANGELOG.md). Pin an exact version and coordinate upgrades with the maintainers (e.g. `xform-native`) until `1.0.0`.
+
 ## What it supports
 
 | Feature | Status |
