@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-08-17
+
+### Changed
+- `getChoices()` now recognizes the classic cascading-select `choice_filter` shape (`instance('id')/path/item[column = ref]`, either operand order) and indexes candidate items by the filtered column's value once, instead of rescanning the whole secondary instance on every distinct filter value — the same approach JavaRosa uses (`EqualityExpressionIndexFilterStrategy`). Any other predicate shape (compound conditions, functions, nested brackets) falls back to the existing generic evaluator unchanged. Measured on the real 296,124-row production CSV: first evaluation ~231ms (builds the index), every subsequent distinct filter value ~46-62ms — down from ~2,400-5,100ms per evaluation.
+
 ## [0.1.4] - 2026-08-17
 
 ### Changed
