@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-08-17
+
+### Added
+- `getAttribute`, `setAttribute`, `deleteAttribute`, `attributeNames` — public helpers for `InstanceNode.attributes`, now lazily allocated instead of an eagerly-created `Map` on every node.
+
+### Changed
+- `csvToInstanceTree()` casts each cell straight to its `AnswerValue` instead of round-tripping through `node.attributes` + `applyBindings`. Measured on a real 296,124-row/3-column production CSV (8.0MB): RSS delta 909MB → 559MB (-38%), build time 859ms → 399ms (-54%).
+
 ## [0.1.2] - 2026-08-17
 
 ### Fixed
