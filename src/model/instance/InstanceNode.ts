@@ -70,6 +70,45 @@ export function childrenNamed(node: InstanceNode, name: string): InstanceNode[] 
 }
 
 /**
+ * Same-name children that are NOT repeat templates — the "candidates" set
+ * used throughout TreeReference resolution (resolveReference/resolveAll/
+ * resolveAllWithin/resolveAllContextualized). Single pass over
+ * `node.children`, rather than `childrenNamed(...).filter(...)`'s two
+ * chained scans — halves the per-level scan cost of every reference
+ * resolution.
+ */
+export function realChildrenNamed(node: InstanceNode, name: string): InstanceNode[] {
+  const result: InstanceNode[] = [];
+  for (const child of node.children) {
+    if (child.name === name && child.multiplicity !== INDEX_TEMPLATE) {
+      result.push(child);
+    }
+  }
+  return result;
+}
+
+/**
+ * The Nth (0-indexed) same-name non-template child, or null if there aren't
+ * that many. Single pass with early exit as soon as the target position is
+ * reached — avoids materializing the full candidates array (via
+ * `realChildrenNamed`) when only one position is actually needed, which is
+ * the common case (a concrete or default-multiplicity reference level).
+ */
+export function nthRealChildNamed(node: InstanceNode, name: string, index: number): InstanceNode | null {
+  if (index < 0) return null;
+
+  let count = 0;
+  for (const child of node.children) {
+    if (child.name === name && child.multiplicity !== INDEX_TEMPLATE) {
+      if (count === index) return child;
+      count++;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Deep-clone an InstanceNode subtree.
  * The clone has no parent set (caller must appendChild).
  * Multiplicity is reset to DEFAULT_MULTIPLICITY (appendChild will update it).

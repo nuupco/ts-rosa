@@ -213,6 +213,23 @@ declare function newNode(name: string, opts?: NewNodeOptions): InstanceNode;
 declare function appendChild(parent: InstanceNode, child: InstanceNode): void;
 declare function childrenNamed(node: InstanceNode, name: string): InstanceNode[];
 /**
+ * Same-name children that are NOT repeat templates — the "candidates" set
+ * used throughout TreeReference resolution (resolveReference/resolveAll/
+ * resolveAllWithin/resolveAllContextualized). Single pass over
+ * `node.children`, rather than `childrenNamed(...).filter(...)`'s two
+ * chained scans — halves the per-level scan cost of every reference
+ * resolution.
+ */
+declare function realChildrenNamed(node: InstanceNode, name: string): InstanceNode[];
+/**
+ * The Nth (0-indexed) same-name non-template child, or null if there aren't
+ * that many. Single pass with early exit as soon as the target position is
+ * reached — avoids materializing the full candidates array (via
+ * `realChildrenNamed`) when only one position is actually needed, which is
+ * the common case (a concrete or default-multiplicity reference level).
+ */
+declare function nthRealChildNamed(node: InstanceNode, name: string, index: number): InstanceNode | null;
+/**
  * Deep-clone an InstanceNode subtree.
  * The clone has no parent set (caller must appendChild).
  * Multiplicity is reset to DEFAULT_MULTIPLICITY (appendChild will update it).
@@ -2245,4 +2262,4 @@ declare function getExternalInstanceResolver(): ExternalInstanceResolver;
 
 declare function resolveExternalInstances(definition: FormDefinition): Promise<FormDefinition>;
 
-export { AnswerResult, type AnswerValue, type AtFormIndex, type ChoiceItem, type ControlType, type CreateFormSessionOpts, DEFAULT_MULTIPLICITY, type DataBinding, type DataType, type ExternalInstanceResolver, FORM_ENTRY_EVENT, type FormDefinition, type FormElement, type FormEntryEvent, FormEvaluator, type FormEvaluatorOptions, type FormIndex, type FormIndexLevel, FormNavigator, type FormSession, type FrozenPreloadOptions, type GeoPoint, HydrationError, INDEX_ATTRIBUTE, INDEX_TEMPLATE, INDEX_UNBOUND, type InstanceNode, type InstanceTree, type Multiplicity, type NewNodeOptions, type NodeState, type PreloadProvider, REF_ABSOLUTE, type RefContext, type SelectChoice, type SelectChoiceRef, type TreeReference, type TreeReferenceLevel, type ValidateOutcome, type XPathPredicate, type XmlParser, addRepeatInstance, appendChild, atIndex, attributeNames, beginningOfForm, booleanValue, cast, childrenNamed, cloneNode, contextualize, controlTypeFromTag, countRepeatInstances, createFormSession, dataTypeFromXsdName, dateValue, decimalValue, defaultPreloadProvider, deleteAttribute, endOfForm, extendRef, frozenPreloadProvider, genericize, getAttribute, getExternalInstanceResolver, getXmlParser, hydrateInstance, intValue, isAt, isBof, isEof, level, newNode, parentOf, parseAbsoluteRef, parseDocument, parseForm, refEquals, refToString, registerExternalInstanceResolver, registerXmlParser, removeRepeatInstance, resolveAll, resolveAllContextualized, resolveAllWithin, resolveExternalInstances, resolveReference, rootRef, selectMultiValue, selectOneValue, selfRef, setAttribute, stringValue, uncast, walkControls };
+export { AnswerResult, type AnswerValue, type AtFormIndex, type ChoiceItem, type ControlType, type CreateFormSessionOpts, DEFAULT_MULTIPLICITY, type DataBinding, type DataType, type ExternalInstanceResolver, FORM_ENTRY_EVENT, type FormDefinition, type FormElement, type FormEntryEvent, FormEvaluator, type FormEvaluatorOptions, type FormIndex, type FormIndexLevel, FormNavigator, type FormSession, type FrozenPreloadOptions, type GeoPoint, HydrationError, INDEX_ATTRIBUTE, INDEX_TEMPLATE, INDEX_UNBOUND, type InstanceNode, type InstanceTree, type Multiplicity, type NewNodeOptions, type NodeState, type PreloadProvider, REF_ABSOLUTE, type RefContext, type SelectChoice, type SelectChoiceRef, type TreeReference, type TreeReferenceLevel, type ValidateOutcome, type XPathPredicate, type XmlParser, addRepeatInstance, appendChild, atIndex, attributeNames, beginningOfForm, booleanValue, cast, childrenNamed, cloneNode, contextualize, controlTypeFromTag, countRepeatInstances, createFormSession, dataTypeFromXsdName, dateValue, decimalValue, defaultPreloadProvider, deleteAttribute, endOfForm, extendRef, frozenPreloadProvider, genericize, getAttribute, getExternalInstanceResolver, getXmlParser, hydrateInstance, intValue, isAt, isBof, isEof, level, newNode, nthRealChildNamed, parentOf, parseAbsoluteRef, parseDocument, parseForm, realChildrenNamed, refEquals, refToString, registerExternalInstanceResolver, registerXmlParser, removeRepeatInstance, resolveAll, resolveAllContextualized, resolveAllWithin, resolveExternalInstances, resolveReference, rootRef, selectMultiValue, selectOneValue, selfRef, setAttribute, stringValue, uncast, walkControls };

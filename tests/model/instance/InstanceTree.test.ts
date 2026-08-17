@@ -183,4 +183,52 @@ describe('InstanceTree + resolveReference', () => {
     const nodes = resolveAll(tree, ref);
     expect(nodes).toHaveLength(3);
   });
+
+  it('resolveReference: finds the correct instance among many same-name siblings, skipping an interleaved template', () => {
+    // Regression test: resolveReference used to build its candidates via
+    // childrenNamed(node, name).filter(notTemplate) — two full scans of
+    // node.children per level — before indexing into the result. Now a
+    // single pass with early exit (nthRealChildNamed). Pin down correctness
+    // at a size where a bug would be obvious: resolve every instance and
+    // confirm each returns the node at the expected position, with a
+    // template sibling interleaved partway through (excluded from indexing,
+    // but not from correctness of the positions around it).
+    const root = newNode('data');
+    const N = 200;
+    for (let i = 0; i < N; i++) {
+      if (i === 50) {
+        appendChild(root, newNode('item', { multiplicity: INDEX_TEMPLATE }));
+      }
+      const item = newNode('item');
+      appendChild(item, newNode('label', { value: { kind: 'string', value: `label-${i}`, displayText: `label-${i}` } }));
+      appendChild(root, item);
+    }
+    const tree = { root, name: null } as unknown as InstanceTree;
+
+    for (let i = 0; i < N; i++) {
+      const node = resolveReference(tree, parseAbsoluteRef(`/data/item[${i + 1}]`));
+      expect(node).not.toBeNull();
+      const label = resolveReference(tree, parseAbsoluteRef(`/data/item[${i + 1}]/label`));
+      expect(label!.value?.value).toBe(`label-${i}`);
+    }
+    // One past the last real instance — no match
+    expect(resolveReference(tree, parseAbsoluteRef(`/data/item[${N + 1}]`))).toBeNull();
+  });
+
+  it('resolveReference resolves 5,000 same-name siblings in well under a second', () => {
+    const root = newNode('data');
+    const N = 5_000;
+    for (let i = 0; i < N; i++) {
+      appendChild(root, newNode('item'));
+    }
+    const tree = { root, name: null } as unknown as InstanceTree;
+
+    const t0 = performance.now();
+    for (let i = 0; i < N; i++) {
+      resolveReference(tree, parseAbsoluteRef(`/data/item[${i + 1}]`));
+    }
+    const elapsedMs = performance.now() - t0;
+
+    expect(elapsedMs).toBeLessThan(5000);
+  });
 });

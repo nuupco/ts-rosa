@@ -1,4 +1,4 @@
-import { type InstanceNode, childrenNamed, cloneNode } from './InstanceNode';
+import { type InstanceNode, realChildrenNamed, nthRealChildNamed, cloneNode } from './InstanceNode';
 import { INDEX_TEMPLATE, INDEX_UNBOUND, DEFAULT_MULTIPLICITY } from './multiplicity';
 import type { TreeReference } from './TreeReference';
 
@@ -28,11 +28,8 @@ export function resolveReference(tree: InstanceTree, ref: TreeReference): Instan
   let node: InstanceNode = tree.root;
 
   for (const lvl of restLevels) {
-    const candidates = childrenNamed(node, lvl.name).filter(
-      (c) => c.multiplicity !== INDEX_TEMPLATE,
-    );
     const idx = lvl.multiplicity === INDEX_UNBOUND ? DEFAULT_MULTIPLICITY : lvl.multiplicity;
-    const next = candidates[idx] ?? null;
+    const next = nthRealChildNamed(node, lvl.name, idx);
     if (next === null) return null;
     node = next;
   }
@@ -95,13 +92,10 @@ export function resolveAllWithin(tree: InstanceTree, subtreeRoot: InstanceNode, 
   for (const lvl of suffixLevels) {
     const nextNodes: InstanceNode[] = [];
     for (const node of currentNodes) {
-      const candidates = childrenNamed(node, lvl.name).filter(
-        (c) => c.multiplicity !== INDEX_TEMPLATE,
-      );
       if (lvl.multiplicity === INDEX_UNBOUND) {
-        nextNodes.push(...candidates);
+        nextNodes.push(...realChildrenNamed(node, lvl.name));
       } else {
-        const match = candidates[lvl.multiplicity] ?? null;
+        const match = nthRealChildNamed(node, lvl.name, lvl.multiplicity);
         if (match !== null) nextNodes.push(match);
       }
     }
@@ -194,12 +188,8 @@ export function resolveAllContextualized(
     }
     anchorNode = tree.root;
     for (const lvl of rest) {
-      const cur = anchorNode;
-      const candidates: InstanceNode[] = childrenNamed(cur, lvl.name).filter(
-        (c) => c.multiplicity !== INDEX_TEMPLATE,
-      );
       const idx = lvl.multiplicity === INDEX_UNBOUND ? DEFAULT_MULTIPLICITY : lvl.multiplicity;
-      const next = candidates[idx] ?? null;
+      const next = nthRealChildNamed(anchorNode, lvl.name, idx);
       if (next === null) return [];
       anchorNode = next;
     }
@@ -218,13 +208,10 @@ export function resolveAllContextualized(
   for (const lvl of suffixLevels) {
     const nextNodes: InstanceNode[] = [];
     for (const node of currentNodes) {
-      const candidates = childrenNamed(node, lvl.name).filter(
-        (c) => c.multiplicity !== INDEX_TEMPLATE,
-      );
       if (lvl.multiplicity === INDEX_UNBOUND) {
-        nextNodes.push(...candidates);
+        nextNodes.push(...realChildrenNamed(node, lvl.name));
       } else {
-        const match = candidates[lvl.multiplicity] ?? null;
+        const match = nthRealChildNamed(node, lvl.name, lvl.multiplicity);
         if (match !== null) nextNodes.push(match);
       }
     }
@@ -250,14 +237,11 @@ export function resolveAll(tree: InstanceTree, ref: TreeReference): InstanceNode
   for (const lvl of restLevels) {
     const nextNodes: InstanceNode[] = [];
     for (const node of currentNodes) {
-      const candidates = childrenNamed(node, lvl.name).filter(
-        (c) => c.multiplicity !== INDEX_TEMPLATE,
-      );
       if (lvl.multiplicity === INDEX_UNBOUND) {
         // Wildcard — collect all matching children
-        nextNodes.push(...candidates);
+        nextNodes.push(...realChildrenNamed(node, lvl.name));
       } else {
-        const match = candidates[lvl.multiplicity] ?? null;
+        const match = nthRealChildNamed(node, lvl.name, lvl.multiplicity);
         if (match !== null) nextNodes.push(match);
       }
     }
