@@ -3,7 +3,7 @@ import {
 	TIMEZONE_OFFSET_PATTERN,
 	VALID_OFFSET_VALUE,
 } from '../../../common/constants/datetime.ts';
-import { Temporal } from 'temporal-polyfill';
+import { Temporal } from '../../../../../platform/temporal.ts';
 import { isISODateOrDateTimeLike } from './predicates.ts';
 
 export const tryParseDateString = (value: string): Date | null => {

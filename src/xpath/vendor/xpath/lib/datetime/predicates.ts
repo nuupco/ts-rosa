@@ -1,4 +1,4 @@
-import { Temporal } from 'temporal-polyfill';
+import { Temporal } from '../../../../../platform/temporal.ts';
 import { ISO_DATE_OR_DATE_TIME_LIKE_PATTERN } from '../../../common/constants/datetime.ts';
 
 export const isISODateOrDateTimeLike = (value: string) =>

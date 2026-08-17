@@ -1,4 +1,4 @@
-import { Temporal } from 'temporal-polyfill';
+import { Temporal } from '../../../../platform/temporal.ts';
 import type { XPathNode } from '../adapter/interface/XPathNode.ts';
 import type {
 	AdapterDocument,
