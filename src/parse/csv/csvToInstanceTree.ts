@@ -13,7 +13,7 @@
 import type { InstanceTree } from '../../model/instance/InstanceTree.ts';
 import { newNode, appendChild } from '../../model/instance/InstanceNode.ts';
 import { parseCsv } from './parseCsv.ts';
-import { applyBindings, RAW_TEXT_ATTR } from '../XFormParser.ts';
+import { cast } from '../../model/data/codecs.ts';
 
 export function csvToInstanceTree(id: string, csvText: string): InstanceTree {
   const rows = parseCsv(csvText);
@@ -48,14 +48,17 @@ export function csvToInstanceTree(id: string, csvText: string): InstanceTree {
     for (let colIndex = 0; colIndex < columns.length; colIndex++) {
       const columnName = columns[colIndex]!;
       const cell = row[colIndex]!;
-      const col = newNode(columnName);
-      col.attributes.set(RAW_TEXT_ATTR, cell);
+      // Cast straight to the leaf's value: applyBindings' unbound-node branch
+      // would do exactly this (cast('string', rawText)) via a round-trip
+      // through node.attributes (RAW_TEXT_ATTR set, then read, then
+      // deleted) — every CSV secondary instance is unbound, so that Map
+      // round-trip is pure overhead here, and at hundreds of thousands of
+      // cells the transient Map allocations were a real memory cost.
+      const col = newNode(columnName, { value: cast('string', cell) ?? null });
       appendChild(item, col);
     }
     root.children.push(item);
   });
 
-  const tree: InstanceTree = { root, name: id };
-  applyBindings(tree, new Map());
-  return tree;
+  return { root, name: id };
 }

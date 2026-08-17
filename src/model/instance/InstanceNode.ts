@@ -7,13 +7,34 @@ export type InstanceNode = {
   multiplicity: Multiplicity;
   value: AnswerValue | null;
   readonly children: InstanceNode[];
-  readonly attributes: Map<string, string>;
+  // Lazily allocated: most nodes (e.g. every CSV-sourced secondary instance
+  // leaf) never carry a real XML attribute, and an eagerly-allocated empty
+  // Map costs real memory at scale (hundreds of thousands of nodes for a
+  // large jr://file-csv/* instance). Use getAttribute/setAttribute/
+  // deleteAttribute/attributeNames below instead of touching this directly.
+  attributes: Map<string, string> | null;
   dataType: DataType;
   parent: InstanceNode | null;
   // ---- PRELOAD METADATA (Phase 7, Slice 7-INFRA-A) ----
   preload?: string | null;
   preloadParams?: string | null;
 };
+
+export function getAttribute(node: InstanceNode, name: string): string | undefined {
+  return node.attributes?.get(name);
+}
+
+export function setAttribute(node: InstanceNode, name: string, value: string): void {
+  (node.attributes ??= new Map()).set(name, value);
+}
+
+export function deleteAttribute(node: InstanceNode, name: string): void {
+  node.attributes?.delete(name);
+}
+
+export function attributeNames(node: InstanceNode): string[] {
+  return node.attributes === null ? [] : Array.from(node.attributes.keys());
+}
 
 export interface NewNodeOptions {
   multiplicity?: Multiplicity;
@@ -27,7 +48,7 @@ export function newNode(name: string, opts?: NewNodeOptions): InstanceNode {
     multiplicity: opts?.multiplicity ?? DEFAULT_MULTIPLICITY,
     value: opts?.value ?? null,
     children: [],
-    attributes: new Map(),
+    attributes: null,
     dataType: opts?.dataType ?? 'string',
     parent: null,
   };
@@ -59,7 +80,7 @@ export function cloneNode(source: InstanceNode): InstanceNode {
     multiplicity: DEFAULT_MULTIPLICITY,
     value: source.value,
     children: [],
-    attributes: new Map(source.attributes),
+    attributes: source.attributes === null ? null : new Map(source.attributes),
     dataType: source.dataType,
     parent: null,
   };

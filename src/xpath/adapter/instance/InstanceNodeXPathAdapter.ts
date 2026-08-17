@@ -33,7 +33,7 @@ import type {
 } from '../../vendor/xpath/adapter/interface/XPathDOMAdapter.ts';
 import type { AdapterProcessingInstruction } from '../../vendor/xpath/adapter/interface/XPathNodeKindAdapter.ts';
 import { INDEX_TEMPLATE } from '../../../model/instance/multiplicity.ts';
-import type { InstanceNode } from '../../../model/instance/InstanceNode.ts';
+import { attributeNames, type InstanceNode } from '../../../model/instance/InstanceNode.ts';
 import type { InstanceTree } from '../../../model/instance/InstanceTree.ts';
 import {
   type InstanceXPathNode,
@@ -217,7 +217,7 @@ function pathIndexVector(n: InstanceXPathNode): number[] {
     case 'attribute': {
       // Attributes follow their element; use element vector + large offset
       const ownerVec = pathIndexVector(n.owner);
-      const attrKeys = Array.from(n.owner.node.attributes.keys());
+      const attrKeys = attributeNames(n.owner.node);
       const attrIdx = attrKeys.indexOf(n.name);
       return [...ownerVec, 1_000_000 + (attrIdx < 0 ? 0 : attrIdx)];
     }
@@ -365,7 +365,7 @@ export const instanceNodeXPathAdapter: XPathDOMAdapter<InstanceXPathNode> = {
   ): readonly AdapterAttribute<InstanceXPathNode>[] {
     if (node.kind !== 'element') return [];
     const result: InstanceAttributeNode[] = [];
-    for (const [name, value] of node.node.attributes) {
+    for (const [name, value] of node.node.attributes ?? []) {
       result.push({
         [XPathNodeKindKey]: 'attribute',
         kind: 'attribute',

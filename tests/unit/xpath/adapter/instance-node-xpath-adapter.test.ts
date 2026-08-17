@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { newNode, appendChild } from '../../../../src/model/instance/InstanceNode.ts';
+import { newNode, appendChild, setAttribute } from '../../../../src/model/instance/InstanceNode.ts';
 import type { InstanceNode } from '../../../../src/model/instance/InstanceNode.ts';
 import type { InstanceTree } from '../../../../src/model/instance/InstanceTree.ts';
 import { INDEX_TEMPLATE } from '../../../../src/model/instance/multiplicity.ts';
@@ -125,7 +125,7 @@ describe('S3.1-A: simple path evaluation over InstanceTree', () => {
 describe('S3.1-B: attribute access', () => {
   it('evaluates /data/@id attribute', () => {
     const root = newNode('data');
-    root.attributes.set('id', 'form1');
+    setAttribute(root, 'id', 'form1');
     const tree = makeTree(root);
     const doc = makeInstanceDocumentNode(tree);
     const rootWrapper = wrapInstanceNode(root, doc);

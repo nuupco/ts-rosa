@@ -12,7 +12,7 @@ import type { InstanceNode } from '../model/instance/InstanceNode.ts';
 import type { InstanceTree } from '../model/instance/InstanceTree.ts';
 import type { DataBinding } from '../model/def/DataBinding.ts';
 import type { FormElement } from '../model/def/FormElement.ts';
-import { newNode, appendChild } from '../model/instance/InstanceNode.ts';
+import { newNode, appendChild, getAttribute, setAttribute, deleteAttribute } from '../model/instance/InstanceNode.ts';
 import { resolveReference } from '../model/instance/InstanceTree.ts';
 import { INDEX_TEMPLATE } from '../model/instance/multiplicity.ts';
 import { cast } from '../model/data/codecs.ts';
@@ -44,7 +44,7 @@ export function buildInstanceNode(el: Element): InstanceNode {
   for (let i = 0; i < attrs.length; i++) {
     const attr = attrs[i];
     if (attr && !attr.name.startsWith('xmlns')) {
-      node.attributes.set(attr.name, attr.value);
+      setAttribute(node, attr.name, attr.value);
     }
   }
 
@@ -74,7 +74,7 @@ export function buildInstanceNode(el: Element): InstanceNode {
     const raw = directTextContent(el);
     if (raw !== null) {
       // Store raw text in attributes map for retrieval in applyBindings
-      node.attributes.set(RAW_TEXT_ATTR, raw);
+      setAttribute(node, RAW_TEXT_ATTR, raw);
     }
   }
 
@@ -109,17 +109,17 @@ function applyBindingsToNode(node: InstanceNode, bindings: ReadonlyMap<string, D
     node.preload = binding.preload;
     node.preloadParams = binding.preloadParams;
     // Cast raw text to typed AnswerValue
-    const rawText = node.attributes.get(RAW_TEXT_ATTR);
+    const rawText = getAttribute(node, RAW_TEXT_ATTR);
     if (rawText !== undefined) {
       node.value = cast(binding.dataType, rawText) ?? null;
-      node.attributes.delete(RAW_TEXT_ATTR);
+      deleteAttribute(node, RAW_TEXT_ATTR);
     }
   } else {
     // Clean up raw text attribute for unbound nodes — keep as string AnswerValue
-    const rawText = node.attributes.get(RAW_TEXT_ATTR);
+    const rawText = getAttribute(node, RAW_TEXT_ATTR);
     if (rawText !== undefined) {
       node.value = cast('string', rawText) ?? null;
-      node.attributes.delete(RAW_TEXT_ATTR);
+      deleteAttribute(node, RAW_TEXT_ATTR);
     }
   }
 

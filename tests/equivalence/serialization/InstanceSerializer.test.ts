@@ -30,7 +30,7 @@ import {
   serializeInstance,
   type SerializeOptions,
 } from '../../../src/model/instance/InstanceSerializer.ts';
-import { newNode, appendChild } from '../../../src/model/instance/InstanceNode.ts';
+import { newNode, appendChild, setAttribute } from '../../../src/model/instance/InstanceNode.ts';
 import { INDEX_TEMPLATE } from '../../../src/model/instance/multiplicity.ts';
 import {
   stringValue,
@@ -176,7 +176,7 @@ describe('serializeInstance — 6A-S4 attributes preserved', () => {
     const meta = newNode('meta');
     const instanceID = newNode('instanceID');
     instanceID.value = stringValue('uuid:abc-123');
-    instanceID.attributes.set('id', 'uuid:abc-123');
+    setAttribute(instanceID, 'id', 'uuid:abc-123');
     appendChild(root, meta);
     appendChild(meta, instanceID);
 
@@ -188,7 +188,7 @@ describe('serializeInstance — 6A-S4 attributes preserved', () => {
     const root = newNode('data');
     const node = newNode('field');
     node.value = stringValue('x');
-    node.attributes.set('label', 'say "hello"');
+    setAttribute(node, 'label', 'say "hello"');
     appendChild(root, node);
 
     const xml = serializeInstance(makeTree(root), alwaysRelevant());
@@ -199,7 +199,7 @@ describe('serializeInstance — 6A-S4 attributes preserved', () => {
     const root = newNode('data');
     const node = newNode('field');
     node.value = stringValue('x');
-    node.attributes.set('key', 'a&b');
+    setAttribute(node, 'key', 'a&b');
     appendChild(root, node);
 
     const xml = serializeInstance(makeTree(root), alwaysRelevant());

@@ -69,8 +69,8 @@ function escapeAttr(s: string): string {
 // Attribute serialization
 // ---------------------------------------------------------------------------
 
-function serializeAttrs(attrs: Map<string, string>): string {
-  if (attrs.size === 0) return '';
+function serializeAttrs(attrs: Map<string, string> | null): string {
+  if (attrs === null || attrs.size === 0) return '';
   const parts: string[] = [];
   for (const [key, val] of attrs) {
     parts.push(` ${key}="${escapeAttr(val)}"`);

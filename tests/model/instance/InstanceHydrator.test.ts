@@ -14,7 +14,7 @@ import {
   HydrationError,
 } from '../../../src/model/instance/InstanceHydrator.ts';
 import { INDEX_TEMPLATE } from '../../../src/model/instance/multiplicity.ts';
-import type { InstanceNode } from '../../../src/model/instance/InstanceNode.ts';
+import { getAttribute, type InstanceNode } from '../../../src/model/instance/InstanceNode.ts';
 import {
   html,
   head,
@@ -279,11 +279,11 @@ describe('hydrateInstance — attribute round-trip (ADR-D)', () => {
 
     const tree = hydrateInstance(definition, xml);
 
-    expect(tree.root.attributes.get('id')).toBe('container');
-    expect(tree.root.attributes.get('instanceID')).toBe('uuid:abc');
-    expect(tree.root.attributes.has('xmlns:jr')).toBe(false);
+    expect(getAttribute(tree.root, 'id')).toBe('container');
+    expect(getAttribute(tree.root, 'instanceID')).toBe('uuid:abc');
+    expect(getAttribute(tree.root, 'xmlns:jr')).toBeUndefined();
 
     const grp = findChildren(tree.root, 'grp')[0]!;
-    expect(grp.attributes.get('foo')).toBe('bar');
+    expect(getAttribute(grp, 'foo')).toBe('bar');
   });
 });

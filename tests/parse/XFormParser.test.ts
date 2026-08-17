@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
 import { parseForm, parseDocument, buildInstanceNode } from '../../src/parse/XFormParser.ts';
+import { getAttribute } from '../../src/model/instance/InstanceNode.ts';
 import { html, head, body, model, mainInstance, bind, input, select1, select, t, label, item } from '../harness/XFormsElement.ts';
 import type { XFormsElement } from '../harness/XFormsElement.ts';
 
@@ -263,6 +264,6 @@ describe('buildInstanceNode (public export — sdd/last-saved-instance)', () => 
 
     expect(node.name).toBe('name');
     expect(node.children).toHaveLength(0);
-    expect(node.attributes.get('__rawText')).toBe('Alice');
+    expect(getAttribute(node, '__rawText')).toBe('Alice');
   });
 });

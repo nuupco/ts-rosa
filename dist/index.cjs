@@ -360,13 +360,25 @@ function parseAbsoluteRef(path) {
 }
 
 // src/model/instance/InstanceNode.ts
+function getAttribute(node, name2) {
+  return node.attributes?.get(name2);
+}
+function setAttribute(node, name2, value) {
+  (node.attributes ??= /* @__PURE__ */ new Map()).set(name2, value);
+}
+function deleteAttribute(node, name2) {
+  node.attributes?.delete(name2);
+}
+function attributeNames(node) {
+  return node.attributes === null ? [] : Array.from(node.attributes.keys());
+}
 function newNode(name2, opts) {
   return {
     name: name2,
     multiplicity: opts?.multiplicity ?? DEFAULT_MULTIPLICITY,
     value: opts?.value ?? null,
     children: [],
-    attributes: /* @__PURE__ */ new Map(),
+    attributes: null,
     dataType: opts?.dataType ?? "string",
     parent: null
   };
@@ -388,7 +400,7 @@ function cloneNode(source) {
     multiplicity: DEFAULT_MULTIPLICITY,
     value: source.value,
     children: [],
-    attributes: new Map(source.attributes),
+    attributes: source.attributes === null ? null : new Map(source.attributes),
     dataType: source.dataType,
     parent: null
   };
@@ -6230,7 +6242,7 @@ function pathIndexVector(n) {
     }
     case "attribute": {
       const ownerVec = pathIndexVector(n.owner);
-      const attrKeys = Array.from(n.owner.node.attributes.keys());
+      const attrKeys = attributeNames(n.owner.node);
       const attrIdx = attrKeys.indexOf(n.name);
       return [...ownerVec, 1e6 + (attrIdx < 0 ? 0 : attrIdx)];
     }
@@ -6328,7 +6340,7 @@ var instanceNodeXPathAdapter = {
   getAttributes(node) {
     if (node.kind !== "element") return [];
     const result = [];
-    for (const [name2, value] of node.node.attributes) {
+    for (const [name2, value] of node.node.attributes ?? []) {
       result.push({
         [XPathNodeKindKey]: "attribute",
         kind: "attribute",
@@ -7607,7 +7619,7 @@ function buildInstanceNode(el) {
   for (let i = 0; i < attrs.length; i++) {
     const attr = attrs[i];
     if (attr && !attr.name.startsWith("xmlns")) {
-      node.attributes.set(attr.name, attr.value);
+      setAttribute(node, attr.name, attr.value);
     }
   }
   const isTemplate = el.getAttribute("jr:template") !== null;
@@ -7627,7 +7639,7 @@ function buildInstanceNode(el) {
   if (!hasElementChildren) {
     const raw = directTextContent(el);
     if (raw !== null) {
-      node.attributes.set(RAW_TEXT_ATTR, raw);
+      setAttribute(node, RAW_TEXT_ATTR, raw);
     }
   }
   return node;
@@ -7649,16 +7661,16 @@ function applyBindingsToNode(node, bindings, path) {
     node.dataType = binding.dataType;
     node.preload = binding.preload;
     node.preloadParams = binding.preloadParams;
-    const rawText = node.attributes.get(RAW_TEXT_ATTR);
+    const rawText = getAttribute(node, RAW_TEXT_ATTR);
     if (rawText !== void 0) {
       node.value = cast(binding.dataType, rawText) ?? null;
-      node.attributes.delete(RAW_TEXT_ATTR);
+      deleteAttribute(node, RAW_TEXT_ATTR);
     }
   } else {
-    const rawText = node.attributes.get(RAW_TEXT_ATTR);
+    const rawText = getAttribute(node, RAW_TEXT_ATTR);
     if (rawText !== void 0) {
       node.value = cast("string", rawText) ?? null;
-      node.attributes.delete(RAW_TEXT_ATTR);
+      deleteAttribute(node, RAW_TEXT_ATTR);
     }
   }
   for (const child of node.children) {
@@ -9917,7 +9929,7 @@ function escapeAttr(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 function serializeAttrs(attrs) {
-  if (attrs.size === 0) return "";
+  if (attrs === null || attrs.size === 0) return "";
   const parts = [];
   for (const [key, val] of attrs) {
     parts.push(` ${key}="${escapeAttr(val)}"`);
@@ -10150,7 +10162,7 @@ function copyAttributes(node, el) {
   for (let i = 0; i < attrs.length; i++) {
     const attr = attrs[i];
     if (attr && !attr.name.startsWith("xmlns")) {
-      node.attributes.set(attr.name, attr.value);
+      setAttribute(node, attr.name, attr.value);
     }
   }
 }
@@ -10395,15 +10407,12 @@ function csvToInstanceTree(id2, csvText) {
     for (let colIndex = 0; colIndex < columns.length; colIndex++) {
       const columnName = columns[colIndex];
       const cell = row[colIndex];
-      const col = newNode(columnName);
-      col.attributes.set(RAW_TEXT_ATTR, cell);
+      const col = newNode(columnName, { value: cast("string", cell) ?? null });
       appendChild(item, col);
     }
     root.children.push(item);
   });
-  const tree = { root, name: id2 };
-  applyBindings(tree, /* @__PURE__ */ new Map());
-  return tree;
+  return { root, name: id2 };
 }
 
 // src/parse/resolveExternalInstances.ts
@@ -10496,6 +10505,7 @@ exports.REF_ABSOLUTE = REF_ABSOLUTE;
 exports.addRepeatInstance = addRepeatInstance;
 exports.appendChild = appendChild;
 exports.atIndex = atIndex;
+exports.attributeNames = attributeNames;
 exports.beginningOfForm = beginningOfForm;
 exports.booleanValue = booleanValue;
 exports.cast = cast;
@@ -10509,10 +10519,12 @@ exports.dataTypeFromXsdName = dataTypeFromXsdName;
 exports.dateValue = dateValue;
 exports.decimalValue = decimalValue;
 exports.defaultPreloadProvider = defaultPreloadProvider;
+exports.deleteAttribute = deleteAttribute;
 exports.endOfForm = endOfForm;
 exports.extendRef = extendRef;
 exports.frozenPreloadProvider = frozenPreloadProvider;
 exports.genericize = genericize;
+exports.getAttribute = getAttribute;
 exports.getExternalInstanceResolver = getExternalInstanceResolver;
 exports.getXmlParser = getXmlParser;
 exports.hydrateInstance = hydrateInstance;
@@ -10540,6 +10552,7 @@ exports.rootRef = rootRef;
 exports.selectMultiValue = selectMultiValue;
 exports.selectOneValue = selectOneValue;
 exports.selfRef = selfRef;
+exports.setAttribute = setAttribute;
 exports.stringValue = stringValue;
 exports.uncast = uncast;
 exports.walkControls = walkControls;

@@ -21,7 +21,7 @@ import type { FormDefinition } from '../def/FormDefinition.ts';
 import { cast } from '../data/codecs.ts';
 import { getXmlParser } from '../../platform/XmlParser.ts';
 import { childElementsByLocalName, directTextContent } from '../../parse/domHelpers.ts';
-import { cloneNode, type InstanceNode } from './InstanceNode.ts';
+import { cloneNode, setAttribute, type InstanceNode } from './InstanceNode.ts';
 import { INDEX_TEMPLATE } from './multiplicity.ts';
 import type { InstanceTree } from './InstanceTree.ts';
 
@@ -93,7 +93,7 @@ function copyAttributes(node: InstanceNode, el: Element): void {
   for (let i = 0; i < attrs.length; i++) {
     const attr = attrs[i];
     if (attr && !attr.name.startsWith('xmlns')) {
-      node.attributes.set(attr.name, attr.value);
+      setAttribute(node, attr.name, attr.value);
     }
   }
 }

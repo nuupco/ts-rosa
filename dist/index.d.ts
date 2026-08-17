@@ -194,12 +194,16 @@ type InstanceNode = {
     multiplicity: Multiplicity;
     value: AnswerValue | null;
     readonly children: InstanceNode[];
-    readonly attributes: Map<string, string>;
+    attributes: Map<string, string> | null;
     dataType: DataType;
     parent: InstanceNode | null;
     preload?: string | null;
     preloadParams?: string | null;
 };
+declare function getAttribute(node: InstanceNode, name: string): string | undefined;
+declare function setAttribute(node: InstanceNode, name: string, value: string): void;
+declare function deleteAttribute(node: InstanceNode, name: string): void;
+declare function attributeNames(node: InstanceNode): string[];
 interface NewNodeOptions {
     multiplicity?: Multiplicity;
     value?: AnswerValue | null;
@@ -2215,4 +2219,4 @@ declare function getExternalInstanceResolver(): ExternalInstanceResolver;
 
 declare function resolveExternalInstances(definition: FormDefinition): Promise<FormDefinition>;
 
-export { AnswerResult, type AnswerValue, type AtFormIndex, type ChoiceItem, type ControlType, type CreateFormSessionOpts, DEFAULT_MULTIPLICITY, type DataBinding, type DataType, type ExternalInstanceResolver, FORM_ENTRY_EVENT, type FormDefinition, type FormElement, type FormEntryEvent, FormEvaluator, type FormEvaluatorOptions, type FormIndex, type FormIndexLevel, FormNavigator, type FormSession, type FrozenPreloadOptions, type GeoPoint, HydrationError, INDEX_ATTRIBUTE, INDEX_TEMPLATE, INDEX_UNBOUND, type InstanceNode, type InstanceTree, type Multiplicity, type NewNodeOptions, type NodeState, type PreloadProvider, REF_ABSOLUTE, type RefContext, type SelectChoice, type SelectChoiceRef, type TreeReference, type TreeReferenceLevel, type ValidateOutcome, type XPathPredicate, type XmlParser, addRepeatInstance, appendChild, atIndex, beginningOfForm, booleanValue, cast, childrenNamed, cloneNode, contextualize, controlTypeFromTag, countRepeatInstances, createFormSession, dataTypeFromXsdName, dateValue, decimalValue, defaultPreloadProvider, endOfForm, extendRef, frozenPreloadProvider, genericize, getExternalInstanceResolver, getXmlParser, hydrateInstance, intValue, isAt, isBof, isEof, level, newNode, parentOf, parseAbsoluteRef, parseDocument, parseForm, refEquals, refToString, registerExternalInstanceResolver, registerXmlParser, removeRepeatInstance, resolveAll, resolveAllContextualized, resolveAllWithin, resolveExternalInstances, resolveReference, rootRef, selectMultiValue, selectOneValue, selfRef, stringValue, uncast, walkControls };
+export { AnswerResult, type AnswerValue, type AtFormIndex, type ChoiceItem, type ControlType, type CreateFormSessionOpts, DEFAULT_MULTIPLICITY, type DataBinding, type DataType, type ExternalInstanceResolver, FORM_ENTRY_EVENT, type FormDefinition, type FormElement, type FormEntryEvent, FormEvaluator, type FormEvaluatorOptions, type FormIndex, type FormIndexLevel, FormNavigator, type FormSession, type FrozenPreloadOptions, type GeoPoint, HydrationError, INDEX_ATTRIBUTE, INDEX_TEMPLATE, INDEX_UNBOUND, type InstanceNode, type InstanceTree, type Multiplicity, type NewNodeOptions, type NodeState, type PreloadProvider, REF_ABSOLUTE, type RefContext, type SelectChoice, type SelectChoiceRef, type TreeReference, type TreeReferenceLevel, type ValidateOutcome, type XPathPredicate, type XmlParser, addRepeatInstance, appendChild, atIndex, attributeNames, beginningOfForm, booleanValue, cast, childrenNamed, cloneNode, contextualize, controlTypeFromTag, countRepeatInstances, createFormSession, dataTypeFromXsdName, dateValue, decimalValue, defaultPreloadProvider, deleteAttribute, endOfForm, extendRef, frozenPreloadProvider, genericize, getAttribute, getExternalInstanceResolver, getXmlParser, hydrateInstance, intValue, isAt, isBof, isEof, level, newNode, parentOf, parseAbsoluteRef, parseDocument, parseForm, refEquals, refToString, registerExternalInstanceResolver, registerXmlParser, removeRepeatInstance, resolveAll, resolveAllContextualized, resolveAllWithin, resolveExternalInstances, resolveReference, rootRef, selectMultiValue, selectOneValue, selfRef, setAttribute, stringValue, uncast, walkControls };
