@@ -1118,6 +1118,19 @@ declare class FormEvaluator {
      * evaluated; a changed signature triggers recomputation.
      */
     private readonly choiceCache;
+    /**
+     * Equality-filter itemset index, mirroring JavaRosa's
+     * EqualityExpressionIndexFilterStrategy: for the common
+     * `instance('id')/path/item[column = ref]` choice_filter shape, index all
+     * candidate items by `column`'s string value ONCE (built lazily, on first
+     * use, keyed by instance id + item path + column name), so that every
+     * subsequent choice_filter evaluation against a DIFFERENT ref value (e.g.
+     * the user picking a different municipio) is an O(1) map lookup instead
+     * of a full O(n) rescan of the secondary instance. Safe to cache for the
+     * lifetime of this FormEvaluator: secondaryDocs/tree are populated once in
+     * the constructor and never replaced (see FormSession.createFormSession).
+     */
+    private readonly itemsetIndexCache;
     constructor(tree: InstanceTree, opts?: OpaqueReactiveObjectFactory | FormEvaluatorOptions);
     /**
      * Switch the active language for itext resolution.
@@ -1186,6 +1199,19 @@ declare class FormEvaluator {
      * Choices reflect instance state AT CALL TIME (REQ-5C-4 stale-choice contract).
      */
     getChoices(ref: TreeReference): readonly SelectChoice[];
+    private static readonly EQUALITY_FILTER_SHAPE_RE;
+    private static isBareName;
+    /**
+     * Fast path for the classic choice_filter shape
+     * `instance('id')/path/item[column = ref]` (JavaRosa's
+     * EqualityExpressionIndexFilterStrategy equivalent): index all candidate
+     * items by `column`'s string value once, then serve every subsequent
+     * distinct `ref` value as an O(1) lookup instead of rescanning the whole
+     * secondary instance through the generic XPath evaluator. Returns null
+     * (falling back to the generic evaluator, unchanged) whenever the shape
+     * isn't recognized with full confidence — this must never guess.
+     */
+    private tryEqualityFilterFastPath;
     /**
      * @experimental
      * Fully clears the choice cache.

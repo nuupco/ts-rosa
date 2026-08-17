@@ -18,7 +18,8 @@
 import type { InstanceTree } from '../model/instance/InstanceTree.ts';
 import type { ItextTranslations } from '../model/def/Itext.ts';
 import { makeItextResolver, type ItextResolver } from '../model/def/Itext.ts';
-import type { InstanceNode } from '../model/instance/InstanceNode.ts';
+import { childrenNamed, type InstanceNode } from '../model/instance/InstanceNode.ts';
+import { answerValueToXPathString } from '../xpath/adapter/instance/answerValueToXPathString.ts';
 import {
   makeInstanceDocumentNode,
   wrapInstanceNode,
@@ -128,6 +129,20 @@ export class FormEvaluator {
    * evaluated; a changed signature triggers recomputation.
    */
   private readonly choiceCache: Map<string, { triggerSig: string; choices: readonly SelectChoice[] }> = new Map();
+
+  /**
+   * Equality-filter itemset index, mirroring JavaRosa's
+   * EqualityExpressionIndexFilterStrategy: for the common
+   * `instance('id')/path/item[column = ref]` choice_filter shape, index all
+   * candidate items by `column`'s string value ONCE (built lazily, on first
+   * use, keyed by instance id + item path + column name), so that every
+   * subsequent choice_filter evaluation against a DIFFERENT ref value (e.g.
+   * the user picking a different municipio) is an O(1) map lookup instead
+   * of a full O(n) rescan of the secondary instance. Safe to cache for the
+   * lifetime of this FormEvaluator: secondaryDocs/tree are populated once in
+   * the constructor and never replaced (see FormSession.createFormSession).
+   */
+  private readonly itemsetIndexCache = new Map<string, Map<string, readonly InstanceNode[]>>();
 
   constructor(tree: InstanceTree, opts?: OpaqueReactiveObjectFactory | FormEvaluatorOptions) {
     this.tree = tree;
@@ -328,29 +343,147 @@ export class FormEvaluator {
     const contextNode = resolveReference(this.tree, ref);
     const ctx = this.makeContext(contextNode);
 
-    // Evaluate nodesetExpr as ANY_TYPE (nodeset)
-    const result = evaluateInstanceExpr(
-      itemset.nodesetExpr,
-      ctx.contextNode,
-      XPATH_EVALUATION_RESULT.ANY_TYPE,
-    );
+    const fastPathNodes = this.tryEqualityFilterFastPath(itemset, ctx.contextNode);
 
     // Collect result nodes
     const choices: SelectChoice[] = [];
-    let node = result.iterateNext();
-    while (node !== null) {
-      if (node.kind === 'element') {
+
+    if (fastPathNodes !== null) {
+      for (const node of fastPathNodes) {
         const value = this.evaluateRelativeOnNode(itemset.valueExpr, node);
         const label = this.resolveChoiceLabel(itemset, node);
         choices.push({ value, label });
       }
-      node = result.iterateNext();
+    } else {
+      // Evaluate nodesetExpr as ANY_TYPE (nodeset)
+      const result = evaluateInstanceExpr(
+        itemset.nodesetExpr,
+        ctx.contextNode,
+        XPATH_EVALUATION_RESULT.ANY_TYPE,
+      );
+
+      let node = result.iterateNext();
+      while (node !== null) {
+        if (node.kind === 'element') {
+          const value = this.evaluateRelativeOnNode(itemset.valueExpr, node);
+          const label = this.resolveChoiceLabel(itemset, node);
+          choices.push({ value, label });
+        }
+        node = result.iterateNext();
+      }
     }
 
     // Store and return
     const frozen = Object.freeze(choices);
     this.choiceCache.set(refKey, { triggerSig, choices: frozen });
     return frozen;
+  }
+
+  // Matches: instance('id')/seg1/seg2.../item[ column = ref ]  (either operand
+  // order). Deliberately conservative — no nested brackets, no compound
+  // predicates, no functions — anything else falls through to null and the
+  // generic evaluator runs unchanged.
+  private static readonly EQUALITY_FILTER_SHAPE_RE =
+    /^instance\((['"])([^'"]*)\1\)((?:\/[A-Za-z_][\w\-.]*)+)\[\s*([^[\]=]+?)\s*=\s*([^[\]=]+?)\s*\]$/;
+
+  private static isBareName(s: string): boolean {
+    return /^[A-Za-z_][\w\-.]*$/.test(s);
+  }
+
+  /**
+   * Fast path for the classic choice_filter shape
+   * `instance('id')/path/item[column = ref]` (JavaRosa's
+   * EqualityExpressionIndexFilterStrategy equivalent): index all candidate
+   * items by `column`'s string value once, then serve every subsequent
+   * distinct `ref` value as an O(1) lookup instead of rescanning the whole
+   * secondary instance through the generic XPath evaluator. Returns null
+   * (falling back to the generic evaluator, unchanged) whenever the shape
+   * isn't recognized with full confidence — this must never guess.
+   */
+  private tryEqualityFilterFastPath(
+    itemset: ItemsetDef,
+    questionContextNode: InstanceXPathNode,
+  ): readonly InstanceXPathNode[] | null {
+    const match = FormEvaluator.EQUALITY_FILTER_SHAPE_RE.exec(itemset.nodesetExpr.trim());
+    if (match === null) return null;
+
+    const [, , instanceId, pathExpr, lhsRaw, rhsRaw] = match;
+    const segments = pathExpr!.split('/').filter((s) => s.length > 0);
+    if (segments.length < 2) return null;
+
+    const lhsIsBare = FormEvaluator.isBareName(lhsRaw!);
+    const rhsIsBare = FormEvaluator.isBareName(rhsRaw!);
+
+    let columnName: string;
+    let refExpr: string;
+    if (lhsIsBare && !rhsIsBare) {
+      columnName = lhsRaw!;
+      refExpr = rhsRaw!;
+    } else if (rhsIsBare && !lhsIsBare) {
+      columnName = rhsRaw!;
+      refExpr = lhsRaw!;
+    } else {
+      // Ambiguous (both or neither side is a bare column name) — don't guess.
+      return null;
+    }
+
+    const doc = this.secondaryDocs.get(instanceId!);
+    if (doc === undefined || doc.kind !== 'document') return null;
+
+    const root = doc.tree.root;
+    if (root.name !== segments[0]) return null;
+
+    // Walk down to the item-level parent: every intermediate segment must
+    // resolve to exactly one child. An absent or ambiguous step bails out
+    // to the generic evaluator rather than guessing.
+    let parent = root;
+    for (let i = 1; i < segments.length - 1; i++) {
+      const matches = childrenNamed(parent, segments[i]!);
+      if (matches.length !== 1) return null;
+      parent = matches[0]!;
+    }
+
+    const itemName = segments[segments.length - 1]!;
+    const items = childrenNamed(parent, itemName);
+
+    // A quoted literal needs no evaluation; anything else is a real (small,
+    // single-value) XPath expression evaluated the normal way against the
+    // question's context — only the candidate-item SCAN is fast-pathed, not
+    // the filter value itself.
+    const literalMatch = /^(['"])([^'"]*)\1$/.exec(refExpr);
+    const targetValue = literalMatch !== null
+      ? literalMatch[2]!
+      : evaluateInstanceExpr(refExpr, questionContextNode, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
+
+    // JSON.stringify of a tuple, not string concatenation: instanceId is
+    // arbitrary form-author text and could itself contain any delimiter.
+    const cacheKey = JSON.stringify([instanceId, pathExpr, columnName]);
+    let index = this.itemsetIndexCache.get(cacheKey);
+
+    if (index === undefined) {
+      const built = new Map<string, InstanceNode[]>();
+
+      for (const item of items) {
+        const col = childrenNamed(item, columnName)[0];
+        if (col === undefined) continue;
+
+        const key = answerValueToXPathString(col.value);
+        let bucket = built.get(key);
+
+        if (bucket === undefined) {
+          bucket = [];
+          built.set(key, bucket);
+        }
+
+        bucket.push(item);
+      }
+
+      index = built;
+      this.itemsetIndexCache.set(cacheKey, index);
+    }
+
+    const matchedItems = index.get(targetValue) ?? [];
+    return matchedItems.map((item) => wrapInstanceNode(item, doc));
   }
 
   /**

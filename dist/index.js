@@ -7933,6 +7933,19 @@ var FormEvaluator = class _FormEvaluator {
    * evaluated; a changed signature triggers recomputation.
    */
   choiceCache = /* @__PURE__ */ new Map();
+  /**
+   * Equality-filter itemset index, mirroring JavaRosa's
+   * EqualityExpressionIndexFilterStrategy: for the common
+   * `instance('id')/path/item[column = ref]` choice_filter shape, index all
+   * candidate items by `column`'s string value ONCE (built lazily, on first
+   * use, keyed by instance id + item path + column name), so that every
+   * subsequent choice_filter evaluation against a DIFFERENT ref value (e.g.
+   * the user picking a different municipio) is an O(1) map lookup instead
+   * of a full O(n) rescan of the secondary instance. Safe to cache for the
+   * lifetime of this FormEvaluator: secondaryDocs/tree are populated once in
+   * the constructor and never replaced (see FormSession.createFormSession).
+   */
+  itemsetIndexCache = /* @__PURE__ */ new Map();
   constructor(tree, opts) {
     this.tree = tree;
     let factory;
@@ -8082,24 +8095,105 @@ var FormEvaluator = class _FormEvaluator {
     }
     const contextNode = resolveReference(this.tree, ref);
     const ctx = this.makeContext(contextNode);
-    const result = evaluateInstanceExpr(
-      itemset.nodesetExpr,
-      ctx.contextNode,
-      XPATH_EVALUATION_RESULT.ANY_TYPE
-    );
+    const fastPathNodes = this.tryEqualityFilterFastPath(itemset, ctx.contextNode);
     const choices = [];
-    let node = result.iterateNext();
-    while (node !== null) {
-      if (node.kind === "element") {
+    if (fastPathNodes !== null) {
+      for (const node of fastPathNodes) {
         const value = this.evaluateRelativeOnNode(itemset.valueExpr, node);
         const label = this.resolveChoiceLabel(itemset, node);
         choices.push({ value, label });
       }
-      node = result.iterateNext();
+    } else {
+      const result = evaluateInstanceExpr(
+        itemset.nodesetExpr,
+        ctx.contextNode,
+        XPATH_EVALUATION_RESULT.ANY_TYPE
+      );
+      let node = result.iterateNext();
+      while (node !== null) {
+        if (node.kind === "element") {
+          const value = this.evaluateRelativeOnNode(itemset.valueExpr, node);
+          const label = this.resolveChoiceLabel(itemset, node);
+          choices.push({ value, label });
+        }
+        node = result.iterateNext();
+      }
     }
     const frozen = Object.freeze(choices);
     this.choiceCache.set(refKey, { triggerSig, choices: frozen });
     return frozen;
+  }
+  // Matches: instance('id')/seg1/seg2.../item[ column = ref ]  (either operand
+  // order). Deliberately conservative — no nested brackets, no compound
+  // predicates, no functions — anything else falls through to null and the
+  // generic evaluator runs unchanged.
+  static EQUALITY_FILTER_SHAPE_RE = /^instance\((['"])([^'"]*)\1\)((?:\/[A-Za-z_][\w\-.]*)+)\[\s*([^[\]=]+?)\s*=\s*([^[\]=]+?)\s*\]$/;
+  static isBareName(s) {
+    return /^[A-Za-z_][\w\-.]*$/.test(s);
+  }
+  /**
+   * Fast path for the classic choice_filter shape
+   * `instance('id')/path/item[column = ref]` (JavaRosa's
+   * EqualityExpressionIndexFilterStrategy equivalent): index all candidate
+   * items by `column`'s string value once, then serve every subsequent
+   * distinct `ref` value as an O(1) lookup instead of rescanning the whole
+   * secondary instance through the generic XPath evaluator. Returns null
+   * (falling back to the generic evaluator, unchanged) whenever the shape
+   * isn't recognized with full confidence — this must never guess.
+   */
+  tryEqualityFilterFastPath(itemset, questionContextNode) {
+    const match = _FormEvaluator.EQUALITY_FILTER_SHAPE_RE.exec(itemset.nodesetExpr.trim());
+    if (match === null) return null;
+    const [, , instanceId, pathExpr, lhsRaw, rhsRaw] = match;
+    const segments = pathExpr.split("/").filter((s) => s.length > 0);
+    if (segments.length < 2) return null;
+    const lhsIsBare = _FormEvaluator.isBareName(lhsRaw);
+    const rhsIsBare = _FormEvaluator.isBareName(rhsRaw);
+    let columnName;
+    let refExpr;
+    if (lhsIsBare && !rhsIsBare) {
+      columnName = lhsRaw;
+      refExpr = rhsRaw;
+    } else if (rhsIsBare && !lhsIsBare) {
+      columnName = rhsRaw;
+      refExpr = lhsRaw;
+    } else {
+      return null;
+    }
+    const doc = this.secondaryDocs.get(instanceId);
+    if (doc === void 0 || doc.kind !== "document") return null;
+    const root = doc.tree.root;
+    if (root.name !== segments[0]) return null;
+    let parent = root;
+    for (let i = 1; i < segments.length - 1; i++) {
+      const matches = childrenNamed(parent, segments[i]);
+      if (matches.length !== 1) return null;
+      parent = matches[0];
+    }
+    const itemName = segments[segments.length - 1];
+    const items = childrenNamed(parent, itemName);
+    const literalMatch = /^(['"])([^'"]*)\1$/.exec(refExpr);
+    const targetValue = literalMatch !== null ? literalMatch[2] : evaluateInstanceExpr(refExpr, questionContextNode, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
+    const cacheKey = JSON.stringify([instanceId, pathExpr, columnName]);
+    let index = this.itemsetIndexCache.get(cacheKey);
+    if (index === void 0) {
+      const built = /* @__PURE__ */ new Map();
+      for (const item of items) {
+        const col = childrenNamed(item, columnName)[0];
+        if (col === void 0) continue;
+        const key = answerValueToXPathString(col.value);
+        let bucket = built.get(key);
+        if (bucket === void 0) {
+          bucket = [];
+          built.set(key, bucket);
+        }
+        bucket.push(item);
+      }
+      index = built;
+      this.itemsetIndexCache.set(cacheKey, index);
+    }
+    const matchedItems = index.get(targetValue) ?? [];
+    return matchedItems.map((item) => wrapInstanceNode(item, doc));
   }
   /**
    * @experimental
