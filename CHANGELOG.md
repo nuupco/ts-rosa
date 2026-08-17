@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-08-17
+
+### Changed
+- Filtering a large secondary instance by a single-select `choice_filter` (e.g. `instance('locs')/root/item[id_municipio = 'X']`) is now significantly faster. Two per-node computations in the vendored XPath evaluator (`NodeEvaluation.computeValues()` and `LocationPathEvaluation.nodeEvaluations`) that were eagerly computed together are now lazily computed and cached independently, since most comparisons (including this one) only ever need one of them. Measured on a real 296,124-row production CSV: ~2985ms → ~1710-1900ms (-36% to -43%).
+
 ## [0.1.3] - 2026-08-17
 
 ### Added
