@@ -8166,7 +8166,7 @@ var FormEvaluator = class _FormEvaluator {
    * Returns null if not found or if the body is empty.
    */
   findQuestionByRef(ref) {
-    const refKey = refToString(ref);
+    const refKey = refToString(genericize(ref));
     let found = null;
     function walk(elements) {
       for (const el of elements) {

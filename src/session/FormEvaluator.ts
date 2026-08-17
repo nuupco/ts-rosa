@@ -460,7 +460,11 @@ export class FormEvaluator {
    * Returns null if not found or if the body is empty.
    */
   private findQuestionByRef(ref: TreeReference): (FormElement & { kind: 'question' }) | null {
-    const refKey = refToString(ref);
+    // Body-tree question refs are templates: every ancestor level (e.g. a
+    // repeat) has unbound multiplicity, while `ref` carries the concrete
+    // multiplicity of the instance being evaluated. Compare against the
+    // genericized form so questions inside repeats resolve correctly.
+    const refKey = refToString(genericize(ref));
     let found: (FormElement & { kind: 'question' }) | null = null;
 
     function walk(elements: readonly FormElement[]): void {
