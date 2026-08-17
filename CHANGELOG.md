@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-08-17
+
+### Fixed
+- `buildInstanceNode()` built same-name element children via `appendChild()`, which recomputes multiplicity by scanning all of the parent's existing same-name children on every call — O(n) per child, O(n²) overall. This hit any large *inline* (non-CSV) secondary instance, e.g. a lookup table pasted directly into the XForm's `<instance>` block. Fixed with a running per-name counter, same fix shape as the CSV case in 0.1.2. Measured: a 20,000-item inline secondary instance parsed in ~9,952ms → ~269ms (~37x).
+
 ## [0.1.5] - 2026-08-17
 
 ### Changed
