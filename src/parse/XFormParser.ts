@@ -12,7 +12,7 @@ import type { InstanceNode } from '../model/instance/InstanceNode.ts';
 import type { InstanceTree } from '../model/instance/InstanceTree.ts';
 import type { DataBinding } from '../model/def/DataBinding.ts';
 import type { FormElement } from '../model/def/FormElement.ts';
-import { newNode, appendChild, getAttribute, setAttribute, deleteAttribute } from '../model/instance/InstanceNode.ts';
+import { newNode, getAttribute, setAttribute, deleteAttribute } from '../model/instance/InstanceNode.ts';
 import { resolveReference } from '../model/instance/InstanceTree.ts';
 import { INDEX_TEMPLATE } from '../model/instance/multiplicity.ts';
 import { cast } from '../model/data/codecs.ts';
@@ -57,15 +57,33 @@ export function buildInstanceNode(el: Element): InstanceNode {
     node.multiplicity = INDEX_TEMPLATE;
   }
 
-  // Walk child nodes
+  // Walk child nodes.
+  //
+  // Multiplicity is assigned directly instead of via appendChild(): appendChild
+  // recomputes it by scanning ALL of the parent's existing same-name children
+  // on every call, which is O(n) per child and O(n²) overall for n children —
+  // catastrophic for a large inline secondary instance (e.g. a lookup table
+  // pasted directly into the XForm's <instance> block instead of referenced
+  // via jr://file-csv). A running per-name counter reproduces the exact same
+  // count appendChild would have computed (including template children,
+  // which count toward the total but never receive a computed multiplicity
+  // themselves) without the rescan.
   let hasElementChildren = false;
+  const sameNameCounts = new Map<string, number>();
   const children = el.childNodes;
   for (let i = 0; i < children.length; i++) {
     const child = children[i];
     if (!child) continue;
     if (child.nodeType === 1 /* ELEMENT_NODE */) {
       hasElementChildren = true;
-      appendChild(node, buildInstanceNode(child as Element));
+      const childNode = buildInstanceNode(child as Element);
+      const sameNameCount = sameNameCounts.get(childNode.name) ?? 0;
+      if (childNode.multiplicity !== INDEX_TEMPLATE) {
+        childNode.multiplicity = sameNameCount;
+      }
+      sameNameCounts.set(childNode.name, sameNameCount + 1);
+      childNode.parent = node;
+      node.children.push(childNode);
     }
   }
 

@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
 import { parseForm, parseDocument, buildInstanceNode } from '../../src/parse/XFormParser.ts';
 import { getAttribute } from '../../src/model/instance/InstanceNode.ts';
+import { INDEX_TEMPLATE } from '../../src/model/instance/multiplicity.ts';
 import { html, head, body, model, mainInstance, bind, input, select1, select, t, label, item } from '../harness/XFormsElement.ts';
 import type { XFormsElement } from '../harness/XFormsElement.ts';
 
@@ -265,5 +266,53 @@ describe('buildInstanceNode (public export — sdd/last-saved-instance)', () => 
     expect(node.name).toBe('name');
     expect(node.children).toHaveLength(0);
     expect(getAttribute(node, '__rawText')).toBe('Alice');
+  });
+
+  it('assigns sequential multiplicities to same-name siblings without calling appendChild', () => {
+    const doc = new DOMParser().parseFromString(
+      '<root><item>a</item><item>b</item><item>c</item></root>',
+      'text/xml',
+    ) as unknown as Document;
+    const el = doc.documentElement as unknown as Element;
+
+    const node = buildInstanceNode(el);
+
+    expect(node.children.map((c) => c.multiplicity)).toEqual([0, 1, 2]);
+  });
+
+  it('counts a template sibling toward the running count without assigning it a computed multiplicity', () => {
+    const doc = new DOMParser().parseFromString(
+      '<root xmlns:jr="http://openrosa.org/javarosa"><item jr:template="">t</item><item>a</item><item>b</item></root>',
+      'text/xml',
+    ) as unknown as Document;
+    const el = doc.documentElement as unknown as Element;
+
+    const node = buildInstanceNode(el);
+
+    expect(node.children.map((c) => c.multiplicity)).toEqual([INDEX_TEMPLATE, 1, 2]);
+  });
+
+  it('builds a large inline secondary instance (20k same-name children) in near-linear time', () => {
+    // Regression test: appendChild(node, buildInstanceNode(child)) used to
+    // recompute each child's multiplicity by scanning ALL of the parent's
+    // existing same-name children on every call — O(n) per child, O(n²)
+    // overall. A 20k-item inline (non-CSV) secondary instance took ~10s to
+    // build. Fixed by tracking multiplicity with a running per-name counter
+    // instead of appendChild's rescan.
+    const N = 20_000;
+    const items = Array.from({ length: N }, (_, i) => `<item>${i}</item>`).join('');
+    const doc = new DOMParser().parseFromString(`<root>${items}</root>`, 'text/xml') as unknown as Document;
+    const el = doc.documentElement as unknown as Element;
+
+    const t0 = performance.now();
+    const node = buildInstanceNode(el);
+    const elapsedMs = performance.now() - t0;
+
+    expect(node.children).toHaveLength(N);
+    expect(node.children[0]!.multiplicity).toBe(0);
+    expect(node.children[N - 1]!.multiplicity).toBe(N - 1);
+    // O(n²) would take multiple seconds at this size; O(n) finishes in well
+    // under a second even on a loaded CI runner.
+    expect(elapsedMs).toBeLessThan(5000);
   });
 });

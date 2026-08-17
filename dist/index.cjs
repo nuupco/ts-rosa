@@ -7671,13 +7671,21 @@ function buildInstanceNode(el) {
     node.multiplicity = INDEX_TEMPLATE;
   }
   let hasElementChildren = false;
+  const sameNameCounts = /* @__PURE__ */ new Map();
   const children = el.childNodes;
   for (let i = 0; i < children.length; i++) {
     const child = children[i];
     if (!child) continue;
     if (child.nodeType === 1) {
       hasElementChildren = true;
-      appendChild(node, buildInstanceNode(child));
+      const childNode = buildInstanceNode(child);
+      const sameNameCount = sameNameCounts.get(childNode.name) ?? 0;
+      if (childNode.multiplicity !== INDEX_TEMPLATE) {
+        childNode.multiplicity = sameNameCount;
+      }
+      sameNameCounts.set(childNode.name, sameNameCount + 1);
+      childNode.parent = node;
+      node.children.push(childNode);
     }
   }
   if (!hasElementChildren) {
