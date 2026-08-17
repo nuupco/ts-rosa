@@ -10390,7 +10390,8 @@ function csvToInstanceTree(id2, csvText) {
         `csvToInstanceTree: CSV for instance '${id2}' has a column count mismatch at row ${rowIndex + 2} (header has ${columns.length} column(s), row has ${row.length})`
       );
     }
-    const item = newNode("item");
+    const item = newNode("item", { multiplicity: rowIndex });
+    item.parent = root;
     for (let colIndex = 0; colIndex < columns.length; colIndex++) {
       const columnName = columns[colIndex];
       const cell = row[colIndex];
@@ -10398,7 +10399,7 @@ function csvToInstanceTree(id2, csvText) {
       col.attributes.set(RAW_TEXT_ATTR, cell);
       appendChild(item, col);
     }
-    appendChild(root, item);
+    root.children.push(item);
   });
   const tree = { root, name: id2 };
   applyBindings(tree, /* @__PURE__ */ new Map());

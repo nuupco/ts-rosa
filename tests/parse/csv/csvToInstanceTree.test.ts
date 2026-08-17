@@ -43,6 +43,30 @@ describe('csvToInstanceTree', () => {
     expect(() => csvToInstanceTree('cities', csv)).toThrow(/column count/i);
   });
 
+  it('builds a large CSV (20k rows) in near-linear time with correct multiplicities', () => {
+    // Regression test: appendChild(root, item) used to recompute each item's
+    // multiplicity by scanning ALL of root's existing children on every
+    // call — O(n) per row, O(n²) overall. That made a 100k-row secondary
+    // instance CSV take ~84s to build (reported as an indefinite hang in a
+    // consuming app). Fixed by assigning multiplicity directly, since rows
+    // are appended in order and no other node under root is named 'item'.
+    const N = 20_000;
+    const rows = Array.from({ length: N }, (_, i) => `loc${i},Localidad ${i}`).join('\n');
+    const csv = `name,label\n${rows}\n`;
+
+    const t0 = performance.now();
+    const tree = csvToInstanceTree('locations', csv);
+    const elapsedMs = performance.now() - t0;
+
+    expect(tree.root.children).toHaveLength(N);
+    expect(tree.root.children[0]!.multiplicity).toBe(0);
+    expect(tree.root.children[N - 1]!.multiplicity).toBe(N - 1);
+    expect(tree.root.children[N - 1]!.children[0]!.value?.value).toBe(`loc${N - 1}`);
+    // O(n²) would take tens of seconds at this size; O(n) finishes in well
+    // under a second even on a loaded CI runner.
+    expect(elapsedMs).toBeLessThan(5000);
+  });
+
   it('matches the shape produced by inline buildInstanceTree for the equivalent XML', () => {
     // Equivalent inline instance: <root><item><name>Merida</name><region>Yucatan</region></item></root>
     const csv = 'name,region\nMerida,Yucatan\n';

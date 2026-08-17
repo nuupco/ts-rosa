@@ -35,7 +35,16 @@ export function csvToInstanceTree(id: string, csvText: string): InstanceTree {
       );
     }
 
-    const item = newNode('item');
+    // Multiplicity is assigned directly (= rowIndex) instead of going through
+    // appendChild(root, item): appendChild recomputes it by scanning ALL of
+    // root's existing same-name children on every call, which is O(n) per
+    // row and O(n²) overall for n rows — root has thousands to hundreds of
+    // thousands of `item` children in a real CSV secondary instance, and
+    // that quadratic blowup is what made large CSVs hang. Every prior row
+    // is an `item` with no other same-name sibling, so rowIndex IS the
+    // sibling count appendChild would have computed.
+    const item = newNode('item', { multiplicity: rowIndex });
+    item.parent = root;
     for (let colIndex = 0; colIndex < columns.length; colIndex++) {
       const columnName = columns[colIndex]!;
       const cell = row[colIndex]!;
@@ -43,7 +52,7 @@ export function csvToInstanceTree(id: string, csvText: string): InstanceTree {
       col.attributes.set(RAW_TEXT_ATTR, cell);
       appendChild(item, col);
     }
-    appendChild(root, item);
+    root.children.push(item);
   });
 
   const tree: InstanceTree = { root, name: id };
