@@ -930,18 +930,21 @@ export class FormEvaluator {
     if (cascadeRoots !== undefined && cascadeRoots.size > 0) {
       const toTrigger = getAllToTrigger(cascadeRoots, useDag.immediateCascades);
 
-      const alreadyEvaluated = new Set<Triggerable>();
-      for (const triggerable of useDag.triggerablesDAG) {
-        if (!toTrigger.has(triggerable)) continue;
-        if (alreadyEvaluated.has(triggerable)) continue;
+      // Sort just the (usually small) toTrigger subset into topological
+      // order via the precomputed index, instead of scanning the full
+      // triggerablesDAG array to filter it down by Set membership — this
+      // ran on EVERY answerQuestion() call regardless of how small
+      // toTrigger actually was.
+      const ordered = Array.from(toTrigger).sort(
+        (a, b) => useDag.triggerableIndex.get(a)! - useDag.triggerableIndex.get(b)!,
+      );
 
+      for (const triggerable of ordered) {
         if (triggerable.kind === 'recalculate') {
           this.applyRecalculate(triggerable, changedRef);
         } else if (triggerable.kind === 'condition') {
           this.applyCondition(triggerable, changedRef);
         }
-
-        alreadyEvaluated.add(triggerable);
       }
     }
 

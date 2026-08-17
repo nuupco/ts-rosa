@@ -70,6 +70,15 @@ export interface TriggerableDag {
    * Built by buildRelevancePerRepeat; consumed by repeat add/remove (Slice 3.7).
    */
   readonly relevancePerRepeat: ReadonlyMap<string, Triggerable>;
+
+  /**
+   * Each triggerable's position in `triggerablesDAG` (its topological order).
+   * Lets triggerTriggerables() sort just the (usually small) toTrigger subset
+   * into evaluation order in O(k log k), instead of scanning the full
+   * triggerablesDAG array (O(n)) on every answerQuestion() call to filter it
+   * down via Set membership.
+   */
+  readonly triggerableIndex: ReadonlyMap<Triggerable, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -98,12 +107,16 @@ export function finalizeDag(
   const triggerablesDAG = buildDag(allTriggerables, edges);
   const relevancePerRepeat = buildRelevancePerRepeat(triggerablesDAG, tree);
 
+  const triggerableIndex = new Map<Triggerable, number>();
+  triggerablesDAG.forEach((t, i) => triggerableIndex.set(t, i));
+
   return {
     allTriggerables,
     triggerablesDAG,
     triggerablesPerTrigger,
     immediateCascades,
     relevancePerRepeat,
+    triggerableIndex,
   };
 }
 

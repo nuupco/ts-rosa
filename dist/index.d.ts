@@ -790,6 +790,14 @@ interface TriggerableDag {
      * Built by buildRelevancePerRepeat; consumed by repeat add/remove (Slice 3.7).
      */
     readonly relevancePerRepeat: ReadonlyMap<string, Triggerable>;
+    /**
+     * Each triggerable's position in `triggerablesDAG` (its topological order).
+     * Lets triggerTriggerables() sort just the (usually small) toTrigger subset
+     * into evaluation order in O(k log k), instead of scanning the full
+     * triggerablesDAG array (O(n)) on every answerQuestion() call to filter it
+     * down via Set membership.
+     */
+    readonly triggerableIndex: ReadonlyMap<Triggerable, number>;
 }
 
 /**

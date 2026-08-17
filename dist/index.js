@@ -7019,12 +7019,15 @@ function finalizeDag(allTriggerables, triggerablesPerTrigger, tree) {
   const edges = getDagEdges(allTriggerables, triggerablesPerTrigger, immediateCascades, tree);
   const triggerablesDAG = buildDag(allTriggerables, edges);
   const relevancePerRepeat = buildRelevancePerRepeat(triggerablesDAG, tree);
+  const triggerableIndex = /* @__PURE__ */ new Map();
+  triggerablesDAG.forEach((t, i) => triggerableIndex.set(t, i));
   return {
     allTriggerables,
     triggerablesDAG,
     triggerablesPerTrigger,
     immediateCascades,
-    relevancePerRepeat
+    relevancePerRepeat,
+    triggerableIndex
   };
 }
 function addTriggerable(triggerable, allTriggerables, triggerablesPerTrigger) {
@@ -8552,16 +8555,15 @@ var FormEvaluator = class _FormEvaluator {
     const cascadeRoots = useDag.triggerablesPerTrigger.get(key);
     if (cascadeRoots !== void 0 && cascadeRoots.size > 0) {
       const toTrigger = getAllToTrigger(cascadeRoots, useDag.immediateCascades);
-      const alreadyEvaluated = /* @__PURE__ */ new Set();
-      for (const triggerable of useDag.triggerablesDAG) {
-        if (!toTrigger.has(triggerable)) continue;
-        if (alreadyEvaluated.has(triggerable)) continue;
+      const ordered = Array.from(toTrigger).sort(
+        (a, b) => useDag.triggerableIndex.get(a) - useDag.triggerableIndex.get(b)
+      );
+      for (const triggerable of ordered) {
         if (triggerable.kind === "recalculate") {
           this.applyRecalculate(triggerable, changedRef);
         } else if (triggerable.kind === "condition") {
           this.applyCondition(triggerable, changedRef);
         }
-        alreadyEvaluated.add(triggerable);
       }
     }
     if (this.actionRegistry !== null) {
