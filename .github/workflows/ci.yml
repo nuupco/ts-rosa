@@ -29,5 +29,12 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: dist/ is committed — verify it matches source
+        run: |
+          git diff --exit-code -- dist/index.js dist/index.cjs dist/index.d.ts dist/index.d.cts || {
+            echo "::error::dist/ is out of date. Run 'bun run build' and commit the result.";
+            exit 1;
+          }
+
       - name: E2E (published entry point)
         run: bun run test:e2e
