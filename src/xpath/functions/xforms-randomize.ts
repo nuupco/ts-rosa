@@ -17,7 +17,7 @@
  * Phase 6, Slice 6b (REQ-6B-3, REQ-6B-4, REQ-6B-5, REQ-6B-6, REQ-X-3).
  */
 
-import { SHA256 } from 'crypto-js';
+import SHA256 from 'crypto-js/sha256';
 
 import type { XPathNode } from '../vendor/xpath/adapter/interface/XPathNode.ts';
 import { LocationPathEvaluation } from '../vendor/xpath/evaluations/LocationPathEvaluation.ts';

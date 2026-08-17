@@ -1,4 +1,4 @@
-import { SHA256 } from 'crypto-js';
+import SHA256 from 'crypto-js/sha256';
 
 import type { XPathNode } from '../../adapter/interface/XPathNode.ts';
 import type { XPathDOMProvider } from '../../adapter/xpathDOMProvider.ts';

@@ -1,12 +1,16 @@
 // TODO: make digest optional, and the `crypto-js` package along with it
-import { MD5, SHA1, SHA256, SHA384, SHA512 } from 'crypto-js';
+import MD5 from 'crypto-js/md5';
+import SHA1 from 'crypto-js/sha1';
+import SHA256 from 'crypto-js/sha256';
+import SHA384 from 'crypto-js/sha384';
+import SHA512 from 'crypto-js/sha512';
 import * as base64 from 'crypto-js/enc-base64';
 import * as hex from 'crypto-js/enc-hex';
-import { enc as CryptoEnc } from 'crypto-js';
+import Utf8 from 'crypto-js/enc-utf8';
 import type { XPathNode } from '../../adapter/interface/XPathNode.ts';
 
 // Inline base64 decode using crypto-js (avoids browser-global `atob`).
-const decode = (input: string): string => CryptoEnc.Utf8.stringify(base64.parse(input));
+const decode = (input: string): string => Utf8.stringify(base64.parse(input));
 import { IncompatibleRuntimeEnvironmentError } from '../../error/IncompatibleRuntimeEnvironmentError.ts';
 import type { Evaluation } from '../../evaluations/Evaluation.ts';
 import type { LocationPathEvaluation } from '../../evaluations/LocationPathEvaluation.ts';
