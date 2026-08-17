@@ -6,7 +6,7 @@
 
 `@nuup/ts-rosa` is a pure TypeScript XForms engine that parses ODK XForms XML and runs them programmatically. It's a faithful port of JavaRosa (the engine that powers ODK Collect, Enketo, and ODK Central), designed for React Native / Hermes.
 
-**1073+ tests.** No DOM, no WASM, no Node-specific APIs. Runtime dependencies are limited to `@xmldom/xmldom`, `crypto-js`, and `temporal-polyfill` — the same three packages are declared under `dependencies` and marked `external` in the build, so they resolve from your project's `node_modules` instead of being duplicated inside the bundle.
+**1300+ tests.** No DOM, no WASM, no Node-specific APIs. Runtime dependencies are limited to `@xmldom/xmldom`, `crypto-js`, and `temporal-polyfill` — the same three packages are declared under `dependencies` and marked `external` in the build, so they resolve from your project's `node_modules` instead of being duplicated inside the bundle.
 
 ## Quick Start
 

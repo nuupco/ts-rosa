@@ -6,5 +6,4 @@ coverage/
 
 # JavaRosa reference clone — used only for analysis and curated fixture vendoring, not shipped.
 reference/
-.atl/.skill-registry.cache.json
-.atl/skill-registry.md
+.atl/
