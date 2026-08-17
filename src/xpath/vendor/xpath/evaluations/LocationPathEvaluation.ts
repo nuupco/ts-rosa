@@ -525,7 +525,30 @@ export class LocationPathEvaluation<T extends XPathNode>
 	// --- Evaluation ---
 	readonly type = 'NODE';
 
-	protected readonly nodeEvaluations: ReadonlyArray<NodeEvaluation<T>>;
+	// PERF (ts-rosa-original): lazily computed and cached on first access,
+	// rather than eagerly built in the constructor. `[Symbol.iterator]`
+	// constructs one single-node LocationPathEvaluation per context node
+	// while stepping through a location path (e.g. per row when filtering a
+	// large secondary instance by a predicate) — most of those intermediate,
+	// single-node wrappers only ever need `contextNodes` to take the next
+	// step and never touch `nodeEvaluations` at all. At hundreds of
+	// thousands of context nodes, skipping the unused Array.from().map()
+	// (and the NodeEvaluation objects it built) for every intermediate
+	// wrapper was the dominant cost of evaluating such a predicate.
+	protected _nodeEvaluations: ReadonlyArray<NodeEvaluation<T>> | undefined;
+
+	protected get nodeEvaluations(): ReadonlyArray<NodeEvaluation<T>> {
+		let nodeEvaluations = this._nodeEvaluations;
+
+		if (nodeEvaluations === undefined) {
+			nodeEvaluations = Array.from(this.contextNodes).map((node) => {
+				return new NodeEvaluation(this, node);
+			});
+			this._nodeEvaluations = nodeEvaluations;
+		}
+
+		return nodeEvaluations;
+	}
 
 	// --- Context ---
 	readonly evaluator: Evaluator<T>;
@@ -611,9 +634,6 @@ export class LocationPathEvaluation<T extends XPathNode>
 
 		this.nodes = contextNodes;
 
-		this.nodeEvaluations = Array.from(contextNodes).map((node) => {
-			return new NodeEvaluation(this, node);
-		});
 		this.computedContextSize = options.contextSize ?? contextNodes.size;
 		this.initializedContextPosition = options.contextPosition ?? 1;
 	}

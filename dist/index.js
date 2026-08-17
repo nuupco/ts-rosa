@@ -1019,55 +1019,82 @@ var NodeEvaluation = class extends ValueEvaluation {
     super();
     this.context = context;
     this.value = value;
-    this.nodes = /* @__PURE__ */ new Set([value]);
   }
   context;
   value;
   type = "NODE";
-  nodes;
-  computedValues = null;
+  // PERF (ts-rosa-original): each of nodes/stringValue/numberValue/isEmpty is
+  // computed lazily and cached independently, rather than eagerly computing
+  // all four together on first access (as an upstream single computeValues()
+  // pass did). Most XPath comparisons only ever read one of these — e.g.
+  // ValueEvaluation.eq() for a NODE-vs-STRING comparison (the common
+  // itemset choice_filter shape: item[col = 'literal']) only calls
+  // toString(), never toNumber() — so eagerly computing numberValue
+  // (a function-registry lookup + StringEvaluation construction) for
+  // every context node visited during a predicate scan was pure waste.
+  // At hundreds of thousands of nodes (e.g. a large CSV secondary
+  // instance filtered by a single-select), that waste dominated the
+  // evaluation cost of the whole expression.
+  _nodes;
+  _stringValue;
+  _isEmpty;
+  _numberValue;
+  get nodes() {
+    let nodes = this._nodes;
+    if (nodes === void 0) {
+      nodes = /* @__PURE__ */ new Set([this.value]);
+      this._nodes = nodes;
+    }
+    return nodes;
+  }
+  getStringValue() {
+    let stringValue2 = this._stringValue;
+    if (stringValue2 === void 0) {
+      stringValue2 = this.context.domProvider.getNodeValue(this.value);
+      this._stringValue = stringValue2;
+    }
+    return stringValue2;
+  }
+  getIsEmpty() {
+    let isEmpty = this._isEmpty;
+    if (isEmpty === void 0) {
+      isEmpty = trimXMLXPathWhitespace(this.getStringValue()) === "";
+      this._isEmpty = isEmpty;
+    }
+    return isEmpty;
+  }
   get booleanValue() {
-    return this.computeValues().booleanValue;
+    return !this.getIsEmpty();
   }
   get numberValue() {
-    return this.computeValues().numberValue;
+    let numberValue = this._numberValue;
+    if (numberValue === void 0) {
+      numberValue = this.computeNumberValue();
+      this._numberValue = numberValue;
+    }
+    return numberValue;
   }
   get stringValue() {
-    return this.computeValues().stringValue;
+    return this.getStringValue();
   }
   get isEmpty() {
-    return this.computeValues().isEmpty;
+    return this.getIsEmpty();
   }
-  computeValues() {
-    let { computedValues } = this;
-    if (computedValues == null) {
-      const { context, value: node } = this;
-      const stringValue2 = context.domProvider.getNodeValue(node);
-      const isEmpty = trimXMLXPathWhitespace(stringValue2) === "";
-      const booleanValue2 = !isEmpty;
-      const numberFunction = context.functions.getDefaultImplementation("number");
-      let numberValue;
-      if (isEmpty) {
-        numberValue = NaN;
-      } else if (numberFunction == null) {
-        numberValue = Number(stringValue2);
-      } else {
-        const stringEvaluation = new StringEvaluation(context, stringValue2);
-        numberValue = numberFunction.call(context, [
-          {
-            evaluate: () => stringEvaluation
-          }
-        ]).toNumber();
-      }
-      computedValues = {
-        booleanValue: booleanValue2,
-        isEmpty,
-        numberValue,
-        stringValue: stringValue2
-      };
-      this.computedValues = computedValues;
+  computeNumberValue() {
+    const { context } = this;
+    if (this.getIsEmpty()) {
+      return NaN;
     }
-    return computedValues;
+    const numberFunction = context.functions.getDefaultImplementation("number");
+    if (numberFunction == null) {
+      return Number(this.getStringValue());
+    }
+    const stringEvaluation = new StringEvaluation(context, this.getStringValue());
+    return numberFunction.call(context, [
+      {
+        evaluate: () => stringEvaluation
+      }
+    ]).toNumber();
   }
 };
 
@@ -1305,9 +1332,6 @@ var LocationPathEvaluation = class _LocationPathEvaluation {
     this.rootNode = rootNode;
     this.timeZone = timeZone;
     this.nodes = contextNodes;
-    this.nodeEvaluations = Array.from(contextNodes).map((node) => {
-      return new NodeEvaluation(this, node);
-    });
     this.computedContextSize = options.contextSize ?? contextNodes.size;
     this.initializedContextPosition = options.contextPosition ?? 1;
   }
@@ -1325,7 +1349,27 @@ var LocationPathEvaluation = class _LocationPathEvaluation {
   domProvider;
   // --- Evaluation ---
   type = "NODE";
-  nodeEvaluations;
+  // PERF (ts-rosa-original): lazily computed and cached on first access,
+  // rather than eagerly built in the constructor. `[Symbol.iterator]`
+  // constructs one single-node LocationPathEvaluation per context node
+  // while stepping through a location path (e.g. per row when filtering a
+  // large secondary instance by a predicate) — most of those intermediate,
+  // single-node wrappers only ever need `contextNodes` to take the next
+  // step and never touch `nodeEvaluations` at all. At hundreds of
+  // thousands of context nodes, skipping the unused Array.from().map()
+  // (and the NodeEvaluation objects it built) for every intermediate
+  // wrapper was the dominant cost of evaluating such a predicate.
+  _nodeEvaluations;
+  get nodeEvaluations() {
+    let nodeEvaluations = this._nodeEvaluations;
+    if (nodeEvaluations === void 0) {
+      nodeEvaluations = Array.from(this.contextNodes).map((node) => {
+        return new NodeEvaluation(this, node);
+      });
+      this._nodeEvaluations = nodeEvaluations;
+    }
+    return nodeEvaluations;
+  }
   // --- Context ---
   evaluator;
   context = this;
