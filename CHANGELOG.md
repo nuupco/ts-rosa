@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-08-17
+
+### Changed
+- `resolveReference`/`resolveAll`/`resolveAllWithin`/`resolveAllContextualized` now find same-name non-template children in a single pass with early exit, instead of two chained `.filter()` scans per reference level. Measured in isolation: resolving every instance in a 4,000-sibling set once, 397ms → 130ms (~3x).
+- `triggerTriggerables()` sorts the (small) set of triggerables to re-evaluate by a precomputed topological index, instead of scanning the full triggerable list on every `answerQuestion()` call. No measurable difference at plausible form sizes (evaluating each triggerable's expression dominates), but strictly smaller asymptotic cost with zero behavior change.
+
 ## [0.1.6] - 2026-08-17
 
 ### Fixed
