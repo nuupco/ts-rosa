@@ -1,8 +1,11 @@
 node_modules/
-dist/
 coverage/
 *.log
 .DS_Store
+
+# dist/ is committed (git-installable, no npm publish yet) but sourcemaps
+# aren't needed in the repo itself — bun run build regenerates them locally.
+dist/**/*.map
 
 # JavaRosa reference clone — used only for analysis and curated fixture vendoring, not shipped.
 reference/

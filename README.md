@@ -10,8 +10,11 @@
 
 ## Quick Start
 
+Not published to npm yet — install directly from GitHub (`dist/` is
+committed to the repo, so no build step is required on install):
+
 ```bash
-npm install @nuup/ts-rosa
+npm install github:nuupco/ts-rosa
 ```
 
 Register an `XmlParser` provider once at bootstrap (the engine never calls
