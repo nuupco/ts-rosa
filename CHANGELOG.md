@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] - 2026-08-18
+
+### Fixed
+- `jr:choice-name()` threw `"...which has no possible choices"` for every well-formed form that used it (static choices or itemset alike) — the `XPathChoiceNode` interface it depends on was never implemented by any node type. `InstanceElementNode` now implements `getChoiceName()`, reusing `getChoices()` entirely (same cache, same static/itemset branching, same itext resolution). A node with no matching question or choice now resolves to `''` (fail-soft) instead of throwing.
+
 ## [0.1.7] - 2026-08-17
 
 ### Changed
