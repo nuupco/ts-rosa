@@ -6167,6 +6167,13 @@ var activeRelevanceCheck = null;
 function setActiveRelevanceCheck(check) {
   activeRelevanceCheck = check;
 }
+var activeChoiceNameResolver = null;
+function getActiveChoiceNameResolver() {
+  return activeChoiceNameResolver;
+}
+function setActiveChoiceNameResolver(resolver) {
+  activeChoiceNameResolver = resolver;
+}
 var documentCaches = /* @__PURE__ */ new WeakMap();
 function makeInstanceDocumentNode(tree, opts) {
   const doc = {
@@ -6193,7 +6200,10 @@ function wrapInstanceNode(node, doc) {
     [XPathNodeKindKey]: "element",
     kind: "element",
     node,
-    doc
+    doc,
+    getChoiceName(value) {
+      return activeChoiceNameResolver?.(wrapper, value) ?? null;
+    }
   };
   cache.set(node, wrapper);
   return wrapper;
@@ -8258,20 +8268,55 @@ var FormEvaluator = class _FormEvaluator {
    * Returns the string result (or empty string on error/empty nodeset).
    */
   evaluateRelativeOnNode(expr, node) {
-    const result = evaluateInstanceExpr(expr, node, XPATH_EVALUATION_RESULT.ANY_TYPE);
-    switch (result.resultType) {
-      case XPATH_EVALUATION_RESULT.STRING_TYPE:
-        return result.stringValue;
-      case XPATH_EVALUATION_RESULT.NUMBER_TYPE:
-        return String(result.numberValue);
-      case XPATH_EVALUATION_RESULT.BOOLEAN_TYPE:
-        return result.booleanValue ? "true" : "false";
-      default: {
-        const first = result.iterateNext();
-        if (first === null) return "";
-        return evaluateInstanceExpr("string(.)", first, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
+    return this.withActiveChoiceNameResolver(() => {
+      const result = evaluateInstanceExpr(expr, node, XPATH_EVALUATION_RESULT.ANY_TYPE);
+      switch (result.resultType) {
+        case XPATH_EVALUATION_RESULT.STRING_TYPE:
+          return result.stringValue;
+        case XPATH_EVALUATION_RESULT.NUMBER_TYPE:
+          return String(result.numberValue);
+        case XPATH_EVALUATION_RESULT.BOOLEAN_TYPE:
+          return result.booleanValue ? "true" : "false";
+        default: {
+          const first = result.iterateNext();
+          if (first === null) return "";
+          return evaluateInstanceExpr("string(.)", first, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
+        }
       }
+    });
+  }
+  /**
+   * Run `fn` with the active jr:choice-name() resolver set to this
+   * FormEvaluator's own resolveChoiceName, restoring whatever was active
+   * before on exit (safe for nested/re-entrant calls, and for multiple
+   * FormEvaluator instances alive at once — see setActiveChoiceNameResolver).
+   */
+  withActiveChoiceNameResolver(fn2) {
+    const previous = getActiveChoiceNameResolver();
+    setActiveChoiceNameResolver((node, value) => this.resolveChoiceName(node, value));
+    try {
+      return fn2();
+    } finally {
+      setActiveChoiceNameResolver(previous);
     }
+  }
+  /**
+   * Implements jr:choice-name()'s node-side contract (XPathChoiceNode):
+   * given an InstanceElementNode bound to a select/select1 question and a
+   * choice value/token, resolve that choice's label — static or itemset,
+   * itext-translated if applicable. Reuses getChoices() entirely (same
+   * cache, same static/itemset branching, same itext resolution) rather
+   * than duplicating any of that logic here.
+   *
+   * Returns null when `node` isn't bound to a recognized select question or
+   * `value` doesn't match any of its choices — jr:choice-name() then
+   * returns '' rather than throwing (fail-soft: a form-authoring mistake
+   * shouldn't crash the session).
+   */
+  resolveChoiceName(node, value) {
+    const ref = this.nodeToRef(node);
+    if (ref === null) return null;
+    return this.getChoices(ref).find((c) => c.value === value)?.label ?? null;
   }
   /**
    * Compute a trigger signature for the given nodesetExpr.
@@ -8388,21 +8433,23 @@ var FormEvaluator = class _FormEvaluator {
    * string-value when the result is a nodeset.
    */
   evaluateOnInstance(expr, contextNode) {
-    const ctx = this.makeContext(contextNode);
-    const result = evaluateInstanceExpr(expr, ctx.contextNode, XPATH_EVALUATION_RESULT.ANY_TYPE);
-    switch (result.resultType) {
-      case XPATH_EVALUATION_RESULT.BOOLEAN_TYPE:
-        return result.booleanValue;
-      case XPATH_EVALUATION_RESULT.NUMBER_TYPE:
-        return result.numberValue;
-      case XPATH_EVALUATION_RESULT.STRING_TYPE:
-        return result.stringValue;
-      default: {
-        const first = result.iterateNext();
-        if (first === null) return "";
-        return evaluateInstanceExpr("string(.)", first, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
+    return this.withActiveChoiceNameResolver(() => {
+      const ctx = this.makeContext(contextNode);
+      const result = evaluateInstanceExpr(expr, ctx.contextNode, XPATH_EVALUATION_RESULT.ANY_TYPE);
+      switch (result.resultType) {
+        case XPATH_EVALUATION_RESULT.BOOLEAN_TYPE:
+          return result.booleanValue;
+        case XPATH_EVALUATION_RESULT.NUMBER_TYPE:
+          return result.numberValue;
+        case XPATH_EVALUATION_RESULT.STRING_TYPE:
+          return result.stringValue;
+        default: {
+          const first = result.iterateNext();
+          if (first === null) return "";
+          return evaluateInstanceExpr("string(.)", first, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
+        }
       }
-    }
+    });
   }
   /**
    * Evaluate a pre-compiled instance expression with the active relevance closure.
@@ -8416,11 +8463,14 @@ var FormEvaluator = class _FormEvaluator {
       if (nodeRef === null) return true;
       return this.isEffectivelyRelevant(nodeRef);
     });
+    const previousChoiceNameResolver = getActiveChoiceNameResolver();
+    setActiveChoiceNameResolver((node, value) => this.resolveChoiceName(node, value));
     let result;
     try {
       result = compiled.evaluate(ctx);
     } finally {
       setActiveRelevanceCheck(null);
+      setActiveChoiceNameResolver(previousChoiceNameResolver);
     }
     if (typeof result === "string" || typeof result === "number" || typeof result === "boolean") {
       return result;

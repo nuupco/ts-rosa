@@ -69,6 +69,31 @@ export function setActiveRelevanceCheck(check: RelevanceCheck): void {
 }
 
 // ---------------------------------------------------------------------------
+// Choice-name resolver slot — same single-threaded seam pattern as the
+// relevance check above. FormEvaluator sets this so that jr:choice-name()
+// (src/xpath/vendor/xpath/functions/javarosa/select.ts) can resolve a
+// select/select1 node's static choices or itemset without the "pure" XPath
+// adapter/evaluator layer needing to know about FormDefinition/itext at all.
+// ---------------------------------------------------------------------------
+
+type ChoiceNameResolver = ((node: InstanceElementNode, value: string) => string | null) | null;
+
+let activeChoiceNameResolver: ChoiceNameResolver = null;
+
+/** Read the active choice-name resolver — used to save/restore around nested calls. */
+export function getActiveChoiceNameResolver(): ChoiceNameResolver {
+  return activeChoiceNameResolver;
+}
+
+/**
+ * Set the active choice-name resolver for the current synchronous evaluation.
+ * Call with null to restore the default (no choices resolvable).
+ */
+export function setActiveChoiceNameResolver(resolver: ChoiceNameResolver): void {
+  activeChoiceNameResolver = resolver;
+}
+
+// ---------------------------------------------------------------------------
 // Factory: create document node (one per evaluation session)
 // ---------------------------------------------------------------------------
 
@@ -119,6 +144,9 @@ export function wrapInstanceNode(
     kind: 'element',
     node,
     doc,
+    getChoiceName(value: string): string | null {
+      return activeChoiceNameResolver?.(wrapper, value) ?? null;
+    },
   };
   cache.set(node, wrapper);
   return wrapper;

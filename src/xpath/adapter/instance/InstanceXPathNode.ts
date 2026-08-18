@@ -63,6 +63,13 @@ export interface InstanceElementNode {
   readonly kind: 'element';
   readonly node: InstanceNode;
   readonly doc: InstanceDocumentNode;
+  /**
+   * Implements XPathChoiceNode (src/xpath/vendor/xpath/adapter/interface/
+   * XPathChoiceNode.ts) for jr:choice-name(). Delegates to the active
+   * choice-name resolver (set by FormEvaluator); returns null when unset —
+   * e.g. pure XPath unit tests with no FormEvaluator/body tree involved.
+   */
+  readonly getChoiceName: (value: string) => string | null;
 }
 
 // ---------------------------------------------------------------------------

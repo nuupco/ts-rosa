@@ -579,6 +579,13 @@ interface InstanceElementNode {
     readonly kind: 'element';
     readonly node: InstanceNode;
     readonly doc: InstanceDocumentNode;
+    /**
+     * Implements XPathChoiceNode (src/xpath/vendor/xpath/adapter/interface/
+     * XPathChoiceNode.ts) for jr:choice-name(). Delegates to the active
+     * choice-name resolver (set by FormEvaluator); returns null when unset —
+     * e.g. pure XPath unit tests with no FormEvaluator/body tree involved.
+     */
+    readonly getChoiceName: (value: string) => string | null;
 }
 interface InstanceAttributeNode {
     readonly [XPathNodeKindKey]: 'attribute';
@@ -1266,6 +1273,27 @@ declare class FormEvaluator {
      * Returns the string result (or empty string on error/empty nodeset).
      */
     private evaluateRelativeOnNode;
+    /**
+     * Run `fn` with the active jr:choice-name() resolver set to this
+     * FormEvaluator's own resolveChoiceName, restoring whatever was active
+     * before on exit (safe for nested/re-entrant calls, and for multiple
+     * FormEvaluator instances alive at once — see setActiveChoiceNameResolver).
+     */
+    private withActiveChoiceNameResolver;
+    /**
+     * Implements jr:choice-name()'s node-side contract (XPathChoiceNode):
+     * given an InstanceElementNode bound to a select/select1 question and a
+     * choice value/token, resolve that choice's label — static or itemset,
+     * itext-translated if applicable. Reuses getChoices() entirely (same
+     * cache, same static/itemset branching, same itext resolution) rather
+     * than duplicating any of that logic here.
+     *
+     * Returns null when `node` isn't bound to a recognized select question or
+     * `value` doesn't match any of its choices — jr:choice-name() then
+     * returns '' rather than throwing (fail-soft: a form-authoring mistake
+     * shouldn't crash the session).
+     */
+    private resolveChoiceName;
     /**
      * Compute a trigger signature for the given nodesetExpr.
      *

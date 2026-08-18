@@ -31,6 +31,8 @@ import {
 	makeInstanceDocumentNode,
 	wrapInstanceNode,
 	setActiveRelevanceCheck,
+	setActiveChoiceNameResolver,
+	getActiveChoiceNameResolver,
 } from '../adapter/instance/InstanceNodeXPathAdapter.ts';
 import { setActiveVariables } from '../evaluator/VariableScope.ts';
 import { assertXPathVariableValue, type XPathVariableValue } from '../evaluator/XPathVariableValue.ts';
@@ -44,10 +46,13 @@ export {
 	makeInstanceDocumentNode,
 	wrapInstanceNode,
 	setActiveRelevanceCheck,
+	setActiveChoiceNameResolver,
+	getActiveChoiceNameResolver,
 } from '../adapter/instance/InstanceNodeXPathAdapter.ts';
 export type {
 	InstanceDocumentNode,
 	InstanceXPathNode,
+	InstanceElementNode,
 } from '../adapter/instance/InstanceXPathNode.ts';
 
 // Re-export result constants behind the seam boundary.
