@@ -1190,20 +1190,70 @@ export class FormEvaluator {
     return this.evaluateCompiled(compiled, ctx);
   }
 
+  /**
+   * Recalculate a triggerable whose triggers are all outside the newly
+   * created repeat subtree.
+   *
+   * Deliberately full-tree (NOT scoped to subtreeRoot, unlike
+   * applyRecalculate's Fix B): when an outside trigger changes (e.g. an
+   * absolute count() used by every repeat instance), adding one new
+   * instance must re-propagate the new value to ALL existing sibling
+   * instances too, not just the new one — see the
+   * "count(/data/repeat) outside is propagated to inner-count after add
+   * and remove" equivalence test.
+   *
+   * The one broadcast (evaluate once, copy to every same-grandparent node)
+   * is safe ONLY when isContextIndependent(t.expr.source) is true — i.e.
+   * the expression has no relative/position dependency, so every target
+   * node would evaluate to the exact same value anyway (mirrors
+   * applyRecalculate's own context-independent broadcast optimization).
+   * Without this guard, a position()/`..`-relative expression (e.g. a
+   * calculate that distributes an outside select-multi's items across
+   * repeat instances via `selected-at(x, position(..)-1)`) would have one
+   * instance's value silently copied onto every other same-grandparent
+   * instance — each instance must instead be evaluated in its own context.
+   */
   private applyRecalculateGrouped(t: Triggerable & { kind: 'recalculate' }, subtreeRoot: InstanceNode): void {
+    void subtreeRoot; // retained for call-site symmetry with applyRecalculate; intentionally unused — see full-tree rationale above.
     for (const target of t.targets) {
       const nodes = resolveAll(this.tree, target);
-      if (nodes.length <= 1) { for (const n of nodes) { const r = this.evaluateExprFast(t.expr, n); n.value = cast(n.dataType, String(r)); } continue; }
+      if (nodes.length <= 1) {
+        for (const n of nodes) {
+          const r = this.evaluateExprFast(t.expr, n);
+          n.value = cast(n.dataType, String(r));
+        }
+        continue;
+      }
+
+      if (!isContextIndependent(t.expr.source)) {
+        for (const n of nodes) {
+          const r = this.evaluateExprFast(t.expr, n);
+          n.value = cast(n.dataType, String(r));
+        }
+        continue;
+      }
+
       const byGp = new Map<InstanceNode, InstanceNode[]>();
       for (const n of nodes) {
         const gp = n.parent?.parent ?? null;
-        if (gp === null) { const r = this.evaluateExprFast(t.expr, n); n.value = cast(n.dataType, String(r)); continue; }
-        let g = byGp.get(gp); if (!g) { g = []; byGp.set(gp, g); } g.push(n);
+        if (gp === null) {
+          const r = this.evaluateExprFast(t.expr, n);
+          n.value = cast(n.dataType, String(r));
+          continue;
+        }
+        let g = byGp.get(gp);
+        if (!g) {
+          g = [];
+          byGp.set(gp, g);
+        }
+        g.push(n);
       }
       for (const group of byGp.values()) {
-        const f = group[0]!; const raw = this.evaluateExprFast(t.expr, f);
+        const f = group[0]!;
+        const raw = this.evaluateExprFast(t.expr, f);
         const s = typeof raw === 'string' ? raw : typeof raw === 'number' ? String(raw) : raw ? '1' : '0';
-        const v = cast(f.dataType, s); for (const n of group) n.value = v;
+        const v = cast(f.dataType, s);
+        for (const n of group) n.value = v;
       }
     }
   }
@@ -1528,7 +1578,6 @@ export class FormEvaluator {
           const k = refToString(t);
           return k !== rootGeneric && !k.startsWith(subtreePrefix);
         });
-
         if (allInside) {
           this.applyRecalculate(triggerable, repeatRootRef, subtreeRoot);
         } else if (allOutside && subtreeRoot !== null) {
