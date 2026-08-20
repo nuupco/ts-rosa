@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-08-19
+
+### Fixed
+- `pulldata()` built a fresh XPath expression string and re-parsed + linearly re-scanned the CSV secondary instance's rows on every single call — cascades of 3+ `pulldata()` calls off one answer caused multi-second UI freezes (#1). Lookups now use a lazily-built, per-(secondary-instance, lookup-column) index (`Map<lookupValue, item>`), cached by the instance's root node, turning repeated lookups into O(1). Falls back to the original XPath path for non-CSV (inline XML) secondary instances, whose shape isn't guaranteed flat. Also escapes single quotes when interpolating values into the fallback XPath expression, closing a correctness/injection gap.
+
 ## [0.1.8] - 2026-08-18
 
 ### Fixed
