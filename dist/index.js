@@ -5888,6 +5888,48 @@ var position2 = new NumberFunction(
 );
 
 // src/xpath/functions/xforms-pulldata.ts
+var escapeXPathStringLiteral = (value) => value.replace(/'/g, "&apos;");
+function nodeValueAsString(node) {
+  const value = node.value;
+  if (value == null) return null;
+  return value.kind === "string" || value.kind === "uncast" ? value.value : value.displayText;
+}
+var secondaryInstanceIndexCache = /* @__PURE__ */ new WeakMap();
+function isFlatItemColumnTree(root) {
+  for (const item of root.children) {
+    if (item.attributes != null) return false;
+    for (const column of item.children) {
+      if (column.children.length > 0 || column.attributes != null) return false;
+    }
+  }
+  return true;
+}
+function getSecondaryInstanceIndex(root) {
+  let index = secondaryInstanceIndexCache.get(root);
+  if (index == null) {
+    index = { isFlat: isFlatItemColumnTree(root), columnIndexes: /* @__PURE__ */ new Map() };
+    secondaryInstanceIndexCache.set(root, index);
+  }
+  return index;
+}
+function getColumnIndex(root, lookupColumn) {
+  const index = getSecondaryInstanceIndex(root);
+  if (!index.isFlat) return null;
+  let columnIndex = index.columnIndexes.get(lookupColumn);
+  if (columnIndex == null) {
+    const byLookupValue = /* @__PURE__ */ new Map();
+    for (const item of root.children) {
+      const column = item.children.find((child) => child.name === lookupColumn);
+      const columnValue = column == null ? null : nodeValueAsString(column);
+      if (columnValue != null && !byLookupValue.has(columnValue)) {
+        byLookupValue.set(columnValue, item);
+      }
+    }
+    columnIndex = byLookupValue;
+    index.columnIndexes.set(lookupColumn, columnIndex);
+  }
+  return columnIndex;
+}
 var pulldata2 = new StringFunction(
   "pulldata",
   [
@@ -5901,7 +5943,19 @@ var pulldata2 = new StringFunction(
     const desiredElement = desiredElementExpression.evaluate(context).toString();
     const queryElement = queryElementExpression.evaluate(context).toString();
     const query = queryExpression.evaluate(context).toString();
-    const expr = `instance('${instanceId}')/root/item[${queryElement}='${query}']/${desiredElement}`;
+    const doc = context.contextDocument;
+    const secondaryDoc = doc.secondaryInstances?.get(instanceId) ?? null;
+    if (secondaryDoc != null && secondaryDoc.kind === "document") {
+      const root = secondaryDoc.tree.root;
+      const columnIndex = getColumnIndex(root, queryElement);
+      if (columnIndex != null) {
+        const item = columnIndex.get(query);
+        if (item == null) return "";
+        const desiredNode = item.children.find((child) => child.name === desiredElement);
+        return desiredNode == null ? "" : nodeValueAsString(desiredNode) ?? "";
+      }
+    }
+    const expr = `instance('${escapeXPathStringLiteral(instanceId)}')/root/item[${queryElement}='${escapeXPathStringLiteral(query)}']/${desiredElement}`;
     const rootNode = context.rootNode;
     return context.evaluator.evaluate(
       expr,
