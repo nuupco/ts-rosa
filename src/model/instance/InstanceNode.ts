@@ -56,10 +56,15 @@ export function newNode(name: string, opts?: NewNodeOptions): InstanceNode {
 
 export function appendChild(parent: InstanceNode, child: InstanceNode): void {
   child.parent = parent;
-  // Assign multiplicity = count of same-name siblings already present
-  const sameNameCount = parent.children.filter((c) => c.name === child.name).length;
-  // Do not override a manually set template multiplicity
+  // Assign multiplicity = count of same-name REAL (non-template) siblings
+  // already present. A jr:template child must not consume a position slot —
+  // multiplicity is documented (and consumed by nthRealChildNamed/
+  // realChildrenNamed, and by the position(nodeset) XPath extension's fast
+  // path) as 0-indexed among non-template same-name siblings only.
   if (child.multiplicity !== INDEX_TEMPLATE) {
+    const sameNameCount = parent.children.filter(
+      (c) => c.name === child.name && c.multiplicity !== INDEX_TEMPLATE,
+    ).length;
     child.multiplicity = sameNameCount;
   }
   parent.children.push(child);

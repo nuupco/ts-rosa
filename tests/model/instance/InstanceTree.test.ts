@@ -70,6 +70,22 @@ describe('InstanceNode', () => {
     expect(c.multiplicity).toBe(2);
   });
 
+  it('appendChild does not let a jr:template sibling consume a multiplicity slot', () => {
+    // Regression: appendChild used to count the template toward the same-name
+    // total, so the first REAL sibling got multiplicity 1 instead of 0 — off
+    // by one for every real instance loaded alongside a template (e.g. a
+    // resumed/edited submission with an already-answered repeat instance).
+    const parent = newNode('group');
+    const template = newNode('item', { multiplicity: INDEX_TEMPLATE });
+    const a = newNode('item');
+    const b = newNode('item');
+    appendChild(parent, template);
+    appendChild(parent, a);
+    appendChild(parent, b);
+    expect(a.multiplicity).toBe(0);
+    expect(b.multiplicity).toBe(1);
+  });
+
   it('different-name siblings do not affect each other multiplicity', () => {
     const parent = newNode('data');
     const name = newNode('name');

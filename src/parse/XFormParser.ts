@@ -65,9 +65,14 @@ export function buildInstanceNode(el: Element): InstanceNode {
   // catastrophic for a large inline secondary instance (e.g. a lookup table
   // pasted directly into the XForm's <instance> block instead of referenced
   // via jr://file-csv). A running per-name counter reproduces the exact same
-  // count appendChild would have computed (including template children,
-  // which count toward the total but never receive a computed multiplicity
-  // themselves) without the rescan.
+  // count appendChild computes today: only REAL (non-template) same-name
+  // children consume a counter slot — a jr:template child must not, since
+  // multiplicity is documented (and consumed by nthRealChildNamed/
+  // realChildrenNamed, and by the position(nodeset) XPath extension's fast
+  // path) as 0-indexed among non-template same-name siblings only. Counting
+  // the template would offset every real instance loaded alongside it by
+  // one position (e.g. a resumed/edited submission with one already-answered
+  // repeat instance next to its jr:template).
   let hasElementChildren = false;
   const sameNameCounts = new Map<string, number>();
   const children = el.childNodes;
@@ -77,11 +82,11 @@ export function buildInstanceNode(el: Element): InstanceNode {
     if (child.nodeType === 1 /* ELEMENT_NODE */) {
       hasElementChildren = true;
       const childNode = buildInstanceNode(child as Element);
-      const sameNameCount = sameNameCounts.get(childNode.name) ?? 0;
       if (childNode.multiplicity !== INDEX_TEMPLATE) {
+        const sameNameCount = sameNameCounts.get(childNode.name) ?? 0;
         childNode.multiplicity = sameNameCount;
+        sameNameCounts.set(childNode.name, sameNameCount + 1);
       }
-      sameNameCounts.set(childNode.name, sameNameCount + 1);
       childNode.parent = node;
       node.children.push(childNode);
     }

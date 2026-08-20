@@ -280,7 +280,7 @@ describe('buildInstanceNode (public export — sdd/last-saved-instance)', () => 
     expect(node.children.map((c) => c.multiplicity)).toEqual([0, 1, 2]);
   });
 
-  it('counts a template sibling toward the running count without assigning it a computed multiplicity', () => {
+  it('does not count a template sibling toward the running count, so real siblings stay 0-indexed', () => {
     const doc = new DOMParser().parseFromString(
       '<root xmlns:jr="http://openrosa.org/javarosa"><item jr:template="">t</item><item>a</item><item>b</item></root>',
       'text/xml',
@@ -289,7 +289,12 @@ describe('buildInstanceNode (public export — sdd/last-saved-instance)', () => 
 
     const node = buildInstanceNode(el);
 
-    expect(node.children.map((c) => c.multiplicity)).toEqual([INDEX_TEMPLATE, 1, 2]);
+    // multiplicity is documented as 0-indexed among non-template same-name
+    // siblings (nthRealChildNamed/realChildrenNamed, and the position(nodeset)
+    // XPath extension's fast path both rely on this) — a jr:template sibling
+    // must not consume a position slot, or every real instance loaded
+    // alongside it (e.g. a resumed/edited submission) would be off by one.
+    expect(node.children.map((c) => c.multiplicity)).toEqual([INDEX_TEMPLATE, 0, 1]);
   });
 
   it('builds a large inline secondary instance (20k same-name children) in near-linear time', () => {
