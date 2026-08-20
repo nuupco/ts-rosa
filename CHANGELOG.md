@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11] - 2026-08-19
+
+### Fixed
+- `buildInstanceNode`'s same-name counter (and `appendChild`'s) counted a `jr:template` sibling toward the running multiplicity total, so the first real repeat instance loaded next to its template — e.g. a resumed/edited submission with an already-answered repeat instance — got multiplicity 1 instead of 0. `resolveReference`/`resolveAll` were unaffected (they recompute position by filtering out templates), but the `position(nodeset)` XPath extension's fast path trusts the stored multiplicity directly, so any `position(..)`-relative calculate silently read the wrong list item for every pre-loaded repeat instance (#2 — root cause of the reported "razon_actual resolves to the wrong value on a pre-existing repeat instance" symptom).
+
 ## [0.1.10] - 2026-08-19
 
 ### Fixed

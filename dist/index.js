@@ -354,8 +354,10 @@ function newNode(name2, opts) {
 }
 function appendChild(parent, child) {
   child.parent = parent;
-  const sameNameCount = parent.children.filter((c) => c.name === child.name).length;
   if (child.multiplicity !== INDEX_TEMPLATE) {
+    const sameNameCount = parent.children.filter(
+      (c) => c.name === child.name && c.multiplicity !== INDEX_TEMPLATE
+    ).length;
     child.multiplicity = sameNameCount;
   }
   parent.children.push(child);
@@ -7719,11 +7721,11 @@ function buildInstanceNode(el) {
     if (child.nodeType === 1) {
       hasElementChildren = true;
       const childNode = buildInstanceNode(child);
-      const sameNameCount = sameNameCounts.get(childNode.name) ?? 0;
       if (childNode.multiplicity !== INDEX_TEMPLATE) {
+        const sameNameCount = sameNameCounts.get(childNode.name) ?? 0;
         childNode.multiplicity = sameNameCount;
+        sameNameCounts.set(childNode.name, sameNameCount + 1);
       }
-      sameNameCounts.set(childNode.name, sameNameCount + 1);
       childNode.parent = node;
       node.children.push(childNode);
     }
