@@ -1,6 +1,6 @@
 {
   "name": "@nuup/ts-rosa",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "A modern TypeScript XForms engine — behavior-compatible reimplementation of JavaRosa.",
   "license": "Apache-2.0",
   "repository": {

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10] - 2026-08-19
+
+### Fixed
+- `applyRecalculateGrouped` (used by `initializeRepeatInstance` for triggerables whose triggers are fully outside the new repeat subtree) unconditionally grouped target nodes by grandparent and broadcast one evaluated value to every node in the group — safe only for context-independent expressions, unlike its twin `applyRecalculate`, which already guards this. A position()/`..`-relative calculate could have one repeat instance's value silently copied onto every other same-grandparent instance instead of being evaluated in its own context (#2). Added regression coverage for the reported pattern (an outside select-multi distributed across `jr:count`-driven repeat instances via `selected-at(x, position(..)-1)`).
+
 ## [0.1.9] - 2026-08-19
 
 ### Fixed
