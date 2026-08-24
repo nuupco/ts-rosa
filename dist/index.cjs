@@ -351,8 +351,14 @@ function parseAbsoluteRef(path) {
     const bracketIdx = part.indexOf("[");
     if (bracketIdx !== -1) {
       const name2 = part.slice(0, bracketIdx);
-      const pos = parseInt(part.slice(bracketIdx + 1, part.length - 1), 10);
-      return level(name2, Number.isFinite(pos) ? pos - 1 : INDEX_UNBOUND);
+      const body = part.slice(bracketIdx + 1, part.length - 1);
+      if (!/^[0-9]+$/.test(body)) {
+        throw new Error(
+          `TreeReference: unsupported predicate '[${body}]' in ref '${path}' \u2014 only positive integer positions are supported`
+        );
+      }
+      const pos = parseInt(body, 10);
+      return level(name2, pos - 1);
     }
     return level(part, INDEX_UNBOUND);
   });
@@ -7603,7 +7609,9 @@ function parseItext(modelEl) {
 var EVENT_ALIASES = /* @__PURE__ */ new Map([
   ["odk-instance-first-load", "odk-instance-first-load"],
   ["xforms-ready", "odk-instance-first-load"],
-  ["xforms-value-changed", "xforms-value-changed"]
+  ["xforms-value-changed", "xforms-value-changed"],
+  ["odk-new-repeat", "odk-new-repeat"],
+  ["jr-insert", "jr-insert"]
 ]);
 function normalizeEvent(rawEvent) {
   if (rawEvent === null) return null;
@@ -7614,51 +7622,55 @@ function normalizeEvent(rawEvent) {
 
 // src/parse/actionParser.ts
 var sharedParser3 = new PureJSExpressionParser();
-function resolveTargetRef(rawRef, hostRef, sourceLocation) {
-  if (rawRef.startsWith("/")) {
-    return parseAbsoluteRef(rawRef);
-  }
-  if (rawRef.includes("..")) {
-    throw new Error(
-      `setvalue: repeat-relative target ref '${rawRef}' is not supported (${sourceLocation}). Only absolute (starting with '/') or simple host-relative refs are supported in v1.`
-    );
+function stripPredicates(rawRef) {
+  return rawRef.replace(/\[[^\]]*]/g, "");
+}
+function deriveGenericTarget(rawRef, hostRef, sourceLocation) {
+  const stripped = stripPredicates(rawRef);
+  if (stripped.startsWith("/")) {
+    return parseAbsoluteRef(stripped);
   }
   if (hostRef === null) {
     throw new Error(
       `setvalue: relative target ref '${rawRef}' has no host control context to resolve against (${sourceLocation}). Model-level setvalue actions must use an absolute ref (starting with '/').`
     );
   }
-  const hostPath = hostRef.levels.map((lvl) => lvl.name).join("/");
-  const base = hostPath.length > 0 ? `/${hostPath}` : "";
-  return parseAbsoluteRef(`${base}/${rawRef}`);
+  const relativeLevels = parseAbsoluteRef(`/${stripped}`).levels;
+  const relativeRef = {
+    levels: relativeLevels
+  };
+  return contextualize(relativeRef, hostRef);
 }
-function parseSetValueAction(el, hostRef) {
+function parseSetValueActions(el, hostRef) {
   const rawEvent = el.getAttribute("event");
   const rawRef = el.getAttribute("ref");
   const sourceLocation = `<setvalue event="${rawEvent ?? ""}" ref="${rawRef ?? ""}">`;
   if (rawRef === null || rawRef === "") {
     throw new Error(`setvalue: missing required 'ref' attribute (${sourceLocation})`);
   }
-  if (rawEvent !== null && rawEvent.trim().includes(" ")) {
-    const tokens = rawEvent.trim().split(/\s+/);
-    for (const token of tokens) {
-      if (normalizeEvent(token) === null) {
-        throw new Error(
-          `setvalue: unsupported event '${token}' on ref '${rawRef}' (${sourceLocation}). Supported events: 'odk-instance-first-load' (alias 'xforms-ready'), 'xforms-value-changed'.`
-        );
-      }
+  const tokens = rawEvent !== null ? rawEvent.trim().split(/\s+/).filter((t) => t.length > 0) : [];
+  if (tokens.length === 0) {
+    throw new Error(
+      `setvalue: unsupported event '${rawEvent ?? ""}' on ref '${rawRef}' (${sourceLocation}). Supported events: 'odk-instance-first-load' (alias 'xforms-ready'), 'xforms-value-changed', 'odk-new-repeat', 'jr-insert'.`
+    );
+  }
+  const events = [];
+  for (const token of tokens) {
+    const event = normalizeEvent(token);
+    if (event === null) {
+      throw new Error(
+        `setvalue: unsupported event '${token}' on ref '${rawRef}' (${sourceLocation}). Supported events: 'odk-instance-first-load' (alias 'xforms-ready'), 'xforms-value-changed', 'odk-new-repeat', 'jr-insert'.`
+      );
     }
-    throw new Error(
-      `setvalue: multiple events ('${rawEvent}') on ref '${rawRef}' are not supported in v1 (${sourceLocation}).`
-    );
+    if (event === "jr-insert" && hostRef !== null) {
+      throw new Error(
+        `setvalue: 'jr-insert' is only supported on model-level setvalue actions, not on a body-nested <setvalue> (${sourceLocation}). Declare this action directly under <model> instead.`
+      );
+    }
+    events.push(event);
   }
-  const event = normalizeEvent(rawEvent);
-  if (event === null) {
-    throw new Error(
-      `setvalue: unsupported event '${rawEvent ?? ""}' on ref '${rawRef}' (${sourceLocation}). Supported events: 'odk-instance-first-load' (alias 'xforms-ready'), 'xforms-value-changed'.`
-    );
-  }
-  const target = resolveTargetRef(rawRef, hostRef, sourceLocation);
+  const targetExpr = compileInstanceXPath(rawRef);
+  const genericTarget = deriveGenericTarget(rawRef, hostRef, sourceLocation);
   const valueAttr = el.getAttribute("value");
   let expr = null;
   let literal = null;
@@ -7666,21 +7678,24 @@ function parseSetValueAction(el, hostRef) {
   if (valueAttr !== null) {
     expr = compileInstanceXPath(valueAttr);
     const parsed = sharedParser3.parse(valueAttr).rootNode;
-    valueDeps = getTriggers(parsed, target, target);
+    valueDeps = getTriggers(parsed, genericTarget, genericTarget);
   } else {
     literal = directTextContent(el) ?? "";
   }
-  const triggers = event === "xforms-value-changed" ? dedupeRefs([...valueDeps, ...hostRef !== null ? [hostRef] : []]) : [];
-  return {
-    event,
-    target,
-    expr,
-    literal,
-    triggers,
-    contextRef: target,
-    originalContextRef: target,
-    sourceLocation
-  };
+  return events.map((event) => {
+    const triggers = event === "xforms-value-changed" ? dedupeRefs([...valueDeps, ...hostRef !== null ? [hostRef] : []]) : [];
+    return {
+      event,
+      targetSource: rawRef,
+      targetExpr,
+      hostRef,
+      genericTarget,
+      expr,
+      literal,
+      triggers,
+      sourceLocation
+    };
+  });
 }
 function dedupeRefs(refs) {
   const seen = /* @__PURE__ */ new Set();
@@ -7701,7 +7716,7 @@ function collectModelActions(modelEl) {
   for (let i = 0; i < children.length; i++) {
     const child = children[i];
     if (child && child.nodeType === 1 && child.localName === "setvalue") {
-      actions.push(parseSetValueAction(child, null));
+      actions.push(...parseSetValueActions(child, null));
     }
   }
   return actions;
@@ -7711,14 +7726,21 @@ function collectBodyActions(bodyEl) {
   const actions = [];
   function walk(el, hostRef) {
     const refAttr = el.getAttribute("ref") ?? el.getAttribute("nodeset");
-    const currentHostRef = refAttr !== null && refAttr !== "" ? parseAbsoluteRef(refAttr) : hostRef;
+    let currentHostRef = hostRef;
+    if (refAttr !== null && refAttr !== "" && refAttr.startsWith("/")) {
+      try {
+        currentHostRef = parseAbsoluteRef(refAttr);
+      } catch {
+        currentHostRef = hostRef;
+      }
+    }
     const children = el.childNodes;
     for (let i = 0; i < children.length; i++) {
       const child = children[i];
       if (!child || child.nodeType !== 1) continue;
       const childEl = child;
       if (childEl.localName === "setvalue") {
-        actions.push(parseSetValueAction(childEl, currentHostRef));
+        actions.push(...parseSetValueActions(childEl, currentHostRef));
       } else {
         walk(childEl, currentHostRef);
       }
@@ -7922,6 +7944,7 @@ var AnswerResult = /* @__PURE__ */ ((AnswerResult2) => {
   AnswerResult2["OK"] = "OK";
   AnswerResult2["REQUIRED_BUT_EMPTY"] = "REQUIRED_BUT_EMPTY";
   AnswerResult2["CONSTRAINT_VIOLATED"] = "CONSTRAINT_VIOLATED";
+  AnswerResult2["RANK_INVALID"] = "RANK_INVALID";
   return AnswerResult2;
 })(AnswerResult || {});
 
@@ -8008,6 +8031,66 @@ function defaultNodeState() {
 
 // src/platform/ReactiveObjectFactory.ts
 var identityReactiveFactory = (initial) => initial;
+
+// src/model/validation/rankPermutation.ts
+function checkRankPermutation(tokens, choiceValues) {
+  if (tokens.length === 0) {
+    return { valid: true };
+  }
+  const answerCounts = /* @__PURE__ */ new Map();
+  for (const token of tokens) {
+    answerCounts.set(token, (answerCounts.get(token) ?? 0) + 1);
+  }
+  const choiceCounts = /* @__PURE__ */ new Map();
+  for (const value of choiceValues) {
+    choiceCounts.set(value, (choiceCounts.get(value) ?? 0) + 1);
+  }
+  const duplicateTokens = [];
+  const seenForDuplicate = /* @__PURE__ */ new Set();
+  for (const token of tokens) {
+    if (seenForDuplicate.has(token)) continue;
+    seenForDuplicate.add(token);
+    const answerCount = answerCounts.get(token) ?? 0;
+    const choiceCount = choiceCounts.get(token) ?? 0;
+    if (answerCount > choiceCount && choiceCount > 0) {
+      duplicateTokens.push(token);
+    }
+  }
+  const missingTokens = [];
+  const seenForMissing = /* @__PURE__ */ new Set();
+  for (const value of choiceValues) {
+    if (seenForMissing.has(value)) continue;
+    seenForMissing.add(value);
+    const choiceCount = choiceCounts.get(value) ?? 0;
+    const answerCount = answerCounts.get(value) ?? 0;
+    if (answerCount < choiceCount) {
+      missingTokens.push(value);
+    }
+  }
+  const foreignTokens = [];
+  const seenForForeign = /* @__PURE__ */ new Set();
+  for (const token of tokens) {
+    if (seenForForeign.has(token)) continue;
+    seenForForeign.add(token);
+    if (!choiceCounts.has(token)) {
+      foreignTokens.push(token);
+    }
+  }
+  const violations = [];
+  if (duplicateTokens.length > 0) {
+    violations.push({ kind: "duplicate", tokens: duplicateTokens });
+  }
+  if (missingTokens.length > 0) {
+    violations.push({ kind: "missing", tokens: missingTokens });
+  }
+  if (foreignTokens.length > 0) {
+    violations.push({ kind: "foreign", tokens: foreignTokens });
+  }
+  if (violations.length === 0) {
+    return { valid: true };
+  }
+  return { valid: false, violations };
+}
 
 // src/session/FormEvaluator.ts
 var FormEvaluator = class _FormEvaluator {
@@ -8449,6 +8532,25 @@ var FormEvaluator = class _FormEvaluator {
     walk(this.body);
     return found;
   }
+  /**
+   * Applicability + delegation for the rank permutation rule.
+   *
+   * Returns null when the rule does not apply (empty value, non-selectMulti
+   * kind, no question element, non-'rank' control, or an unresolved dynamic
+   * itemset). Returns a RankPermutationResult when the rule was evaluated.
+   *
+   * See sdd/rank-validation design §2.3.
+   */
+  checkRank(ref, value) {
+    if (value === null || isAnswerEmpty(value)) return null;
+    if (value.kind !== "selectMulti") return null;
+    const questionEl = this.findQuestionByRef(ref);
+    if (questionEl === null) return null;
+    if (questionEl.controlType !== "rank") return null;
+    const choices = this.getChoices(ref);
+    if (questionEl.itemset !== null && choices.length === 0) return null;
+    return checkRankPermutation(value.value, choices.map((c) => c.value));
+  }
   // ---------------------------------------------------------------------------
   // NodeState management
   // ---------------------------------------------------------------------------
@@ -8780,7 +8882,7 @@ var FormEvaluator = class _FormEvaluator {
    * value-changed actions triggering each other exceeds the bound, rather
    * than looping indefinitely or silently truncating (spec Requirement 7).
    */
-  fireAction(action) {
+  fireAction(action, contextNode) {
     this.actionChainDepth++;
     try {
       if (this.actionChainDepth > _FormEvaluator.MAX_ACTION_CHAIN_DEPTH) {
@@ -8788,14 +8890,45 @@ var FormEvaluator = class _FormEvaluator {
           `setvalue action chain exceeded max depth ${_FormEvaluator.MAX_ACTION_CHAIN_DEPTH} (possible cycle) at ${action.sourceLocation}`
         );
       }
-      this.fireActionInner(action);
+      this.fireActionInner(action, contextNode);
     } finally {
       this.actionChainDepth--;
     }
   }
-  fireActionInner(action) {
-    const targetNode = resolveReference(this.tree, action.target);
-    if (targetNode === null) return;
+  /**
+   * Resolves `action.targetExpr` at fire time via the XPath seam
+   * (`evaluateTyped` → NODESET), replacing the pre-parity parse-time
+   * `TreeReference`-based lookup. Design Decisions 2/3 (sdd/setvalue-parity):
+   * a target that resolves to 0 or >1 nodes, or to a non-NODESET result, now
+   * throws fail-loud instead of silently no-op'ing (accepted breaking change,
+   * no deprecation path).
+   */
+  fireActionInner(action, contextNode) {
+    const hostNode = contextNode !== void 0 ? contextNode : action.hostRef !== null ? resolveReference(this.tree, action.hostRef) : null;
+    const ctx = this.makeContext(hostNode);
+    const result = action.targetExpr.evaluateTyped(ctx);
+    if (result.type !== "NODESET") {
+      throw new Error(
+        `setvalue: target ref '${action.targetSource}' did not evaluate to a nodeset (${action.sourceLocation})`
+      );
+    }
+    if (result.nodes.length === 0) {
+      throw new Error(
+        `setvalue: target ref '${action.targetSource}' resolved to no nodes (${action.sourceLocation})`
+      );
+    }
+    if (result.nodes.length > 1) {
+      throw new Error(
+        `setvalue: target ref '${action.targetSource}' resolved to ${result.nodes.length} nodes; a setvalue target must be a single node (${action.sourceLocation})`
+      );
+    }
+    const targetXPathNode = result.nodes[0];
+    if (targetXPathNode.kind !== "element") {
+      throw new Error(
+        `setvalue: target ref '${action.targetSource}' did not resolve to an element node (${action.sourceLocation})`
+      );
+    }
+    const targetNode = targetXPathNode.node;
     let rawString;
     if (action.expr !== null) {
       const rawResult = this.evaluateExprFast(action.expr, targetNode);
@@ -8804,7 +8937,10 @@ var FormEvaluator = class _FormEvaluator {
       rawString = action.literal ?? "";
     }
     targetNode.value = cast(targetNode.dataType, rawString);
-    this.triggerTriggerables(action.target);
+    const writtenRef = this.nodeToRef(this.wrap(targetNode));
+    if (writtenRef !== null) {
+      this.triggerTriggerables(writtenRef);
+    }
   }
   /**
    * Evaluate a Recalculate triggerable and write the result to its target nodes.
@@ -9079,6 +9215,10 @@ var FormEvaluator = class _FormEvaluator {
    */
   answerQuestion(ref, value) {
     const nodeset = refToString(ref);
+    const rankResult = this.checkRank(ref, value);
+    if (rankResult !== null && !rankResult.valid) {
+      return "RANK_INVALID" /* RANK_INVALID */;
+    }
     const constraintCb = this.constraintBindings.get(nodeset);
     if (value !== null && constraintCb !== void 0) {
       const targetNode = resolveReference(this.tree, ref);
@@ -9121,6 +9261,10 @@ var FormEvaluator = class _FormEvaluator {
       if (isRelevant && state?.required === true && isAnswerEmpty(node.value)) {
         return { failedNodeset: nodeset, status: "REQUIRED_BUT_EMPTY" /* REQUIRED_BUT_EMPTY */ };
       }
+      const rankResult = this.checkRank(ref, node.value);
+      if (rankResult !== null && !rankResult.valid) {
+        return { failedNodeset: nodeset, status: "RANK_INVALID" /* RANK_INVALID */ };
+      }
       const constraintCb = this.constraintBindings.get(nodeset);
       if (constraintCb !== void 0 && !isAnswerEmpty(node.value)) {
         const constraintResult = this.evaluateCompiled(constraintCb.expr, node);
@@ -9149,6 +9293,25 @@ var FormEvaluator = class _FormEvaluator {
     const subtreeRoot = resolveReference(this.tree, repeatRootRef);
     const rootGeneric = refToString(genericize(repeatRootRef));
     const subtreePrefix = rootGeneric + "/";
+    if (this.actionRegistry !== null) {
+      const registry = this.actionRegistry;
+      for (const action of registry.byEvent.get("jr-insert") ?? []) {
+        this.fireAction(action);
+      }
+      for (const action of registry.byEvent.get("odk-new-repeat") ?? []) {
+        if (action.hostRef === null) {
+          this.fireAction(action);
+        }
+      }
+      for (const [scopeKey, scopedActions] of registry.newRepeatByScope) {
+        if (scopeKey !== rootGeneric && !scopeKey.startsWith(subtreePrefix)) continue;
+        for (const action of scopedActions) {
+          const hostRef = action.hostRef;
+          const hostNode = subtreeRoot !== null ? resolveAllWithin(this.tree, subtreeRoot, hostRef)[0] ?? subtreeRoot : null;
+          this.fireAction(action, hostNode);
+        }
+      }
+    }
     const subtreeRoots = /* @__PURE__ */ new Set();
     for (const triggerable of this.dag.triggerablesDAG) {
       const hasTargetInSubtree = triggerable.targets.some((tgt) => {
@@ -10528,22 +10691,41 @@ function hydrateNode(templateNode, xmlEl, path) {
 function buildActionRegistry(actions) {
   const loadActions = [];
   const valueChangedByTrigger = /* @__PURE__ */ new Map();
+  const byEvent = /* @__PURE__ */ new Map();
+  const newRepeatByScope = /* @__PURE__ */ new Map();
   for (const action of actions) {
+    let eventBucket = byEvent.get(action.event);
+    if (eventBucket === void 0) {
+      eventBucket = [];
+      byEvent.set(action.event, eventBucket);
+    }
+    eventBucket.push(action);
+    if (action.event === "odk-new-repeat" && action.hostRef !== null) {
+      const scopeKey = refToString(genericize(action.hostRef));
+      let scopeBucket = newRepeatByScope.get(scopeKey);
+      if (scopeBucket === void 0) {
+        scopeBucket = [];
+        newRepeatByScope.set(scopeKey, scopeBucket);
+      }
+      scopeBucket.push(action);
+    }
     if (action.event === "odk-instance-first-load") {
       loadActions.push(action);
       continue;
     }
-    for (const trigger of action.triggers) {
-      const key = refToString(genericize(trigger));
-      let bucket = valueChangedByTrigger.get(key);
-      if (bucket === void 0) {
-        bucket = [];
-        valueChangedByTrigger.set(key, bucket);
+    if (action.event === "xforms-value-changed") {
+      for (const trigger of action.triggers) {
+        const key = refToString(genericize(trigger));
+        let bucket = valueChangedByTrigger.get(key);
+        if (bucket === void 0) {
+          bucket = [];
+          valueChangedByTrigger.set(key, bucket);
+        }
+        bucket.push(action);
       }
-      bucket.push(action);
     }
   }
-  return { loadActions, valueChangedByTrigger };
+  return { loadActions, valueChangedByTrigger, byEvent, newRepeatByScope };
 }
 
 // src/session/FormSession.ts

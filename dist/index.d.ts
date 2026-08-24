@@ -187,6 +187,17 @@ declare function genericize(ref: TreeReference): TreeReference;
 declare function contextualize(ref: TreeReference, context: TreeReference): TreeReference;
 declare function refEquals(a: TreeReference, b: TreeReference): boolean;
 declare function refToString(ref: TreeReference): string;
+/**
+ * Parses a slash-separated absolute path (optionally with `[N]` positional
+ * predicates) into a `TreeReference` with concrete, 0-indexed multiplicities.
+ *
+ * sdd/setvalue-parity design Decision 7 (accepted breaking change, no
+ * deprecation path): a predicate body that is not a positive integer literal
+ * (e.g. `[position()=1]`, `[@x='y']`, `[last()]`) now THROWS instead of
+ * silently degrading to `INDEX_UNBOUND`. Such refs are only resolvable via
+ * real XPath evaluation (the seam's `compileInstanceXPath`/`evaluateTyped`),
+ * not via this parse-time string-splitting helper.
+ */
 declare function parseAbsoluteRef(path: string): TreeReference;
 
 type InstanceNode = {
@@ -856,18 +867,22 @@ type CompiledBinding = {
  * rule re-evaluated on every dependency change). See design doc
  * "sdd/setvalue-actions/design" for the full architecture rationale.
  *
- * v1 supports exactly two events:
+ * Supported events:
  *   - 'odk-instance-first-load' (alias 'xforms-ready'): fires once at
  *     form-load time.
  *   - 'xforms-value-changed': fires when one of `triggers` changes.
+ *   - 'odk-new-repeat': fires once per newly created repeat instance
+ *     (dispatched from `initializeRepeatInstance`, a later PR).
+ *   - 'jr-insert': deprecated alias-era event, model-level only (a later PR
+ *     wires the actual fire point; this PR only parses/gates it).
  *
  * This module only defines the data shape + a pure event-normalization
  * helper. Parsing (src/parse/actionParser.ts) and firing (FormEvaluator,
  * a later PR) are separate concerns.
  */
 
-/** v1-supported, normalized setvalue events. */
-type SetValueEvent = 'odk-instance-first-load' | 'xforms-value-changed';
+/** Supported, normalized setvalue events. */
+type SetValueEvent = 'odk-instance-first-load' | 'xforms-value-changed' | 'odk-new-repeat' | 'jr-insert';
 /**
  * A single parsed `<setvalue>` action declaration.
  *
@@ -880,8 +895,30 @@ type SetValueEvent = 'odk-instance-first-load' | 'xforms-value-changed';
 interface SetValueAction {
     /** Normalized event this action fires on. */
     readonly event: SetValueEvent;
-    /** Absolute target TreeReference (`ref` attribute) this action writes to. */
-    readonly target: TreeReference;
+    /**
+     * Raw `ref` attribute string this action targets, unresolved. Compiled
+     * once (see `targetExpr`) and resolved at FIRE TIME via the XPath seam —
+     * sdd/setvalue-parity design Decision 2. Never parsed with parse-time
+     * string manipulation (that was the pre-parity v1 approach, removed).
+     */
+    readonly targetSource: string;
+    /**
+     * Compiled target expression, evaluated via `evaluateTyped` at fire time
+     * against a context anchored at `hostRef` (or the document root for
+     * model-level actions). Must evaluate to a NODESET of exactly one element
+     * node — see `FormEvaluator.fireActionInner` error contract.
+     */
+    readonly targetExpr: CompiledInstanceExpression;
+    /** Absolute ref of the enclosing host control, or null for model-level actions. */
+    readonly hostRef: TreeReference | null;
+    /**
+     * Predicate-free generic ref: derived at parse time by stripping
+     * predicates from an absolute `targetSource`, or by contextualizing a
+     * relative `targetSource` onto `hostRef`. Used ONLY for `ActionRegistry`
+     * keying and as the `getTriggers` context ref for the value expression —
+     * NEVER written to (design Decision 4).
+     */
+    readonly genericTarget: TreeReference;
     /** Compiled value expression, or null when `literal` is used instead. */
     readonly expr: CompiledInstanceExpression | null;
     /** Inner-text literal value, or null when `expr` is used instead. */
@@ -893,10 +930,6 @@ interface SetValueAction {
      * actions, the host control's ref).
      */
     readonly triggers: readonly TreeReference[];
-    /** Context ref used to contextualize the value expression (= target). */
-    readonly contextRef: TreeReference;
-    /** Original/first context ref (= target); used by getTriggers for current()/. */
-    readonly originalContextRef: TreeReference;
     /** Human-readable source location for fail-loud error messages. */
     readonly sourceLocation: string;
 }
@@ -991,7 +1024,14 @@ declare function parseForm(xml: string): FormDefinition;
 declare enum AnswerResult {
     OK = "OK",
     REQUIRED_BUT_EMPTY = "REQUIRED_BUT_EMPTY",
-    CONSTRAINT_VIOLATED = "CONSTRAINT_VIOLATED"
+    CONSTRAINT_VIOLATED = "CONSTRAINT_VIOLATED",
+    /**
+     * ts-rosa extension — no JavaRosa counterpart. JavaRosa's FormEntryController
+     * has no rank permutation validation (ANSWER_OK/REQUIRED_BUT_EMPTY/
+     * CONSTRAINT_VIOLATED only). Reported when a `rank` control's answer is not
+     * exactly a permutation of its choice set (duplicate/missing/foreign token).
+     */
+    RANK_INVALID = "RANK_INVALID"
 }
 
 /**
@@ -1071,6 +1111,24 @@ interface ActionRegistry {
      * multiple triggers, per SetValueAction.triggers).
      */
     readonly valueChangedByTrigger: ReadonlyMap<string, readonly SetValueAction[]>;
+    /**
+     * All actions bucketed by their normalized event, in declaration order.
+     * Used by `FormEvaluator.initializeRepeatInstance` (sdd/setvalue-parity
+     * PR3, Layer C) to look up `jr-insert` and model-level `odk-new-repeat`
+     * actions without re-scanning the full action list on every repeat
+     * creation.
+     */
+    readonly byEvent: ReadonlyMap<SetValueEvent, readonly SetValueAction[]>;
+    /**
+     * `odk-new-repeat` actions whose `hostRef` is non-null (body-nested,
+     * declared inside a repeat template), keyed by
+     * `refToString(genericize(hostRef))` — sdd/setvalue-parity design
+     * Decision 5 / File Changes table. Looked up by
+     * `initializeRepeatInstance` via a subtree-prefix scan (the new repeat
+     * instance's generic ref may be a proper prefix of a nested host's key)
+     * to fire only actions scoped to the newly created instance.
+     */
+    readonly newRepeatByScope: ReadonlyMap<string, readonly SetValueAction[]>;
 }
 
 /**
@@ -1098,7 +1156,7 @@ interface ValidateOutcome {
     /** The absolute path (nodeset) of the first field that failed validation. */
     readonly failedNodeset: string;
     /** The reason for failure. */
-    readonly status: AnswerResult.REQUIRED_BUT_EMPTY | AnswerResult.CONSTRAINT_VIOLATED;
+    readonly status: AnswerResult.REQUIRED_BUT_EMPTY | AnswerResult.CONSTRAINT_VIOLATED | AnswerResult.RANK_INVALID;
 }
 /** A resolved dynamic choice item returned by getChoices(). */
 interface SelectChoice {
@@ -1311,6 +1369,16 @@ declare class FormEvaluator {
      */
     private findQuestionByRef;
     /**
+     * Applicability + delegation for the rank permutation rule.
+     *
+     * Returns null when the rule does not apply (empty value, non-selectMulti
+     * kind, no question element, non-'rank' control, or an unresolved dynamic
+     * itemset). Returns a RankPermutationResult when the rule was evaluated.
+     *
+     * See sdd/rank-validation design §2.3.
+     */
+    private checkRank;
+    /**
      * Get or create NodeState for a genericized ref key.
      */
     private getOrCreateState;
@@ -1458,6 +1526,14 @@ declare class FormEvaluator {
      * than looping indefinitely or silently truncating (spec Requirement 7).
      */
     private fireAction;
+    /**
+     * Resolves `action.targetExpr` at fire time via the XPath seam
+     * (`evaluateTyped` → NODESET), replacing the pre-parity parse-time
+     * `TreeReference`-based lookup. Design Decisions 2/3 (sdd/setvalue-parity):
+     * a target that resolves to 0 or >1 nodes, or to a non-NODESET result, now
+     * throws fail-loud instead of silently no-op'ing (accepted breaking change,
+     * no deprecation path).
+     */
     private fireActionInner;
     /**
      * Evaluate a Recalculate triggerable and write the result to its target nodes.

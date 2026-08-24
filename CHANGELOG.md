@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-08-24
+
+### Added
+- `rank` questions now validate that the answer is exactly a permutation of the itemset choices (no duplicates, missing, or foreign tokens), reported via a new `AnswerResult.RANK_INVALID` / `ValidateOutcome.status` value. Scoped to `rank` only — `select`/`select1` remain unvalidated for itemset membership, unchanged.
+- `<setvalue>` now accepts multiple space-separated `event` tokens on one element (one action fires per token), and supports `odk-new-repeat` and `jr-insert` (JavaRosa's deprecated non-namespaced repeat-insert token, model-level only) — both fire from repeat-instance creation, before the DAG cascade.
+- `<setvalue>` target refs are now resolved at fire time through the XPath seam instead of parse-time string matching, so repeat-relative targets (`..`, `[position()=1]`) and `$var`-rooted targets now work.
+
+### Changed
+- **Breaking**: an unresolvable or ambiguous `<setvalue>` target (zero or more than one matching node) now throws instead of silently doing nothing.
+- **Breaking**: `parseAbsoluteRef` now throws on a non-numeric ref predicate (e.g. `[position()=1]`) instead of silently resolving it to `INDEX_UNBOUND`.
+
+### Fixed
+- README/API.md/architecture docs incorrectly described `jr://file/*.xml` and `jr://instance/last-saved` external secondary instances, and the XPath `indexed-repeat`/`$var` support, as unimplemented — both had already shipped. Docs corrected to match actual behavior.
+
 ## [0.1.11] - 2026-08-19
 
 ### Fixed
