@@ -12,4 +12,11 @@ export enum AnswerResult {
   OK = "OK",
   REQUIRED_BUT_EMPTY = "REQUIRED_BUT_EMPTY",
   CONSTRAINT_VIOLATED = "CONSTRAINT_VIOLATED",
+  /**
+   * ts-rosa extension — no JavaRosa counterpart. JavaRosa's FormEntryController
+   * has no rank permutation validation (ANSWER_OK/REQUIRED_BUT_EMPTY/
+   * CONSTRAINT_VIOLATED only). Reported when a `rank` control's answer is not
+   * exactly a permutation of its choice set (duplicate/missing/foreign token).
+   */
+  RANK_INVALID = "RANK_INVALID",
 }

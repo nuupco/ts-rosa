@@ -54,6 +54,7 @@ import { PureJSExpressionParser } from '../xpath/parser/PureJSExpressionParser.t
 import { tokenize, TokenKind } from '../xpath/parser/Tokenizer.ts';
 import { getTriggers } from '../eval/getTriggers.ts';
 import { AnswerResult } from './AnswerResult.ts';
+import { checkRankPermutation, type RankPermutationResult } from '../model/validation/rankPermutation.ts';
 import type { ActionRegistry } from '../eval/ActionRegistry.ts';
 import type { SetValueAction } from '../eval/SetValueAction.ts';
 
@@ -69,7 +70,7 @@ export interface ValidateOutcome {
   /** The absolute path (nodeset) of the first field that failed validation. */
   readonly failedNodeset: string;
   /** The reason for failure. */
-  readonly status: AnswerResult.REQUIRED_BUT_EMPTY | AnswerResult.CONSTRAINT_VIOLATED;
+  readonly status: AnswerResult.REQUIRED_BUT_EMPTY | AnswerResult.CONSTRAINT_VIOLATED | AnswerResult.RANK_INVALID;
 }
 
 /** A resolved dynamic choice item returned by getChoices(). */
@@ -655,6 +656,31 @@ export class FormEvaluator {
 
     walk(this.body);
     return found;
+  }
+
+  /**
+   * Applicability + delegation for the rank permutation rule.
+   *
+   * Returns null when the rule does not apply (empty value, non-selectMulti
+   * kind, no question element, non-'rank' control, or an unresolved dynamic
+   * itemset). Returns a RankPermutationResult when the rule was evaluated.
+   *
+   * See sdd/rank-validation design §2.3.
+   */
+  private checkRank(ref: TreeReference, value: AnswerValue | null): RankPermutationResult | null {
+    if (value === null || isAnswerEmpty(value)) return null;
+    if (value.kind !== 'selectMulti') return null;
+
+    const questionEl = this.findQuestionByRef(ref);
+    if (questionEl === null) return null;
+    if (questionEl.controlType !== 'rank') return null;
+
+    const choices = this.getChoices(ref);
+
+    // Unresolved dynamic itemset (currently empty) → skip, not applicable.
+    if (questionEl.itemset !== null && choices.length === 0) return null;
+
+    return checkRankPermutation(value.value, choices.map((c) => c.value));
   }
 
   // ---------------------------------------------------------------------------
@@ -1456,6 +1482,15 @@ export class FormEvaluator {
    */
   answerQuestion(ref: TreeReference, value: AnswerValue | null): AnswerResult {
     const nodeset = refToString(ref);
+
+    // Rank permutation check — intrinsic well-formedness, runs before any
+    // author constraint and before commit. Sibling to the constraint block,
+    // never inside it (see sdd/rank-validation design §3.1).
+    const rankResult = this.checkRank(ref, value);
+    if (rankResult !== null && !rankResult.valid) {
+      return AnswerResult.RANK_INVALID;
+    }
+
     const constraintCb = this.constraintBindings.get(nodeset);
 
     // Non-null value with a constraint → evaluate constraint
@@ -1509,6 +1544,12 @@ export class FormEvaluator {
       // Check required: effectively relevant + required + empty value
       if (isRelevant && state?.required === true && isAnswerEmpty(node.value)) {
         return { failedNodeset: nodeset, status: AnswerResult.REQUIRED_BUT_EMPTY };
+      }
+
+      // Check rank permutation: after required, before constraint.
+      const rankResult = this.checkRank(ref, node.value);
+      if (rankResult !== null && !rankResult.valid) {
+        return { failedNodeset: nodeset, status: AnswerResult.RANK_INVALID };
       }
 
       // Check constraint: non-null, non-empty value with a constraint binding
