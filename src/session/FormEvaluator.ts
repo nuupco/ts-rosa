@@ -1108,7 +1108,7 @@ export class FormEvaluator {
    * value-changed actions triggering each other exceeds the bound, rather
    * than looping indefinitely or silently truncating (spec Requirement 7).
    */
-  private fireAction(action: SetValueAction): void {
+  private fireAction(action: SetValueAction, contextNode?: InstanceNode | null): void {
     this.actionChainDepth++;
     try {
       if (this.actionChainDepth > FormEvaluator.MAX_ACTION_CHAIN_DEPTH) {
@@ -1117,15 +1117,54 @@ export class FormEvaluator {
             `(possible cycle) at ${action.sourceLocation}`,
         );
       }
-      this.fireActionInner(action);
+      this.fireActionInner(action, contextNode);
     } finally {
       this.actionChainDepth--;
     }
   }
 
-  private fireActionInner(action: SetValueAction): void {
-    const targetNode = resolveReference(this.tree, action.target);
-    if (targetNode === null) return;
+  /**
+   * Resolves `action.targetExpr` at fire time via the XPath seam
+   * (`evaluateTyped` → NODESET), replacing the pre-parity parse-time
+   * `TreeReference`-based lookup. Design Decisions 2/3 (sdd/setvalue-parity):
+   * a target that resolves to 0 or >1 nodes, or to a non-NODESET result, now
+   * throws fail-loud instead of silently no-op'ing (accepted breaking change,
+   * no deprecation path).
+   */
+  private fireActionInner(action: SetValueAction, contextNode?: InstanceNode | null): void {
+    const hostNode =
+      contextNode !== undefined
+        ? contextNode
+        : action.hostRef !== null
+          ? resolveReference(this.tree, action.hostRef)
+          : null;
+    const ctx = this.makeContext(hostNode);
+    const result = action.targetExpr.evaluateTyped(ctx);
+
+    if (result.type !== 'NODESET') {
+      throw new Error(
+        `setvalue: target ref '${action.targetSource}' did not evaluate to a nodeset (${action.sourceLocation})`,
+      );
+    }
+    if (result.nodes.length === 0) {
+      throw new Error(
+        `setvalue: target ref '${action.targetSource}' resolved to no nodes (${action.sourceLocation})`,
+      );
+    }
+    if (result.nodes.length > 1) {
+      throw new Error(
+        `setvalue: target ref '${action.targetSource}' resolved to ${result.nodes.length} nodes; ` +
+          `a setvalue target must be a single node (${action.sourceLocation})`,
+      );
+    }
+
+    const targetXPathNode = result.nodes[0]!;
+    if (targetXPathNode.kind !== 'element') {
+      throw new Error(
+        `setvalue: target ref '${action.targetSource}' did not resolve to an element node (${action.sourceLocation})`,
+      );
+    }
+    const targetNode = targetXPathNode.node;
 
     let rawString: string;
     if (action.expr !== null) {
@@ -1143,7 +1182,10 @@ export class FormEvaluator {
     }
 
     targetNode.value = cast(targetNode.dataType, rawString);
-    this.triggerTriggerables(action.target);
+    const writtenRef = this.nodeToRef(this.wrap(targetNode));
+    if (writtenRef !== null) {
+      this.triggerTriggerables(writtenRef);
+    }
   }
 
   /**
@@ -1583,6 +1625,44 @@ export class FormEvaluator {
     const subtreeRoot = resolveReference(this.tree, repeatRootRef);
     const rootGeneric = refToString(genericize(repeatRootRef));
     const subtreePrefix = rootGeneric + '/';
+
+    // --- sdd/setvalue-parity PR3 (Layer C): jr-insert / odk-new-repeat fire
+    // points, dispatched BEFORE the DAG cascade below (design data-flow
+    // diagram, JavaRosa FormDef.createNewRepeat 534-539 oracle finding).
+    // jr-insert is model-level only (hostRef === null by parse-time gating,
+    // design Decision 5) and fires first. odk-new-repeat then fires both at
+    // model level (hostRef === null) AND scoped to the new instance's own
+    // subtree (hostRef nested inside the repeat template) — JavaRosa fires
+    // odk-new-repeat on both the form-level controller and the new repeat's
+    // own controller; ts-rosa has no separate per-instance controller, so the
+    // "own controller" firing is modeled as contextNode = subtreeRoot.
+    if (this.actionRegistry !== null) {
+      const registry = this.actionRegistry;
+
+      for (const action of registry.byEvent.get('jr-insert') ?? []) {
+        this.fireAction(action);
+      }
+
+      for (const action of registry.byEvent.get('odk-new-repeat') ?? []) {
+        if (action.hostRef === null) {
+          this.fireAction(action);
+        }
+      }
+
+      for (const [scopeKey, scopedActions] of registry.newRepeatByScope) {
+        if (scopeKey !== rootGeneric && !scopeKey.startsWith(subtreePrefix)) continue;
+        for (const action of scopedActions) {
+          // action.hostRef is guaranteed non-null for newRepeatByScope entries.
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          const hostRef = action.hostRef!;
+          const hostNode =
+            subtreeRoot !== null
+              ? (resolveAllWithin(this.tree, subtreeRoot, hostRef)[0] ?? subtreeRoot)
+              : null;
+          this.fireAction(action, hostNode);
+        }
+      }
+    }
 
     // --- Fix A: prune triggerables to those relevant to the new subtree ---
     // A triggerable is relevant to a new repeat instance if:

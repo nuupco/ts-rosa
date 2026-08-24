@@ -74,6 +74,17 @@ export function refToString(ref: TreeReference): string {
   return (ref.refLevel === REF_ABSOLUTE ? '/' : '') + segments.join('/');
 }
 
+/**
+ * Parses a slash-separated absolute path (optionally with `[N]` positional
+ * predicates) into a `TreeReference` with concrete, 0-indexed multiplicities.
+ *
+ * sdd/setvalue-parity design Decision 7 (accepted breaking change, no
+ * deprecation path): a predicate body that is not a positive integer literal
+ * (e.g. `[position()=1]`, `[@x='y']`, `[last()]`) now THROWS instead of
+ * silently degrading to `INDEX_UNBOUND`. Such refs are only resolvable via
+ * real XPath evaluation (the seam's `compileInstanceXPath`/`evaluateTyped`),
+ * not via this parse-time string-splitting helper.
+ */
 export function parseAbsoluteRef(path: string): TreeReference {
   const parts = path.split('/').filter((s) => s.length > 0);
   const levels = parts.map((part) => {
@@ -82,8 +93,15 @@ export function parseAbsoluteRef(path: string): TreeReference {
     const bracketIdx = part.indexOf('[');
     if (bracketIdx !== -1) {
       const name = part.slice(0, bracketIdx);
-      const pos = parseInt(part.slice(bracketIdx + 1, part.length - 1), 10);
-      return level(name, Number.isFinite(pos) ? pos - 1 : INDEX_UNBOUND);
+      const body = part.slice(bracketIdx + 1, part.length - 1);
+      if (!/^[0-9]+$/.test(body)) {
+        throw new Error(
+          `TreeReference: unsupported predicate '[${body}]' in ref '${path}' — only positive ` +
+            'integer positions are supported',
+        );
+      }
+      const pos = parseInt(body, 10);
+      return level(name, pos - 1);
     }
     return level(part, INDEX_UNBOUND);
   });

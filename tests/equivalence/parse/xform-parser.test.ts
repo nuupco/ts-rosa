@@ -319,7 +319,7 @@ describe("setvalue action parsing", () => {
     expect(def.actions).toHaveLength(1);
     const action = def.actions[0]!;
     expect(action.event).toBe("odk-instance-first-load");
-    expect(action.target.levels.map((l) => l.name)).toEqual(["data", "a"]);
+    expect(action.genericTarget.levels.map((l) => l.name)).toEqual(["data", "a"]);
     expect(action.expr).not.toBeNull();
     expect(action.literal).toBeNull();
   });
@@ -410,7 +410,7 @@ describe("setvalue action parsing: host-relative ref resolution", () => {
       ).asXml()
     );
     expect(def.actions).toHaveLength(1);
-    const target = def.actions[0]!.target;
+    const target = def.actions[0]!.genericTarget;
     const targetPath = target.levels.map((l) => l.name).join("/");
     // Child-of-host resolution: relative ref "b" under host /data/g resolves
     // to /data/g/b, NOT /data/b (sibling-of-host, which would be wrong).
@@ -425,12 +425,12 @@ describe("setvalue action parsing: fail-loud on unsupported event", () => {
         model(
           mainInstance(t('data id="svbad"', t("a"))),
           bind("/data/a").type("string"),
-          setvalue("odk-new-repeat", "/data/a", "1")
+          setvalue("not-a-real-event", "/data/a", "1")
         )
       ),
       body(input("/data/a"))
     ).asXml();
-    expect(() => parseForm(xml)).toThrow(/odk-new-repeat/);
+    expect(() => parseForm(xml)).toThrow(/not-a-real-event/);
     expect(() => parseForm(xml)).toThrow(/\/data\/a/);
   });
 
@@ -468,32 +468,67 @@ describe("setvalue action parsing: fail-loud on unsupported event", () => {
         model(
           mainInstance(t('data id="svmulti"', t("a"))),
           bind("/data/a").type("string"),
-          t('setvalue event="xforms-value-changed odk-new-repeat" ref="/data/a" value="1"')
+          t('setvalue event="xforms-value-changed not-a-real-event" ref="/data/a" value="1"')
         )
       ),
       body(input("/data/a"))
     ).asXml();
-    expect(() => parseForm(xml)).toThrow(/odk-new-repeat/);
+    expect(() => parseForm(xml)).toThrow(/not-a-real-event/);
   });
 
-  it("throws when multiple space-separated events are all individually valid but distinct (fail-loud, not silently picking one)", () => {
-    const xml = html(
-      head(
-        model(
-          mainInstance(t('data id="svmultivalid"', t("a"))),
-          bind("/data/a").type("string"),
-          t('setvalue event="odk-instance-first-load xforms-value-changed" ref="/data/a" value="1"')
-        )
-      ),
-      body(input("/data/a"))
-    ).asXml();
-    expect(() => parseForm(xml)).toThrow(/multiple events/);
-    expect(() => parseForm(xml)).toThrow(/odk-instance-first-load xforms-value-changed/);
+  it("registers one action per token when multiple space-separated events are all individually valid (JavaRosa parity — no longer rejected)", () => {
+    const def = parseForm(
+      html(
+        head(
+          model(
+            mainInstance(t('data id="svmultivalid"', t("a"))),
+            bind("/data/a").type("string"),
+            t('setvalue event="odk-instance-first-load xforms-value-changed" ref="/data/a" value="1"')
+          )
+        ),
+        body(input("/data/a"))
+      ).asXml()
+    );
+    expect(def.actions).toHaveLength(2);
+    expect(def.actions.map((a) => a.event)).toEqual(["odk-instance-first-load", "xforms-value-changed"]);
   });
 });
 
-describe("setvalue action parsing: repeat-relative target rejection (v1 limit)", () => {
-  it("throws a clear error for a relative target ref with no host context (model-level)", () => {
+describe("setvalue action parsing: jr-insert model-level gating", () => {
+  it("accepts jr-insert on a model-level setvalue", () => {
+    const def = parseForm(
+      html(
+        head(
+          model(
+            mainInstance(t('data id="svjrinsert"', t("a"))),
+            bind("/data/a").type("string"),
+            setvalue("jr-insert", "/data/a", "'x'")
+          )
+        ),
+        body(input("/data/a"))
+      ).asXml()
+    );
+    expect(def.actions).toHaveLength(1);
+    expect(def.actions[0]!.event).toBe("jr-insert");
+  });
+
+  it("rejects jr-insert on a body-nested setvalue", () => {
+    const xml = html(
+      head(
+        model(
+          mainInstance(t('data id="svjrinsertbad"', t("a"), t("b"))),
+          bind("/data/a").type("string"),
+          bind("/data/b").type("string")
+        )
+      ),
+      body(input("/data/a", setvalue("jr-insert", "/data/b", "'x'")))
+    ).asXml();
+    expect(() => parseForm(xml)).toThrow(/jr-insert/);
+  });
+});
+
+describe("setvalue action parsing: relative target ref genericTarget derivation (sdd/setvalue-parity PR2)", () => {
+  it("still throws a clear error for a relative target ref with no host context (model-level)", () => {
     const xml = html(
       head(
         model(
@@ -507,7 +542,7 @@ describe("setvalue action parsing: repeat-relative target rejection (v1 limit)",
     expect(() => parseForm(xml)).toThrow(/relative target ref/);
   });
 
-  it("throws a clear error for a '..'-navigating (repeat-relative) target ref", () => {
+  it("no longer rejects a '..'-navigating (repeat-relative) target ref at parse time — resolved at fire time via the XPath seam", () => {
     const xml = html(
       head(
         model(
@@ -519,6 +554,6 @@ describe("setvalue action parsing: repeat-relative target rejection (v1 limit)",
         repeat("/data/reps", input("/data/reps/item", t('setvalue event="xforms-value-changed" ref="../item" value="1"')))
       )
     ).asXml();
-    expect(() => parseForm(xml)).toThrow(/repeat-relative target ref/);
+    expect(() => parseForm(xml)).not.toThrow();
   });
 });

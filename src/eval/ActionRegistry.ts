@@ -18,7 +18,7 @@
  *     only builds the map.
  */
 
-import type { SetValueAction } from './SetValueAction.ts';
+import type { SetValueAction, SetValueEvent } from './SetValueAction.ts';
 import { genericize, refToString } from '../model/instance/TreeReference.ts';
 
 export interface ActionRegistry {
@@ -30,6 +30,24 @@ export interface ActionRegistry {
    * multiple triggers, per SetValueAction.triggers).
    */
   readonly valueChangedByTrigger: ReadonlyMap<string, readonly SetValueAction[]>;
+  /**
+   * All actions bucketed by their normalized event, in declaration order.
+   * Used by `FormEvaluator.initializeRepeatInstance` (sdd/setvalue-parity
+   * PR3, Layer C) to look up `jr-insert` and model-level `odk-new-repeat`
+   * actions without re-scanning the full action list on every repeat
+   * creation.
+   */
+  readonly byEvent: ReadonlyMap<SetValueEvent, readonly SetValueAction[]>;
+  /**
+   * `odk-new-repeat` actions whose `hostRef` is non-null (body-nested,
+   * declared inside a repeat template), keyed by
+   * `refToString(genericize(hostRef))` — sdd/setvalue-parity design
+   * Decision 5 / File Changes table. Looked up by
+   * `initializeRepeatInstance` via a subtree-prefix scan (the new repeat
+   * instance's generic ref may be a proper prefix of a nested host's key)
+   * to fire only actions scoped to the newly created instance.
+   */
+  readonly newRepeatByScope: ReadonlyMap<string, readonly SetValueAction[]>;
 }
 
 /**
@@ -39,23 +57,43 @@ export interface ActionRegistry {
 export function buildActionRegistry(actions: readonly SetValueAction[]): ActionRegistry {
   const loadActions: SetValueAction[] = [];
   const valueChangedByTrigger = new Map<string, SetValueAction[]>();
+  const byEvent = new Map<SetValueEvent, SetValueAction[]>();
+  const newRepeatByScope = new Map<string, SetValueAction[]>();
 
   for (const action of actions) {
+    let eventBucket = byEvent.get(action.event);
+    if (eventBucket === undefined) {
+      eventBucket = [];
+      byEvent.set(action.event, eventBucket);
+    }
+    eventBucket.push(action);
+
+    if (action.event === 'odk-new-repeat' && action.hostRef !== null) {
+      const scopeKey = refToString(genericize(action.hostRef));
+      let scopeBucket = newRepeatByScope.get(scopeKey);
+      if (scopeBucket === undefined) {
+        scopeBucket = [];
+        newRepeatByScope.set(scopeKey, scopeBucket);
+      }
+      scopeBucket.push(action);
+    }
+
     if (action.event === 'odk-instance-first-load') {
       loadActions.push(action);
       continue;
     }
-    // action.event === 'xforms-value-changed'
-    for (const trigger of action.triggers) {
-      const key = refToString(genericize(trigger));
-      let bucket = valueChangedByTrigger.get(key);
-      if (bucket === undefined) {
-        bucket = [];
-        valueChangedByTrigger.set(key, bucket);
+    if (action.event === 'xforms-value-changed') {
+      for (const trigger of action.triggers) {
+        const key = refToString(genericize(trigger));
+        let bucket = valueChangedByTrigger.get(key);
+        if (bucket === undefined) {
+          bucket = [];
+          valueChangedByTrigger.set(key, bucket);
+        }
+        bucket.push(action);
       }
-      bucket.push(action);
     }
   }
 
-  return { loadActions, valueChangedByTrigger };
+  return { loadActions, valueChangedByTrigger, byEvent, newRepeatByScope };
 }

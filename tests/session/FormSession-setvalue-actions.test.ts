@@ -117,8 +117,8 @@ describe('buildActionRegistry', () => {
     const registry = buildActionRegistry(def.actions);
 
     expect(registry.loadActions).toHaveLength(2);
-    expect(registry.loadActions[0]!.target.levels.map((l) => l.name)).toEqual(['data', 'a']);
-    expect(registry.loadActions[1]!.target.levels.map((l) => l.name)).toEqual(['data', 'b']);
+    expect(registry.loadActions[0]!.genericTarget.levels.map((l) => l.name)).toEqual(['data', 'a']);
+    expect(registry.loadActions[1]!.genericTarget.levels.map((l) => l.name)).toEqual(['data', 'b']);
   });
 
   it('returns an empty registry for a form with no actions', () => {

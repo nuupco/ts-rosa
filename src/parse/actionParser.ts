@@ -5,15 +5,22 @@
  * Kept separate from handlers.ts (FormElement production) per design
  * doc "sdd/setvalue-actions/design" section "Integration points".
  *
- * Scope (v1, this module):
+ * Scope (this module):
  *   - Recognizes `<setvalue event="..." ref="..." value="...">` (attribute
  *     value) or `<setvalue event="..." ref="...">inner text</setvalue>`.
+ *   - `event` accepts a space-separated list of tokens (JavaRosa parity —
+ *     see sdd/setvalue-parity design Decision 1); `parseSetValueActions`
+ *     returns one `SetValueAction` per token, sharing the same compiled
+ *     target/value expression.
  *   - Fails loud (throws) on:
- *       - missing/unsupported `event` attribute value
+ *       - missing/unsupported `event` attribute value or token
+ *       - `jr-insert` declared on a body-nested (non-model) `<setvalue>`
+ *         (design Decision 5 — model-level only)
  *       - missing `ref` attribute
  *       - a `ref` that would require repeat-relative resolution (v1 limit —
  *         only absolute and simple host-relative single targets are
- *         supported; see `resolveTargetRef`)
+ *         supported; see `resolveTargetRef`. Runtime target ref resolution
+ *         via the XPath seam is a later PR, see design Decision 2.)
  *   - Does NOT wire actions into TriggerableDag (separate ActionRegistry,
  *     a later PR).
  */
@@ -22,31 +29,30 @@ import { compileInstanceXPath } from '../xpath/seam/XPathSeam.ts';
 import { getTriggers } from '../eval/getTriggers.ts';
 import { PureJSExpressionParser } from '../xpath/parser/PureJSExpressionParser.ts';
 import { normalizeEvent, type SetValueAction } from '../eval/SetValueAction.ts';
-import { parseAbsoluteRef, type TreeReference } from '../model/instance/TreeReference.ts';
+import { parseAbsoluteRef, contextualize, type TreeReference } from '../model/instance/TreeReference.ts';
 import { directTextContent } from './domHelpers.ts';
 
 const sharedParser = new PureJSExpressionParser();
 
-/**
- * Resolves a `<setvalue ref="...">` attribute to an absolute TreeReference.
- *
- * v1 scope: only absolute refs (starting with '/') and simple host-relative
- * refs (a bare relative path, no `..` parent navigation, resolved as a child
- * of the host control's own ref) are supported. Anything else
- * (relative refs with no host context, or refs using `..` navigation) would
- * require repeat-instance-aware resolution that FormDefinition — a static,
- * parse-time record — cannot express, so it is rejected fail-loud.
- */
-function resolveTargetRef(rawRef: string, hostRef: TreeReference | null, sourceLocation: string): TreeReference {
-  if (rawRef.startsWith('/')) {
-    return parseAbsoluteRef(rawRef);
-  }
+/** Strips all `[...]` bracketed predicates from a raw ref string. */
+function stripPredicates(rawRef: string): string {
+  return rawRef.replace(/\[[^\]]*]/g, '');
+}
 
-  if (rawRef.includes('..')) {
-    throw new Error(
-      `setvalue: repeat-relative target ref '${rawRef}' is not supported (${sourceLocation}). ` +
-        "Only absolute (starting with '/') or simple host-relative refs are supported in v1.",
-    );
+/**
+ * Derives the predicate-free `genericTarget` ref used ONLY for
+ * `ActionRegistry` keying and as the `getTriggers` context ref for the
+ * value expression — NEVER for writing (sdd/setvalue-parity design
+ * Decision 4). The actual write target is resolved at fire time via the
+ * XPath seam (see `FormEvaluator.fireActionInner`), which is why this
+ * function tolerates (by simply stripping) any predicate shape instead of
+ * requiring numeric ones like `parseAbsoluteRef` does.
+ */
+export function deriveGenericTarget(rawRef: string, hostRef: TreeReference | null, sourceLocation: string): TreeReference {
+  const stripped = stripPredicates(rawRef);
+
+  if (stripped.startsWith('/')) {
+    return parseAbsoluteRef(stripped);
   }
 
   if (hostRef === null) {
@@ -56,24 +62,30 @@ function resolveTargetRef(rawRef: string, hostRef: TreeReference | null, sourceL
     );
   }
 
-  // Host-relative: resolve by appending the relative segments to the host's
-  // own path (standard XForms/XPath relative-path semantics evaluate a
-  // relative ref against the context node itself, i.e. as a child of the
-  // host, not a sibling of it — no repeat-instance resolution needed for a
-  // bare path).
-  const hostPath = hostRef.levels.map((lvl) => lvl.name).join('/');
-  const base = hostPath.length > 0 ? `/${hostPath}` : '';
-  return parseAbsoluteRef(`${base}/${rawRef}`);
+  // Parse the stripped relative path into a bare (non-contextualized)
+  // TreeReference, then anchor it onto the host ref.
+  const relativeLevels = parseAbsoluteRef(`/${stripped}`).levels;
+  const relativeRef: TreeReference = {
+    refLevel: 0,
+    contextType: 'original',
+    instanceName: null,
+    levels: relativeLevels,
+  };
+  return contextualize(relativeRef, hostRef);
 }
 
 /**
- * Parses a single `<setvalue>` DOM element into a `SetValueAction`.
+ * Parses a single `<setvalue>` DOM element into one `SetValueAction` per
+ * space-separated event token in its `event` attribute — JavaRosa allows a
+ * `<setvalue>` to declare multiple events on the same target
+ * (`Actions.java`); each token becomes its own registration sharing the same
+ * compiled target/value expression (design Decision 1).
  *
  * @param el - the `<setvalue>` element.
  * @param hostRef - absolute ref of the enclosing control (body-nested case),
  *   or null for model-level setvalue elements.
  */
-export function parseSetValueAction(el: Element, hostRef: TreeReference | null): SetValueAction {
+export function parseSetValueActions(el: Element, hostRef: TreeReference | null): SetValueAction[] {
   const rawEvent = el.getAttribute('event');
   const rawRef = el.getAttribute('ref');
   const sourceLocation = `<setvalue event="${rawEvent ?? ''}" ref="${rawRef ?? ''}">`;
@@ -82,34 +94,36 @@ export function parseSetValueAction(el: Element, hostRef: TreeReference | null):
     throw new Error(`setvalue: missing required 'ref' attribute (${sourceLocation})`);
   }
 
-  // v1 supports a single event token (no space-separated multi-event lists).
-  if (rawEvent !== null && rawEvent.trim().includes(' ')) {
-    const tokens = rawEvent.trim().split(/\s+/);
-    for (const token of tokens) {
-      if (normalizeEvent(token) === null) {
-        throw new Error(
-          `setvalue: unsupported event '${token}' on ref '${rawRef}' (${sourceLocation}). ` +
-            "Supported events: 'odk-instance-first-load' (alias 'xforms-ready'), 'xforms-value-changed'.",
-        );
-      }
-    }
-    // All tokens individually valid but multi-event setvalue is still v1-unsupported
-    // (JavaRosa allows it; this parser does not yet) — fail loud rather than
-    // silently picking one.
-    throw new Error(
-      `setvalue: multiple events ('${rawEvent}') on ref '${rawRef}' are not supported in v1 (${sourceLocation}).`,
-    );
-  }
-
-  const event = normalizeEvent(rawEvent);
-  if (event === null) {
+  const tokens = rawEvent !== null ? rawEvent.trim().split(/\s+/).filter((t) => t.length > 0) : [];
+  if (tokens.length === 0) {
     throw new Error(
       `setvalue: unsupported event '${rawEvent ?? ''}' on ref '${rawRef}' (${sourceLocation}). ` +
-        "Supported events: 'odk-instance-first-load' (alias 'xforms-ready'), 'xforms-value-changed'.",
+        "Supported events: 'odk-instance-first-load' (alias 'xforms-ready'), 'xforms-value-changed', " +
+        "'odk-new-repeat', 'jr-insert'.",
     );
   }
 
-  const target = resolveTargetRef(rawRef, hostRef, sourceLocation);
+  const events: SetValueAction['event'][] = [];
+  for (const token of tokens) {
+    const event = normalizeEvent(token);
+    if (event === null) {
+      throw new Error(
+        `setvalue: unsupported event '${token}' on ref '${rawRef}' (${sourceLocation}). ` +
+          "Supported events: 'odk-instance-first-load' (alias 'xforms-ready'), 'xforms-value-changed', " +
+          "'odk-new-repeat', 'jr-insert'.",
+      );
+    }
+    if (event === 'jr-insert' && hostRef !== null) {
+      throw new Error(
+        `setvalue: 'jr-insert' is only supported on model-level setvalue actions, not on a body-nested ` +
+          `<setvalue> (${sourceLocation}). Declare this action directly under <model> instead.`,
+      );
+    }
+    events.push(event);
+  }
+
+  const targetExpr = compileInstanceXPath(rawRef);
+  const genericTarget = deriveGenericTarget(rawRef, hostRef, sourceLocation);
 
   const valueAttr = el.getAttribute('value');
   let expr: ReturnType<typeof compileInstanceXPath> | null = null;
@@ -119,26 +133,29 @@ export function parseSetValueAction(el: Element, hostRef: TreeReference | null):
   if (valueAttr !== null) {
     expr = compileInstanceXPath(valueAttr);
     const parsed = sharedParser.parse(valueAttr).rootNode;
-    valueDeps = getTriggers(parsed, target, target);
+    valueDeps = getTriggers(parsed, genericTarget, genericTarget);
   } else {
     literal = directTextContent(el) ?? '';
   }
 
-  const triggers: TreeReference[] =
-    event === 'xforms-value-changed'
-      ? dedupeRefs([...valueDeps, ...(hostRef !== null ? [hostRef] : [])])
-      : [];
+  return events.map((event) => {
+    const triggers: TreeReference[] =
+      event === 'xforms-value-changed'
+        ? dedupeRefs([...valueDeps, ...(hostRef !== null ? [hostRef] : [])])
+        : [];
 
-  return {
-    event,
-    target,
-    expr,
-    literal,
-    triggers,
-    contextRef: target,
-    originalContextRef: target,
-    sourceLocation,
-  };
+    return {
+      event,
+      targetSource: rawRef,
+      targetExpr,
+      hostRef,
+      genericTarget,
+      expr,
+      literal,
+      triggers,
+      sourceLocation,
+    };
+  });
 }
 
 function dedupeRefs(refs: readonly TreeReference[]): TreeReference[] {
@@ -166,7 +183,7 @@ export function collectModelActions(modelEl: Element | null): SetValueAction[] {
   for (let i = 0; i < children.length; i++) {
     const child = children[i];
     if (child && child.nodeType === 1 && (child as Element).localName === 'setvalue') {
-      actions.push(parseSetValueAction(child as Element, null));
+      actions.push(...parseSetValueActions(child as Element, null));
     }
   }
   return actions;
@@ -185,7 +202,21 @@ export function collectBodyActions(bodyEl: Element | null): SetValueAction[] {
 
   function walk(el: Element, hostRef: TreeReference | null): void {
     const refAttr = el.getAttribute('ref') ?? el.getAttribute('nodeset');
-    const currentHostRef = refAttr !== null && refAttr !== '' ? parseAbsoluteRef(refAttr) : hostRef;
+    // Only a plain absolute path (no XPath function calls, only optionally
+    // numeric `[N]` predicates — sdd/setvalue-parity Decision 7) can be used
+    // to track hostRef context here. Other ref/nodeset shapes (e.g. an
+    // `<itemset nodeset="instance('x')/root/item[a = /data/b]">`) are not
+    // setvalue-relevant hosts; parseAbsoluteRef now throws on non-numeric
+    // predicates, so such attributes are simply skipped (hostRef unchanged)
+    // rather than crashing the whole body walk.
+    let currentHostRef = hostRef;
+    if (refAttr !== null && refAttr !== '' && refAttr.startsWith('/')) {
+      try {
+        currentHostRef = parseAbsoluteRef(refAttr);
+      } catch {
+        currentHostRef = hostRef;
+      }
+    }
 
     const children = el.childNodes;
     for (let i = 0; i < children.length; i++) {
@@ -193,7 +224,7 @@ export function collectBodyActions(bodyEl: Element | null): SetValueAction[] {
       if (!child || child.nodeType !== 1) continue;
       const childEl = child as Element;
       if (childEl.localName === 'setvalue') {
-        actions.push(parseSetValueAction(childEl, currentHostRef));
+        actions.push(...parseSetValueActions(childEl, currentHostRef));
       } else {
         walk(childEl, currentHostRef);
       }
