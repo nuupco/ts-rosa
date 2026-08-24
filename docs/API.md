@@ -64,11 +64,17 @@ Fail-loud error contract:
 declared-but-not-yet-resolved external instances; `resolveExternalInstances`
 returns a new `FormDefinition` and never mutates the one it's given.
 
-**Out of scope / deferred:**
+**Also supported, beyond CSV:**
 
-- `jr://file/*.xml` (XML-shaped externals) — the parser records the `src`
-  URI regardless of extension, but only CSV content-parsing is implemented.
-- `jr://instance/last-saved` — not implemented.
+- `jr://file/*.xml` (any `src` ending in `.xml`, case-insensitive) — parsed
+  as XML via the same tree-building machinery as inline secondary instances.
+  Fail-loud: a `null` resolver result or malformed/rootless XML throws.
+- `jr://instance/last-saved` — parsed as XML with relaxed/tolerant schema
+  drift handling (unlike the fail-loud `.xml` path). A `null` resolver
+  result (no prior submission) yields an empty-root tree named after the
+  form's own primary instance root, instead of throwing.
+
+See `src/parse/resolveExternalInstances.ts` for the full dispatch logic.
 
 ### `registerExternalInstanceResolver(provider)` / `getExternalInstanceResolver()`
 

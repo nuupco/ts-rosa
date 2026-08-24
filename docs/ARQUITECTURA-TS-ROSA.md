@@ -419,11 +419,14 @@ and works on every supported RN version.
 
 ### 7.5 Phase 2 gate status
 
-- **~223 / 225 `it.fail` XPath tests activated and passing** (GREEN). The two remaining
-  deferred tests involve `indexed-repeat` (requires the NodeSet→InstanceTree bridge, Phase 3)
-  and `$var` variable references (Phase 3 reactive variable resolution).
-- `indexed-repeat` — deferred to Phase 3: requires the NodeSet→InstanceTree bridge.
-- `$var` (`VariableReferenceNode`) — deferred to Phase 3: requires DAG variable orchestration.
+- **~223 / 225 `it.fail` XPath tests activated and passing** (GREEN) at the time of this
+  Phase 2 snapshot. The two tests then deferred, `indexed-repeat` and `$var` variable
+  references, have since been implemented (post-Phase 3): `indexed-repeat` lives in
+  `src/xpath/functions/xforms-indexed-repeat.ts`, and `$var` resolves via
+  `VariableReferenceExpressionEvaluator.ts` against `VariableScope.ts`. Both are GREEN.
+- `indexed-repeat` — **implemented.** See `src/xpath/functions/xforms-indexed-repeat.ts`.
+- `$var` (`VariableReferenceNode`) — **implemented.** See
+  `src/xpath/vendor/xpath/evaluator/expression/VariableReferenceExpressionEvaluator.ts`.
 
 ### 7.6 Known caveats and maintenance notes
 
@@ -436,9 +439,8 @@ and works on every supported RN version.
   are present in the vendor but excluded from `FunctionLibraryCollection` construction in
   `src/xpath/functions/index.ts` because they import `XFormsXPathEvaluator` circularly.
   They are deferred to Slice 4 / Phase 3 NodeSet support.
-- **NodeSet→InstanceTree bridge:** deferred to Phase 3. Phase 2 delivers on-demand XPath
-  expression evaluation; the bridge that maps `XmldomNode` NodeSet results to
-  `InstanceNode`/`TreeReference` positions in the engine's instance tree is not yet built.
+- **NodeSet→InstanceTree bridge:** implemented (post-Phase 3). `indexed-repeat` and `$var`,
+  the two features that depended on it, are both GREEN — see §7.5.
 - **`pulldata`** — wired via the vendored function libraries; full integration with secondary
   instances is a Phase 2/6 task.
 
@@ -507,7 +509,7 @@ The harness (proposal `sdd/test-equivalence-harness`) already enforces this arch
 |---|---|---|
 | 0 (done/in progress) | DSL, Scenario, AnswerResult, harness | `tests/harness`, `platform/XmlParser` |
 | 1 Data core | answer types, instance tree, minimal parser | `model/data`, `model/instance`, `parse` (subset) |
-| 2 XPath (done) | Vendored `@getodk/xpath` + `@getodk/common` subset at commit `c02a421` (Apache-2.0); 8 conformance patches in `PATCHES.md`. Pure-JS `PureJSExpressionParser` (recursive-descent + precedence-climbing), validated by golden tests. `XmldomXPathAdapter` (~20 methods). `XPathSeam` as sole import boundary (`evaluateXPath`, `evaluateXPathTyped`, `compileXPath`). ~223/225 XPath it.fails GREEN. `indexed-repeat` and `$var` deferred to P3. | `xpath/{vendor,adapter,parser,evaluator,functions,seam,index}` |
+| 2 XPath (done) | Vendored `@getodk/xpath` + `@getodk/common` subset at commit `c02a421` (Apache-2.0); 8 conformance patches in `PATCHES.md`. Pure-JS `PureJSExpressionParser` (recursive-descent + precedence-climbing), validated by golden tests. `XmldomXPathAdapter` (~20 methods). `XPathSeam` as sole import boundary (`evaluateXPath`, `evaluateXPathTyped`, `compileXPath`). ~223/225 XPath it.fails GREEN at Phase 2; `indexed-repeat` and `$var` implemented post-Phase 3, now 225/225. | `xpath/{vendor,adapter,parser,evaluator,functions,seam,index}` |
 | 3 Reactivity | Triggerable + parse-time DAG, relevance/calc/required, constraint, NodeState map, `OpaqueReactiveObjectFactory` seam | `eval/*`, `model/state`, `platform/ReactiveObjectFactory` |
 | 4 Navigation/repeats | FormIndex, session events, repeats | `session/*` |
 | 5 Dynamic selects + i18n | itemset, itext, secondary instances | `model/def/ItemsetBinding`, `platform/SecondaryInstanceLoader` |
@@ -546,9 +548,9 @@ churn from leaking into the engine.
 | WASM (tree-sitter) parser unviable on Hermes | **MITIGATED (Phase 2).** Pure-JS `PureJSExpressionParser` (recursive-descent + precedence-climbing) implemented and validated via golden tests against the real tree-sitter-xpath parser. Zero WASM dependency. Works on all RN versions. |
 | `@getodk/xpath` pre-1.0 drift / upstream breaking changes | **MITIGATED.** Source vendored at commit `c02a421`; frozen. `XPathSeam` is the only import boundary; upstream changes require only a targeted re-vendor + re-apply of `PATCHES.md`. Ported `XPathEvalTest`/`XPathFuncExprTest` (225+ it.fails) remains the sole equivalence oracle. |
 | Vendor patch drift — re-vendor loses conformance fixes | `PATCHES.md` documents all 8 patches with file, change, and the JavaRosa test that drove each. Re-vendor procedure: copy source, rewrite imports, re-apply patches, update commit in `VENDOR.md`. |
-| `@getodk/xpath` missing `$var` / `VariableReferenceNode` | Scoped to Phase 3 (DAG orchestration). Phase 2 = on-demand expression evaluation only; `$var` deferred. |
-| Default WHATWG adapter requires browser globals | **MITIGATED (Phase 2).** Replaced by `XmldomXPathAdapter` (~20 methods) over `@xmldom/xmldom`, consistent with the `XmlParser` seam. NodeSet→InstanceTree bridge deferred to Phase 3. |
-| NodeSet→InstanceTree bridge | Phase 3 work. `XmldomNode` NodeSet results from the XPath engine need to be mapped back to `InstanceNode`/`TreeReference` positions for reactive evaluation. Phase 2 delivers expression evaluation only. |
+| `@getodk/xpath` missing `$var` / `VariableReferenceNode` | **RESOLVED (post-Phase 3).** `$var` implemented in `VariableReferenceExpressionEvaluator.ts`. |
+| Default WHATWG adapter requires browser globals | **MITIGATED (Phase 2).** Replaced by `XmldomXPathAdapter` (~20 methods) over `@xmldom/xmldom`, consistent with the `XmlParser` seam. NodeSet→InstanceTree bridge implemented post-Phase 3. |
+| NodeSet→InstanceTree bridge | **RESOLVED (post-Phase 3).** `XmldomNode` NodeSet results are mapped back to `InstanceNode`/`TreeReference` positions; `indexed-repeat` and `$var` both depend on this and are GREEN. |
 | XPath coercion / `1e-12` / `position()` / `current()` subtleties | 225+ it.fails as equivalence suite, green from Phase 2 day 1. Coercion parity validated by ported test suite. |
 | `@xmldom/xmldom` unviable on Hermes | Phase 0 RN smoke test gates before building on top; `XmlParser` interface lets us swap providers |
 | Discriminated-union refactor diverges from class-based JR semantics | Behavior covered by ported tests, not structure; unions reviewed against audit §3 |
@@ -571,10 +573,11 @@ churn from leaking into the engine.
 - [x] **Pure-JS parser: write bespoke vs. adapt existing library — RESOLVED (Phase 2).**
       Bespoke `PureJSExpressionParser` (recursive-descent + precedence-climbing) written from
       scratch. Validated via golden tests against real tree-sitter-xpath parser. See §7.4.
-- [ ] NodeSet→InstanceTree bridge — Phase 3. Maps `XmldomNode` NodeSet results to
-      `InstanceNode`/`TreeReference` for reactive evaluation. Blocks `indexed-repeat` and 2
-      remaining XPath tests.
-- [ ] XPath `$var` (`VariableReferenceNode`) — Phase 3 (DAG + reactivity variable resolution).
+- [x] NodeSet→InstanceTree bridge — RESOLVED (post-Phase 3). Maps `XmldomNode` NodeSet
+      results to `InstanceNode`/`TreeReference` for reactive evaluation. Unblocked
+      `indexed-repeat` and the 2 remaining XPath tests.
+- [x] XPath `$var` (`VariableReferenceNode`) — RESOLVED (post-Phase 3). See
+      `VariableReferenceExpressionEvaluator.ts`.
 - [ ] `pulldata` full wiring — vendored function library present; integration with secondary
       instances deferred to Phase 2/6.
 - [ ] Whether `FormDefinition` reuse across multiple concurrent sessions is a real product

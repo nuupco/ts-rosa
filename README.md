@@ -126,14 +126,16 @@ indistinguishable in shape from an equivalent inline one.
 - Malformed CSV throws `resolveExternalInstances: external instance '<id>' (<src>) has malformed CSV: <detail>`.
 - Calling `createFormSession(def)` with a declared-but-unresolved external instance throws `createFormSession: external instance '<id>' is declared but not resolved. Call resolveExternalInstances(definition) before createFormSession().` — this prevents an unresolved external from silently behaving as an absent/empty instance.
 
-**Out of scope (deferred, not implemented):**
+**Also supported, beyond CSV:**
 
-- XML-shaped externals (`jr://file/*.xml`) — parser detection is
-  src-format-agnostic (it records the URI regardless of extension), but only
-  CSV content-parsing exists today. Adding XML support is a hydration-layer
-  extension, not a parser change.
-- Last-saved instances (`jr://instance/last-saved`) — no plumbing exists for
-  this source yet.
+- XML-shaped externals (`jr://file/*.xml`, any `src` ending in `.xml`) —
+  parsed via the same tree-building machinery as inline secondary
+  instances. Fail-loud: a `null` resolver result or malformed/rootless XML
+  throws.
+- Last-saved instances (`jr://instance/last-saved`) — parsed as XML with
+  relaxed/tolerant schema drift handling. A `null` resolver result (no
+  prior submission) yields an empty-root tree named after the form's own
+  primary instance root, instead of throwing.
 
 ## Architecture
 
