@@ -52,3 +52,39 @@ function applyPreloadsToNode(node: InstanceNode, provider: PreloadProvider): voi
 export function applyPreloads(tree: InstanceTree, provider: PreloadProvider): void {
   applyPreloadsToNode(tree.root, provider);
 }
+
+// ---------------------------------------------------------------------------
+// End-of-form preloads (timestamp/end)
+// ---------------------------------------------------------------------------
+
+function applyEndPreloadsToNode(node: InstanceNode, provider: PreloadProvider): void {
+  if (node.multiplicity === INDEX_TEMPLATE) {
+    return;
+  }
+
+  if (node.preload === 'timestamp' && node.preloadParams === 'end') {
+    const raw = resolvePreload(node.preload, node.preloadParams, provider);
+    if (raw !== null) {
+      node.value = cast(node.dataType, raw) ?? null;
+    }
+  }
+
+  for (const child of node.children) {
+    applyEndPreloadsToNode(child, provider);
+  }
+}
+
+/**
+ * Re-resolve `jr:preload="timestamp" jr:preloadParams="end"` nodes at finalize
+ * time. Unlike `applyPreloads` (which runs once at session creation and leaves
+ * `end` preloads as null, per JR: resolved only at submission), this walks the
+ * tree again right before submission so `end` reflects form-close time rather
+ * than form-open time.
+ *
+ * Source: org.javarosa.core.model.utils.QuestionPreloader (timestamp/end is
+ * resolved by JavaRosa at FormEntryController#postProcessInstance, i.e. just
+ * before submission — not at form load).
+ */
+export function applyEndPreloads(tree: InstanceTree, provider: PreloadProvider): void {
+  applyEndPreloadsToNode(tree.root, provider);
+}

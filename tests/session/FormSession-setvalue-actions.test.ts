@@ -344,3 +344,52 @@ describe('setvalue action chain depth guard (MAX_ACTION_CHAIN_DEPTH=16)', () => 
     ).toThrow(/max depth|cycle/i);
   });
 });
+
+describe('xforms-revalidate action (FormSession.finalize)', () => {
+  it('does not fire at session creation, only from finalize()', () => {
+    const form = html(
+      head(
+        title('Revalidate'),
+        model(
+          mainInstance(t('data id="rv"', t('a'))),
+          bind('/data/a').type('string'),
+          setvalue('xforms-revalidate', '/data/a', "'finalized'"),
+        ),
+      ),
+      body(input('/data/a')),
+    ).asXml();
+    const def = parseForm(form);
+    const session = createFormSession(def);
+
+    const node = session.tree.root.children.find((c) => c.name === 'a');
+    expect(node?.value).toBeNull();
+
+    session.finalize();
+    expect((node?.value as { value: string } | null)?.value).toBe('finalized');
+  });
+
+  it('fires exactly once per finalize() call, in declaration order', () => {
+    const form = html(
+      head(
+        title('RevalidateOrder'),
+        model(
+          mainInstance(t('data id="rvo"', t('a'), t('b'))),
+          bind('/data/a').type('int'),
+          bind('/data/b').type('int'),
+          setvalue('xforms-revalidate', '/data/a', '1'),
+          setvalue('xforms-revalidate', '/data/b', '/data/a + 1'),
+        ),
+      ),
+      body(input('/data/a'), input('/data/b')),
+    ).asXml();
+    const def = parseForm(form);
+    const session = createFormSession(def);
+
+    session.finalize();
+
+    const a = session.tree.root.children.find((c) => c.name === 'a');
+    const b = session.tree.root.children.find((c) => c.name === 'b');
+    expect((a?.value as { value: number } | null)?.value).toBe(1);
+    expect((b?.value as { value: number } | null)?.value).toBe(2);
+  });
+});

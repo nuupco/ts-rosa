@@ -434,18 +434,32 @@ describe("setvalue action parsing: fail-loud on unsupported event", () => {
     expect(() => parseForm(xml)).toThrow(/\/data\/a/);
   });
 
-  it("throws for another unsupported event token (xforms-revalidate)", () => {
+  it("throws for another unsupported event token (xforms-recalculate)", () => {
     const xml = html(
       head(
         model(
           mainInstance(t('data id="svbad2"', t("a"))),
+          bind("/data/a").type("string"),
+          setvalue("xforms-recalculate", "/data/a", "1")
+        )
+      ),
+      body(input("/data/a"))
+    ).asXml();
+    expect(() => parseForm(xml)).toThrow(/xforms-recalculate/);
+  });
+
+  it("accepts xforms-revalidate (fires from FormSession.finalize())", () => {
+    const xml = html(
+      head(
+        model(
+          mainInstance(t('data id="svrevalidate"', t("a"))),
           bind("/data/a").type("string"),
           setvalue("xforms-revalidate", "/data/a", "1")
         )
       ),
       body(input("/data/a"))
     ).asXml();
-    expect(() => parseForm(xml)).toThrow(/xforms-revalidate/);
+    expect(() => parseForm(xml)).not.toThrow();
   });
 
   it("throws when the event attribute is missing", () => {

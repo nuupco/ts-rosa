@@ -1,7 +1,9 @@
 /**
  * FormNavigator — form entry cursor engine (Phase 4).
  *
- * @experimental Phase 4 cursor API. NOT exported from any stable barrel.
+ * @experimental Phase 4 cursor API. Exported from `src/session/index.ts` /
+ * the root `src/index.ts` barrel and covered by `public-api-surface.test.ts`,
+ * but the surface may still change without a deprecation path.
  *
  * Owns the mutable cursor (FormIndex) and provides query and navigation
  * methods that mirror JavaRosa FormEntryController + FormEntryModel.

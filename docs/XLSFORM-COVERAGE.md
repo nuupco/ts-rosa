@@ -15,7 +15,7 @@ Mapping of XLSForm survey columns to ts-rosa engine support.
 | 9 | `constraint` | `bind constraint` | ✅ | `DataBinding.constraint` |
 | 10 | `constraint_message` | `jr:constraintMsg` | ✅ | `DataBinding.constraintMsg` |
 | 11 | `calculation` | `bind calculate` | ✅ | `DataBinding.calculate` |
-| 12 | `trigger` | `setvalue` actions | ✅ | `odk-instance-first-load`/`xforms-ready`, `xforms-value-changed`, `odk-new-repeat`, and `jr-insert` events; runtime target ref resolution (repeat-relative, `$var`); see notes below for remaining gaps. |
+| 12 | `trigger` | `setvalue` actions | ✅ | `odk-instance-first-load`/`xforms-ready`, `xforms-value-changed`, `odk-new-repeat`, `jr-insert`, and `xforms-revalidate` events; runtime target ref resolution (repeat-relative, `$var`); see notes below for remaining gaps. |
 | 13 | `choice_filter` | `itemset nodesetExpr` | ✅ | `FormElement.itemset` |
 | 14 | `parameters` | `odk:parameters` | 🟡 | ~100 lines. Deferred. |
 | 15 | `repeat_count` | `jr:count` | ✅ | `FormElement.countExpr` |
@@ -31,7 +31,7 @@ All core survey logic: types, labels, hints, validation, branching, calculations
 
 ### `trigger` (`<setvalue>` actions)
 Implemented (sdd/setvalue-actions, sdd/setvalue-parity):
-- Events: `odk-instance-first-load` (and its `xforms-ready` alias), `xforms-value-changed`, `odk-new-repeat`, and `jr-insert` (model-level only, matching JavaRosa's deprecated non-namespaced token — fires before the DAG cascade, alongside `odk-new-repeat`, from repeat-instance creation).
+- Events: `odk-instance-first-load` (and its `xforms-ready` alias), `xforms-value-changed`, `odk-new-repeat`, `jr-insert` (model-level only, matching JavaRosa's deprecated non-namespaced token — fires before the DAG cascade, alongside `odk-new-repeat`, from repeat-instance creation), and `xforms-revalidate` (fires from `FormSession.finalize()`, mirroring JavaRosa `FormDef#postProcessInstance` — callers must call `finalize()` before `serializeToXml()` at submission time; it is never fired at form load or during navigation).
 - Multiple space-separated events on one `<setvalue>` (one action per token).
 - Target refs resolved at runtime through the XPath seam: absolute, host-relative, repeat-relative (`..`, `[position()=1]`), and `$var`-rooted. Fails loud on a target resolving to zero or multiple nodes (no first-match fallback, no silent no-op).
 - A runtime `MAX_ACTION_CHAIN_DEPTH=16` guard bounding chained action cascades (fails loud on runaway/cyclic chains).
@@ -39,7 +39,6 @@ Implemented (sdd/setvalue-actions, sdd/setvalue-parity):
 - Breaking change (0.x, no deprecation path): `parseAbsoluteRef` now fails loud on non-numeric predicates (e.g. `[position()=1]` outside a resolved target context) instead of silently resolving to `INDEX_UNBOUND`.
 
 Deferred (out of scope, tracked for a future change):
-- `xforms-revalidate` — no `postProcessInstance`/finalize lifecycle exists in ts-rosa to bind this event to; JavaRosa fires it only from that phase.
 - `odk:setgeopoint`, `odk:recordaudio`, and rank action variants — no platform seam for geolocation/audio exists in ts-rosa or in the ODK reference implementation (`reference/web-forms` also has this as an unresolved TODO).
 - Strict host-ref-only triggering + same-value short-circuit (JavaRosa parity edge case) — ts-rosa's `xforms-value-changed` trigger set is a superset of JavaRosa's; see `tests/equivalence/actions/setvalue-action.test.ts` header for the documented deviation and its evidence.
 

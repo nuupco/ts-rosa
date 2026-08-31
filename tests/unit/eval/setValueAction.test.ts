@@ -32,8 +32,8 @@ describe('normalizeEvent', () => {
     expect(normalizeEvent('jr:insert')).toBeNull();
   });
 
-  it('rejects xforms-revalidate (explicitly out of scope for this change)', () => {
-    expect(normalizeEvent('xforms-revalidate')).toBeNull();
+  it('accepts xforms-revalidate (fires from FormSession.finalize())', () => {
+    expect(normalizeEvent('xforms-revalidate')).toBe('xforms-revalidate');
   });
 
   it('rejects an unknown token', () => {

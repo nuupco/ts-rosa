@@ -14,7 +14,7 @@ import { FormNavigator } from './FormNavigator.ts';
 import { serializeInstance } from '../model/instance/InstanceSerializer.ts';
 import type { PreloadProvider } from './PreloadProvider.ts';
 import { defaultPreloadProvider } from './PreloadProvider.ts';
-import { applyPreloads } from './preload/applyPreloads.ts';
+import { applyPreloads, applyEndPreloads } from './preload/applyPreloads.ts';
 import { hydrateInstance } from '../model/instance/InstanceHydrator.ts';
 import { buildActionRegistry } from '../eval/ActionRegistry.ts';
 
@@ -42,6 +42,19 @@ export interface FormSession {
    * Slice 6a — serialization-odk-functions
    */
   readonly serializeToXml: () => string;
+  /**
+   * Fire `xforms-revalidate` setvalue actions, re-resolve `timestamp`/`end`
+   * preloads, and re-run the calculate cascade.
+   *
+   * Call once, right before `serializeToXml()`, when the form is actually
+   * being submitted — not on every navigation step. Mirrors JavaRosa's
+   * FormDef#postProcessInstance (triggers EVENT_XFORMS_REVALIDATE, then
+   * re-resolves preloads), which JR only calls from
+   * FormEntryController#finalizeFormEntry — never at form load.
+   *
+   * Slice: finalize-end-preloads / xforms-revalidate.
+   */
+  readonly finalize: () => void;
 }
 
 /** Options for createFormSession (Phase 7, Slice 7-INFRA-A). */
@@ -143,5 +156,18 @@ export function createFormSession(
       serializeInstance(tree, {
         isRelevant: (node) => evaluator.isNodeRelevant(node),
       }),
+    finalize: () => {
+      // Order mirrors JavaRosa FormDef#postProcessInstance: revalidate
+      // actions fire first (each fires its own cascade via fireAction),
+      // then preload postProcess (our applyEndPreloads) runs.
+      evaluator.fireRevalidateActions();
+      applyEndPreloads(tree, provider);
+      // Re-run the cascade so calculates that reference an `end` preload
+      // observe the just-resolved value (mirrors the load-time ordering:
+      // preloads resolve, then the DAG cascades — see applyPreloads above).
+      if (definition.dag !== null) {
+        evaluator.initializeInstance(definition.dag, definition.constraintBindings);
+      }
+    },
   };
 }

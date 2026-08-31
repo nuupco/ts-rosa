@@ -14,6 +14,9 @@
  *     (dispatched from `initializeRepeatInstance`, a later PR).
  *   - 'jr-insert': deprecated alias-era event, model-level only (a later PR
  *     wires the actual fire point; this PR only parses/gates it).
+ *   - 'xforms-revalidate': fires once at form-finalize time, from
+ *     FormSession.finalize() (mirrors JavaRosa FormDef#postProcessInstance ->
+ *     ActionController.triggerActionsFromEvent(EVENT_XFORMS_REVALIDATE)).
  *
  * This module only defines the data shape + a pure event-normalization
  * helper. Parsing (src/parse/actionParser.ts) and firing (FormEvaluator,
@@ -32,15 +35,17 @@ export type SetValueEvent =
   | 'odk-instance-first-load'
   | 'xforms-value-changed'
   | 'odk-new-repeat'
-  | 'jr-insert';
+  | 'jr-insert'
+  | 'xforms-revalidate';
 
 /**
  * Raw event tokens accepted by `normalizeEvent` — 'xforms-ready' is a JavaRosa
  * alias for 'odk-instance-first-load' and is normalized to it. 'jr-insert' is
  * a deprecated, non-namespaced JavaRosa token (hyphenated — NOT `jr:insert`)
  * kept distinct from `odk-new-repeat`; see design doc "sdd/setvalue-parity/design"
- * Decision 5. `xforms-revalidate` is explicitly OUT OF SCOPE (see spec) and is
- * intentionally absent here.
+ * Decision 5. `xforms-revalidate` fires from FormSession.finalize() (see
+ * FormEvaluator.fireRevalidateActions) — closes the finalize-lifecycle gap
+ * documented in docs/XLSFORM-COVERAGE.md.
  */
 const EVENT_ALIASES: ReadonlyMap<string, SetValueEvent> = new Map([
   ['odk-instance-first-load', 'odk-instance-first-load'],
@@ -48,6 +53,7 @@ const EVENT_ALIASES: ReadonlyMap<string, SetValueEvent> = new Map([
   ['xforms-value-changed', 'xforms-value-changed'],
   ['odk-new-repeat', 'odk-new-repeat'],
   ['jr-insert', 'jr-insert'],
+  ['xforms-revalidate', 'xforms-revalidate'],
 ]);
 
 /**

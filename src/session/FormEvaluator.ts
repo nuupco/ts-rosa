@@ -1079,6 +1079,23 @@ export class FormEvaluator {
   }
 
   /**
+   * Fire all `xforms-revalidate` setvalue actions, in declaration order.
+   *
+   * Mirrors JavaRosa FormDef#postProcessInstance, which triggers
+   * EVENT_XFORMS_REVALIDATE before its own preload-postProcess tree walk.
+   * Called from FormSession.finalize() — the finalize/submission lifecycle
+   * point that previously did not exist in ts-rosa (docs/XLSFORM-COVERAGE.md).
+   */
+  fireRevalidateActions(): void {
+    if (this.actionRegistry === null) return;
+    const revalidateActions = this.actionRegistry.byEvent.get('xforms-revalidate');
+    if (revalidateActions === undefined) return;
+    for (const action of revalidateActions) {
+      this.fireAction(action);
+    }
+  }
+
+  /**
    * Runtime re-entrancy depth counter bounding chained `xforms-value-changed`
    * action cascades (design ADR-2). Static DAG cycle detection (finalizeDag)
    * cannot see actions — they are not DAG vertices (ADR-1) — so a build-time

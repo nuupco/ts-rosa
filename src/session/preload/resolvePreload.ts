@@ -110,8 +110,13 @@ export function resolvePreload(
         // Source: org.javarosa.core.model.utils.QuestionPreloader (timestamp/start)
         return provider.now().toISOString();
       }
-      // timestamp/end: returns null at preload time (populated at finalize/postProcess).
-      // Phase 7 NON-GOAL includes finalize — document as known gap.
+      if (params === 'end') {
+        // Source: org.javarosa.core.model.utils.QuestionPreloader (timestamp/end)
+        // JR resolves 'end' at FormEntryController#postProcessInstance (just
+        // before submission), not at form load — see applyEndPreloads, which
+        // re-invokes this at finalize time.
+        return provider.now().toISOString();
+      }
       return null;
     }
 

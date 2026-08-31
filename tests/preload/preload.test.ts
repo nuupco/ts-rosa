@@ -79,10 +79,12 @@ describe('resolvePreload', () => {
     expect(result).toBe(FROZEN_DATE.toISOString());
   });
 
-  // ts-rosa-original — documents finalize gap
-  it('timestamp/end returns null at init time (finalize gap)', () => {
+  // ts-rosa-original — timestamp/end resolves via provider.now() too; callers
+  // re-invoke this (via applyEndPreloads/FormSession.finalize) at submission
+  // time so the value reflects form-close time, not form-open time.
+  it('timestamp/end returns ISO-8601 from provider.now()', () => {
     const result = resolvePreload('timestamp', 'end', frozen);
-    expect(result).toBeNull();
+    expect(result).toBe(FROZEN_DATE.toISOString());
   });
 
   // Source: QuestionPreloaderTest#preloader_preloadsElements
@@ -298,5 +300,32 @@ describe('applyPreloads integration', () => {
     const def = parseForm(xml);
     // Should not throw
     expect(() => createFormSession(def)).not.toThrow();
+  });
+
+  // ts-rosa-original — finalize-end-preloads: `end` must reflect close time,
+  // not open time (the bug this suite exists to guard against).
+  it('finalize() re-resolves timestamp/end to close-time, distinct from open-time', () => {
+    const OPEN = new Date('2020-01-01T00:00:00.000Z');
+    const CLOSE = new Date('2020-01-01T00:05:00.000Z');
+    let current = OPEN;
+    const provider = {
+      now: () => current,
+      uid: () => FROZEN_UID,
+      property: () => null,
+    };
+
+    const xml = preloadForm('timestamp', 'end');
+    const def = parseForm(xml);
+    const session = createFormSession(def, { preloadProvider: provider });
+
+    const node = session.tree.root.children[0]!;
+    // At session creation, 'end' resolves too (JR resolves it once more at
+    // finalize; it is not left unset at open time in this implementation).
+    expect((node.value as { displayText: string } | null)?.displayText).toBe(OPEN.toISOString());
+
+    current = CLOSE;
+    session.finalize();
+
+    expect((node.value as { displayText: string } | null)?.displayText).toBe(CLOSE.toISOString());
   });
 });
