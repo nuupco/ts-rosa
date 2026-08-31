@@ -7580,7 +7580,8 @@ var EVENT_ALIASES = /* @__PURE__ */ new Map([
   ["xforms-ready", "odk-instance-first-load"],
   ["xforms-value-changed", "xforms-value-changed"],
   ["odk-new-repeat", "odk-new-repeat"],
-  ["jr-insert", "jr-insert"]
+  ["jr-insert", "jr-insert"],
+  ["xforms-revalidate", "xforms-revalidate"]
 ]);
 function normalizeEvent(rawEvent) {
   if (rawEvent === null) return null;
@@ -8820,6 +8821,22 @@ var FormEvaluator = class _FormEvaluator {
   fireLoadActions() {
     if (this.actionRegistry === null) return;
     for (const action of this.actionRegistry.loadActions) {
+      this.fireAction(action);
+    }
+  }
+  /**
+   * Fire all `xforms-revalidate` setvalue actions, in declaration order.
+   *
+   * Mirrors JavaRosa FormDef#postProcessInstance, which triggers
+   * EVENT_XFORMS_REVALIDATE before its own preload-postProcess tree walk.
+   * Called from FormSession.finalize() — the finalize/submission lifecycle
+   * point that previously did not exist in ts-rosa (docs/XLSFORM-COVERAGE.md).
+   */
+  fireRevalidateActions() {
+    if (this.actionRegistry === null) return;
+    const revalidateActions = this.actionRegistry.byEvent.get("xforms-revalidate");
+    if (revalidateActions === void 0) return;
+    for (const action of revalidateActions) {
       this.fireAction(action);
     }
   }
@@ -10510,6 +10527,9 @@ function resolvePreload(type, params, provider) {
       if (params === "start") {
         return provider.now().toISOString();
       }
+      if (params === "end") {
+        return provider.now().toISOString();
+      }
       return null;
     }
     case "uid": {
@@ -10542,6 +10562,23 @@ function applyPreloadsToNode(node, provider) {
 }
 function applyPreloads(tree, provider) {
   applyPreloadsToNode(tree.root, provider);
+}
+function applyEndPreloadsToNode(node, provider) {
+  if (node.multiplicity === INDEX_TEMPLATE) {
+    return;
+  }
+  if (node.preload === "timestamp" && node.preloadParams === "end") {
+    const raw = resolvePreload(node.preload, node.preloadParams, provider);
+    if (raw !== null) {
+      node.value = cast(node.dataType, raw) ?? null;
+    }
+  }
+  for (const child of node.children) {
+    applyEndPreloadsToNode(child, provider);
+  }
+}
+function applyEndPreloads(tree, provider) {
+  applyEndPreloadsToNode(tree.root, provider);
 }
 
 // src/model/instance/InstanceHydrator.ts
@@ -10730,7 +10767,14 @@ function createFormSession(definition, opts) {
     navigator,
     serializeToXml: () => serializeInstance(tree, {
       isRelevant: (node) => evaluator.isNodeRelevant(node)
-    })
+    }),
+    finalize: () => {
+      evaluator.fireRevalidateActions();
+      applyEndPreloads(tree, provider);
+      if (definition.dag !== null) {
+        evaluator.initializeInstance(definition.dag, definition.constraintBindings);
+      }
+    }
   };
 }
 

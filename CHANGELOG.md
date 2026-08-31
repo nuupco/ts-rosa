@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-31
+
+### Added
+- `FormSession.finalize()`: a new pre-submission lifecycle hook. Call it once, right before `serializeToXml()`, when the form is actually being submitted. Mirrors JavaRosa's `FormDef#postProcessInstance`.
+- `<setvalue event="xforms-revalidate">` is now supported — fires from `FormSession.finalize()`, in declaration order. Previously rejected by the parser as an unsupported event token.
+
+### Fixed
+- `jr:preload="timestamp" jr:preloadParams="end"` previously never resolved to form-close time — it always mirrored form-open time (same as `preloadParams="start"`) because nothing re-invoked preload resolution before submission. `FormSession.finalize()` now re-resolves it and re-runs the calculate cascade for any dependents.
+
 ## [0.2.0] - 2026-08-24
 
 ### Added

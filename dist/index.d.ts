@@ -875,6 +875,9 @@ type CompiledBinding = {
  *     (dispatched from `initializeRepeatInstance`, a later PR).
  *   - 'jr-insert': deprecated alias-era event, model-level only (a later PR
  *     wires the actual fire point; this PR only parses/gates it).
+ *   - 'xforms-revalidate': fires once at form-finalize time, from
+ *     FormSession.finalize() (mirrors JavaRosa FormDef#postProcessInstance ->
+ *     ActionController.triggerActionsFromEvent(EVENT_XFORMS_REVALIDATE)).
  *
  * This module only defines the data shape + a pure event-normalization
  * helper. Parsing (src/parse/actionParser.ts) and firing (FormEvaluator,
@@ -882,7 +885,7 @@ type CompiledBinding = {
  */
 
 /** Supported, normalized setvalue events. */
-type SetValueEvent = 'odk-instance-first-load' | 'xforms-value-changed' | 'odk-new-repeat' | 'jr-insert';
+type SetValueEvent = 'odk-instance-first-load' | 'xforms-value-changed' | 'odk-new-repeat' | 'jr-insert' | 'xforms-revalidate';
 /**
  * A single parsed `<setvalue>` action declaration.
  *
@@ -1498,6 +1501,15 @@ declare class FormEvaluator {
      */
     fireLoadActions(): void;
     /**
+     * Fire all `xforms-revalidate` setvalue actions, in declaration order.
+     *
+     * Mirrors JavaRosa FormDef#postProcessInstance, which triggers
+     * EVENT_XFORMS_REVALIDATE before its own preload-postProcess tree walk.
+     * Called from FormSession.finalize() — the finalize/submission lifecycle
+     * point that previously did not exist in ts-rosa (docs/XLSFORM-COVERAGE.md).
+     */
+    fireRevalidateActions(): void;
+    /**
      * Runtime re-entrancy depth counter bounding chained `xforms-value-changed`
      * action cascades (design ADR-2). Static DAG cycle detection (finalizeDag)
      * cannot see actions — they are not DAG vertices (ADR-1) — so a build-time
@@ -1804,7 +1816,9 @@ type FormEntryEvent = {
 /**
  * FormNavigator — form entry cursor engine (Phase 4).
  *
- * @experimental Phase 4 cursor API. NOT exported from any stable barrel.
+ * @experimental Phase 4 cursor API. Exported from `src/session/index.ts` /
+ * the root `src/index.ts` barrel and covered by `public-api-surface.test.ts`,
+ * but the surface may still change without a deprecation path.
  *
  * Owns the mutable cursor (FormIndex) and provides query and navigation
  * methods that mirror JavaRosa FormEntryController + FormEntryModel.
@@ -2210,6 +2224,19 @@ interface FormSession {
      * Slice 6a — serialization-odk-functions
      */
     readonly serializeToXml: () => string;
+    /**
+     * Fire `xforms-revalidate` setvalue actions, re-resolve `timestamp`/`end`
+     * preloads, and re-run the calculate cascade.
+     *
+     * Call once, right before `serializeToXml()`, when the form is actually
+     * being submitted — not on every navigation step. Mirrors JavaRosa's
+     * FormDef#postProcessInstance (triggers EVENT_XFORMS_REVALIDATE, then
+     * re-resolves preloads), which JR only calls from
+     * FormEntryController#finalizeFormEntry — never at form load.
+     *
+     * Slice: finalize-end-preloads / xforms-revalidate.
+     */
+    readonly finalize: () => void;
 }
 /** Options for createFormSession (Phase 7, Slice 7-INFRA-A). */
 interface CreateFormSessionOpts {
