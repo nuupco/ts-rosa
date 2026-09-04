@@ -397,6 +397,12 @@ interface ItemsetDef {
      * as XPath per node to get the runtime itext id.
      */
     readonly labelItextId: string | null;
+    /**
+     * Relative XPath for the geometry of each node, e.g. "geometry".
+     * Null when the itemset has no <geometry ref="..."/> child.
+     * Raw value follows the geopoint nodeset convention: "lat lon [alt [acc]]".
+     */
+    readonly geometryExpr: string | null;
 }
 /**
  * FormElement — discriminated union for the body/control tree.
@@ -1167,6 +1173,12 @@ interface SelectChoice {
     readonly value: string;
     /** The label string (from <label ref="..."/> or itext resolution). Null if unresolvable. */
     readonly label: string | null;
+    /**
+     * Raw geometry string (from <geometry ref="..."/> evaluation), following the
+     * geopoint nodeset convention: "lat lon [alt [acc]]". Null when the itemset
+     * has no geometry column, or when this is a static (non-itemset) choice.
+     */
+    readonly geometry?: string | null;
 }
 /** Options bag for FormEvaluator constructor (all optional for backward compat). */
 interface FormEvaluatorOptions {

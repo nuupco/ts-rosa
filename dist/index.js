@@ -7395,13 +7395,15 @@ function getItemset(el) {
   }
   const valueEl = firstByLocalName(itemsetEl, "value");
   const labelEl = firstByLocalName(itemsetEl, "label");
+  const geometryEl = firstByLocalName(itemsetEl, "geometry");
   const valueExpr = valueEl?.getAttribute("ref") ?? "";
   const rawLabelRef = labelEl?.getAttribute("ref") ?? "";
+  const geometryExpr = geometryEl?.getAttribute("ref") ?? null;
   const itextMatch = ITEXT_REF_RE.exec(rawLabelRef);
   const labelIsItext = itextMatch !== null || /jr:itext\(/.test(rawLabelRef);
   const labelItextId = itextMatch !== null ? itextMatch[1] ?? null : null;
   const labelExpr = rawLabelRef !== "" ? rawLabelRef : "label";
-  return { nodesetExpr, valueExpr, labelExpr, labelIsItext, labelItextId };
+  return { nodesetExpr, valueExpr, labelExpr, labelIsItext, labelItextId, geometryExpr };
 }
 function buildFormElements(parentEl, ctx) {
   const elements = [];
@@ -8266,7 +8268,8 @@ var FormEvaluator = class _FormEvaluator {
       for (const node of fastPathNodes) {
         const value = this.evaluateRelativeOnNode(itemset.valueExpr, node);
         const label = this.resolveChoiceLabel(itemset, node);
-        choices.push({ value, label });
+        const geometry = itemset.geometryExpr !== null ? this.evaluateRelativeOnNode(itemset.geometryExpr, node) || null : null;
+        choices.push({ value, label, geometry });
       }
     } else {
       const result = evaluateInstanceExpr(
@@ -8279,7 +8282,8 @@ var FormEvaluator = class _FormEvaluator {
         if (node.kind === "element") {
           const value = this.evaluateRelativeOnNode(itemset.valueExpr, node);
           const label = this.resolveChoiceLabel(itemset, node);
-          choices.push({ value, label });
+          const geometry = itemset.geometryExpr !== null ? this.evaluateRelativeOnNode(itemset.geometryExpr, node) || null : null;
+          choices.push({ value, label, geometry });
         }
         node = result.iterateNext();
       }
