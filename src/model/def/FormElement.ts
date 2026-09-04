@@ -43,6 +43,12 @@ export interface ItemsetDef {
    * as XPath per node to get the runtime itext id.
    */
   readonly labelItextId: string | null;
+  /**
+   * Relative XPath for the geometry of each node, e.g. "geometry".
+   * Null when the itemset has no <geometry ref="..."/> child.
+   * Raw value follows the geopoint nodeset convention: "lat lon [alt [acc]]".
+   */
+  readonly geometryExpr: string | null;
 }
 
 /**

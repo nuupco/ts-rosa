@@ -79,6 +79,12 @@ export interface SelectChoice {
   readonly value: string;
   /** The label string (from <label ref="..."/> or itext resolution). Null if unresolvable. */
   readonly label: string | null;
+  /**
+   * Raw geometry string (from <geometry ref="..."/> evaluation), following the
+   * geopoint nodeset convention: "lat lon [alt [acc]]". Null when the itemset
+   * has no geometry column, or when this is a static (non-itemset) choice.
+   */
+  readonly geometry?: string | null;
 }
 
 /** Options bag for FormEvaluator constructor (all optional for backward compat). */
@@ -356,7 +362,10 @@ export class FormEvaluator {
       for (const node of fastPathNodes) {
         const value = this.evaluateRelativeOnNode(itemset.valueExpr, node);
         const label = this.resolveChoiceLabel(itemset, node);
-        choices.push({ value, label });
+        const geometry = itemset.geometryExpr !== null
+          ? this.evaluateRelativeOnNode(itemset.geometryExpr, node) || null
+          : null;
+        choices.push({ value, label, geometry });
       }
     } else {
       // Evaluate nodesetExpr as ANY_TYPE (nodeset)
@@ -371,7 +380,10 @@ export class FormEvaluator {
         if (node.kind === 'element') {
           const value = this.evaluateRelativeOnNode(itemset.valueExpr, node);
           const label = this.resolveChoiceLabel(itemset, node);
-          choices.push({ value, label });
+          const geometry = itemset.geometryExpr !== null
+            ? this.evaluateRelativeOnNode(itemset.geometryExpr, node) || null
+            : null;
+          choices.push({ value, label, geometry });
         }
         node = result.iterateNext();
       }

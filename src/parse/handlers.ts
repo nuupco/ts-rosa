@@ -98,9 +98,11 @@ function getItemset(el: Element): ItemsetDef | null {
 
   const valueEl = firstByLocalName(itemsetEl, 'value');
   const labelEl = firstByLocalName(itemsetEl, 'label');
+  const geometryEl = firstByLocalName(itemsetEl, 'geometry');
 
   const valueExpr = valueEl?.getAttribute('ref') ?? '';
   const rawLabelRef = labelEl?.getAttribute('ref') ?? '';
+  const geometryExpr = geometryEl?.getAttribute('ref') ?? null;
 
   // Detect jr:itext() label reference
   const itextMatch = ITEXT_REF_RE.exec(rawLabelRef);
@@ -114,7 +116,7 @@ function getItemset(el: Element): ItemsetDef | null {
   // for plain labels, it is the relative XPath to evaluate per node.
   const labelExpr = rawLabelRef !== '' ? rawLabelRef : 'label';
 
-  return { nodesetExpr, valueExpr, labelExpr, labelIsItext, labelItextId };
+  return { nodesetExpr, valueExpr, labelExpr, labelIsItext, labelItextId, geometryExpr };
 }
 
 /**
