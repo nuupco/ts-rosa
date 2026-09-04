@@ -249,6 +249,17 @@ export class FormEvaluator {
     return this.itextResolver?.resolveWithOutputs(id) ?? null;
   }
 
+  /**
+   * Resolve an itext id's media form (e.g. "image", "audio", "video",
+   * "big-image") to its raw, unresolved reference string (e.g.
+   * "jr://images/map.svg"). Requires an exact form match — never falls back
+   * to the label's default text. Returns null when absent or when the form
+   * has no itext.
+   */
+  resolveItextMedia(id: string, form: string): string | null {
+    return this.itextResolver?.resolveExactForm(id, form) ?? null;
+  }
+
   // ---------------------------------------------------------------------------
   // output-label-substitution PR3 — read-time <output> substitution
   // ---------------------------------------------------------------------------

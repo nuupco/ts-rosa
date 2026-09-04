@@ -56,6 +56,15 @@ export interface ItextResolver {
    * languages. Added in output-label-substitution PR2.
    */
   resolveWithOutputs(id: ItextId, form?: ItextForm): { text: string; outputs: readonly string[] } | null;
+  /**
+   * Resolve active-language value for id, requiring an EXACT form match —
+   * unlike resolve()/resolveWithOutputs(), does NOT fall back to the
+   * default/null form or another form when the requested form is absent.
+   * Used for media forms (image/audio/video/big-image), where falling back
+   * to a text value would silently return the wrong kind of content.
+   * Returns null when the id+form pair is absent in all languages.
+   */
+  resolveExactForm(id: ItextId, form: ItextForm): string | null;
 }
 
 /**
@@ -161,6 +170,26 @@ export function makeItextResolver(t: ItextTranslations): ItextResolver {
         const trans = t.byLanguage.get(lang);
         const entry = resolveEntry(trans, id, form);
         if (entry !== null) return { text: entry.text, outputs: entry.outputs };
+      }
+
+      return null;
+    },
+
+    resolveExactForm(id: ItextId, form: ItextForm): string | null {
+      function exactMatch(translation: ItextTranslation | undefined): string | null {
+        const values = translation?.get(id);
+        return values?.find((v) => v.form === form)?.text ?? null;
+      }
+
+      if (activeLanguage !== null) {
+        const result = exactMatch(t.byLanguage.get(activeLanguage));
+        if (result !== null) return result;
+      }
+
+      for (const lang of t.languages) {
+        if (lang === activeLanguage) continue;
+        const result = exactMatch(t.byLanguage.get(lang));
+        if (result !== null) return result;
       }
 
       return null;

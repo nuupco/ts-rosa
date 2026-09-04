@@ -516,7 +516,7 @@ export class FormNavigator {
    * R4.5.2: walks FormDefinition.body via resolvePath — O(depth). No XPath eval.
    * R4.5.8: does NOT trigger XPath evaluation or modify InstanceTree.
    */
-  getQuestionAtIndex(idx?: FormIndex): { getLabelInnerText(): string | null; getControlType(): string; getDataType(): DataType | null; getHintText(): string | null; getRangeBounds(): { start?: number; end?: number; step?: number } | null; getAppearance(): string | null; getMediatype(): string | null; getQuestionText(): string | null; getSubstitutedHintText(): string | null } | null {
+  getQuestionAtIndex(idx?: FormIndex): { getLabelInnerText(): string | null; getControlType(): string; getDataType(): DataType | null; getHintText(): string | null; getRangeBounds(): { start?: number; end?: number; step?: number } | null; getAppearance(): string | null; getMediatype(): string | null; getQuestionText(): string | null; getSubstitutedHintText(): string | null; getLabelMediaUri(form: string): string | null } | null {
     const target = idx ?? this.currentIndex;
     if (!isAt(target)) return null;
     const resolved = this.resolvePath(target.path);
@@ -589,6 +589,18 @@ export class FormNavigator {
       },
       getMediatype(): string | null {
         return element.mediatype ?? null;
+      },
+      /**
+       * Resolve the question label's media reference for the given itext
+       * form (e.g. "image", "audio", "video", "big-image") to its raw,
+       * unresolved reference string (e.g. "jr://images/map.svg"). Resolving
+       * that reference to a loadable URI is a host concern, out of scope
+       * for ts-rosa. Returns null when the label has no itext id, or no
+       * value for that form exists in any language.
+       */
+      getLabelMediaUri(form: string): string | null {
+        if (element.labelItextId == null) return null;
+        return evaluator.resolveItextMedia(element.labelItextId, form);
       },
     };
   }
