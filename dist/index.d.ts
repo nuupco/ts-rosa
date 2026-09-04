@@ -552,6 +552,15 @@ interface ItextResolver {
         text: string;
         outputs: readonly string[];
     } | null;
+    /**
+     * Resolve active-language value for id, requiring an EXACT form match —
+     * unlike resolve()/resolveWithOutputs(), does NOT fall back to the
+     * default/null form or another form when the requested form is absent.
+     * Used for media forms (image/audio/video/big-image), where falling back
+     * to a text value would silently return the wrong kind of content.
+     * Returns null when the id+form pair is absent in all languages.
+     */
+    resolveExactForm(id: ItextId, form: ItextForm): string | null;
 }
 
 /**
@@ -1269,6 +1278,14 @@ declare class FormEvaluator {
         text: string;
         outputs: readonly string[];
     } | null;
+    /**
+     * Resolve an itext id's media form (e.g. "image", "audio", "video",
+     * "big-image") to its raw, unresolved reference string (e.g.
+     * "jr://images/map.svg"). Requires an exact form match — never falls back
+     * to the label's default text. Returns null when absent or when the form
+     * has no itext.
+     */
+    resolveItextMedia(id: string, form: string): string | null;
     /**
      * Replace each `${n}` placeholder in `template` with the string result of
      * evaluating `outputs[n]` against `node` (the question's context node).
@@ -2030,6 +2047,7 @@ declare class FormNavigator {
         getMediatype(): string | null;
         getQuestionText(): string | null;
         getSubstitutedHintText(): string | null;
+        getLabelMediaUri(form: string): string | null;
     } | null;
     /**
      * @experimental

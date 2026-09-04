@@ -7985,6 +7985,22 @@ function makeItextResolver(t) {
         if (entry !== null) return { text: entry.text, outputs: entry.outputs };
       }
       return null;
+    },
+    resolveExactForm(id2, form) {
+      function exactMatch(translation) {
+        const values = translation?.get(id2);
+        return values?.find((v) => v.form === form)?.text ?? null;
+      }
+      if (activeLanguage !== null) {
+        const result = exactMatch(t.byLanguage.get(activeLanguage));
+        if (result !== null) return result;
+      }
+      for (const lang2 of t.languages) {
+        if (lang2 === activeLanguage) continue;
+        const result = exactMatch(t.byLanguage.get(lang2));
+        if (result !== null) return result;
+      }
+      return null;
     }
   };
 }
@@ -8187,6 +8203,16 @@ var FormEvaluator = class _FormEvaluator {
    */
   resolveItextWithOutputs(id2) {
     return this.itextResolver?.resolveWithOutputs(id2) ?? null;
+  }
+  /**
+   * Resolve an itext id's media form (e.g. "image", "audio", "video",
+   * "big-image") to its raw, unresolved reference string (e.g.
+   * "jr://images/map.svg"). Requires an exact form match — never falls back
+   * to the label's default text. Returns null when absent or when the form
+   * has no itext.
+   */
+  resolveItextMedia(id2, form) {
+    return this.itextResolver?.resolveExactForm(id2, form) ?? null;
   }
   // ---------------------------------------------------------------------------
   // output-label-substitution PR3 — read-time <output> substitution
@@ -9970,6 +9996,18 @@ var FormNavigator = class {
       },
       getMediatype() {
         return element.mediatype ?? null;
+      },
+      /**
+       * Resolve the question label's media reference for the given itext
+       * form (e.g. "image", "audio", "video", "big-image") to its raw,
+       * unresolved reference string (e.g. "jr://images/map.svg"). Resolving
+       * that reference to a loadable URI is a host concern, out of scope
+       * for ts-rosa. Returns null when the label has no itext id, or no
+       * value for that form exists in any language.
+       */
+      getLabelMediaUri(form) {
+        if (element.labelItextId == null) return null;
+        return evaluator.resolveItextMedia(element.labelItextId, form);
       }
     };
   }
