@@ -2182,7 +2182,16 @@ declare class FormNavigator {
      * set multiplicity to `count - 1` (last instance) if instances exist, or 0
      * (which will yield PROMPT_NEW_REPEAT) if none.
      *
-     * Returns true if the leaf is a repeat (multiplicity was set), false otherwise.
+     * Returns whether the caller should stop the backward descent HERE:
+     * - false when the leaf is not a repeat (caller's own descent loop decides).
+     * - false when the leaf is a repeat WITH an existing instance — mirrors
+     *   incrementHelper's two-hop repeat entry (stop at the repeat, then a
+     *   separate step descends into its last child), so the backward walk
+     *   must likewise continue descending into that instance's children
+     *   instead of stopping on the repeat itself.
+     * - true when the leaf is a repeat with NO instances — a genuine terminal
+     *   PROMPT_NEW_REPEAT leaf, matching incrementHelper's non-descent into an
+     *   empty repeat.
      */
     private setRepeatNextMultiplicity;
 }

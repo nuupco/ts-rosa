@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-09-08
+
+### Fixed
+- `FormNavigator.stepToPreviousEvent()` skipped the last child of a repeat instance when retreating past a repeat with an existing instance: `decrementHelper` stopped at the repeat entry itself instead of continuing to descend into that instance's children, asymmetric with `incrementHelper`. N `stepToNextEvent()` calls followed by N `stepToPreviousEvent()` calls could overshoot past the starting position whenever the path crossed a repeat.
+
 ## [0.5.0] - 2026-09-03
 
 ### Added
