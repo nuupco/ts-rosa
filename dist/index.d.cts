@@ -2178,20 +2178,20 @@ declare class FormNavigator {
     /**
      * Ported from FormEntryModel.setRepeatNextMultiplicity (LINEAR mode, java:721-742).
      *
-     * If the leaf element in `levels` is a repeat, count existing instances and
-     * set multiplicity to `count - 1` (last instance) if instances exist, or 0
-     * (which will yield PROMPT_NEW_REPEAT) if none.
+     * When the walk first arrives at a repeat container while descending
+     * backward, it always lands on the "next" slot one past the last existing
+     * instance (multiplicity = count) — mirroring incrementHelper's sibling
+     * loop, which unconditionally does `multiplicity += 1` on a repeat leaf
+     * regardless of whether that instance exists yet. That slot never has an
+     * existing instance, so — exactly like incrementHelper's exitRepeat
+     * non-descent into a not-yet-created instance — it is always a terminal
+     * stop for descent purposes: reaching the LAST EXISTING instance's own
+     * children takes one more decrementIndex() call (the top-of-decrementHelper
+     * `curMult > 0` branch), not a continued descent from here.
      *
-     * Returns whether the caller should stop the backward descent HERE:
-     * - false when the leaf is not a repeat (caller's own descent loop decides).
-     * - false when the leaf is a repeat WITH an existing instance — mirrors
-     *   incrementHelper's two-hop repeat entry (stop at the repeat, then a
-     *   separate step descends into its last child), so the backward walk
-     *   must likewise continue descending into that instance's children
-     *   instead of stopping on the repeat itself.
-     * - true when the leaf is a repeat with NO instances — a genuine terminal
-     *   PROMPT_NEW_REPEAT leaf, matching incrementHelper's non-descent into an
-     *   empty repeat.
+     * Returns false when the leaf is not a repeat (caller's own descent loop
+     * decides); true when it is (the position was set and the caller should
+     * stop here).
      */
     private setRepeatNextMultiplicity;
 }

@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-09-08
+
+### Fixed
+- `FormNavigator.stepToPreviousEvent()` still overshot past the starting position when retreating across an open (non `jr:count`) repeat with existing instances: `setRepeatNextMultiplicity` resolved a repeat leaf straight to its last existing instance instead of the not-yet-created "next slot" that `incrementHelper` always produces going forward, silently skipping that `PROMPT_NEW_REPEAT` stop. Also restores the exhausted-count-repeat skip in `stepToPreviousEvent` (mirroring `stepToNextEvent`'s existing skip) so 0.5.1's fix keeps working now that the "next slot" position is reachable again on the way back.
+
 ## [0.5.1] - 2026-09-08
 
 ### Fixed
