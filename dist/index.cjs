@@ -9298,25 +9298,28 @@ var FormEvaluator = class _FormEvaluator {
    * Returns the first failure, or null if the form is valid.
    */
   validate(allNodesets) {
-    for (const nodeset of allNodesets) {
-      const ref = parseAbsoluteRef(nodeset);
-      const node = resolveReference(this.tree, ref);
-      if (node === null) continue;
-      const stateKey = refToString(genericize(ref));
-      const state = this.nodeStates.get(stateKey);
-      const isRelevant = this.isEffectivelyRelevant(ref);
-      if (isRelevant && state?.required === true && isAnswerEmpty(node.value)) {
-        return { failedNodeset: nodeset, status: "REQUIRED_BUT_EMPTY" /* REQUIRED_BUT_EMPTY */ };
-      }
-      const rankResult = this.checkRank(ref, node.value);
-      if (rankResult !== null && !rankResult.valid) {
-        return { failedNodeset: nodeset, status: "RANK_INVALID" /* RANK_INVALID */ };
-      }
-      const constraintCb = this.constraintBindings.get(nodeset);
-      if (constraintCb !== void 0 && !isAnswerEmpty(node.value)) {
-        const constraintResult = this.evaluateCompiled(constraintCb.expr, node);
-        if (!toBoolean(constraintResult)) {
-          return { failedNodeset: nodeset, status: "CONSTRAINT_VIOLATED" /* CONSTRAINT_VIOLATED */ };
+    for (const genericNodeset of allNodesets) {
+      const genericRef = parseAbsoluteRef(genericNodeset);
+      const constraintCb = this.constraintBindings.get(genericNodeset);
+      const nodes = resolveAll(this.tree, genericRef);
+      for (const node of nodes) {
+        const concreteRef = this.nodeToRef(this.wrap(node)) ?? genericRef;
+        const concreteNodeset = refToString(concreteRef);
+        const stateKey = refToString(genericize(concreteRef));
+        const state = this.nodeStates.get(stateKey);
+        const isRelevant = this.isEffectivelyRelevant(concreteRef);
+        if (isRelevant && state?.required === true && isAnswerEmpty(node.value)) {
+          return { failedNodeset: concreteNodeset, status: "REQUIRED_BUT_EMPTY" /* REQUIRED_BUT_EMPTY */ };
+        }
+        const rankResult = this.checkRank(concreteRef, node.value);
+        if (rankResult !== null && !rankResult.valid) {
+          return { failedNodeset: concreteNodeset, status: "RANK_INVALID" /* RANK_INVALID */ };
+        }
+        if (constraintCb !== void 0 && !isAnswerEmpty(node.value)) {
+          const constraintResult = this.evaluateCompiled(constraintCb.expr, node);
+          if (!toBoolean(constraintResult)) {
+            return { failedNodeset: concreteNodeset, status: "CONSTRAINT_VIOLATED" /* CONSTRAINT_VIOLATED */ };
+          }
         }
       }
     }
