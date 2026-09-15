@@ -1614,32 +1614,41 @@ export class FormEvaluator {
   validate(
     allNodesets: readonly string[],
   ): ValidateOutcome | null {
-    for (const nodeset of allNodesets) {
-      const ref = parseAbsoluteRef(nodeset);
-      const node = resolveReference(this.tree, ref);
-      if (node === null) continue;
+    for (const genericNodeset of allNodesets) {
+      const genericRef = parseAbsoluteRef(genericNodeset);
+      const constraintCb = this.constraintBindings.get(genericNodeset);
 
-      const stateKey = refToString(genericize(ref));
-      const state = this.nodeStates.get(stateKey);
-      const isRelevant = this.isEffectivelyRelevant(ref);
+      // Expand repeat wildcards: a bind nodeset is generic (no positional
+      // predicates), so it may match every instance of a repeat, not just
+      // the first. resolveAll walks INDEX_UNBOUND levels across all
+      // same-name siblings, giving one concrete node per instance.
+      const nodes = resolveAll(this.tree, genericRef);
 
-      // Check required: effectively relevant + required + empty value
-      if (isRelevant && state?.required === true && isAnswerEmpty(node.value)) {
-        return { failedNodeset: nodeset, status: AnswerResult.REQUIRED_BUT_EMPTY };
-      }
+      for (const node of nodes) {
+        const concreteRef = this.nodeToRef(this.wrap(node)) ?? genericRef;
+        const concreteNodeset = refToString(concreteRef);
 
-      // Check rank permutation: after required, before constraint.
-      const rankResult = this.checkRank(ref, node.value);
-      if (rankResult !== null && !rankResult.valid) {
-        return { failedNodeset: nodeset, status: AnswerResult.RANK_INVALID };
-      }
+        const stateKey = refToString(genericize(concreteRef));
+        const state = this.nodeStates.get(stateKey);
+        const isRelevant = this.isEffectivelyRelevant(concreteRef);
 
-      // Check constraint: non-null, non-empty value with a constraint binding
-      const constraintCb = this.constraintBindings.get(nodeset);
-      if (constraintCb !== undefined && !isAnswerEmpty(node.value)) {
-        const constraintResult = this.evaluateCompiled(constraintCb.expr, node);
-        if (!toBoolean(constraintResult)) {
-          return { failedNodeset: nodeset, status: AnswerResult.CONSTRAINT_VIOLATED };
+        // Check required: effectively relevant + required + empty value
+        if (isRelevant && state?.required === true && isAnswerEmpty(node.value)) {
+          return { failedNodeset: concreteNodeset, status: AnswerResult.REQUIRED_BUT_EMPTY };
+        }
+
+        // Check rank permutation: after required, before constraint.
+        const rankResult = this.checkRank(concreteRef, node.value);
+        if (rankResult !== null && !rankResult.valid) {
+          return { failedNodeset: concreteNodeset, status: AnswerResult.RANK_INVALID };
+        }
+
+        // Check constraint: non-null, non-empty value with a constraint binding
+        if (constraintCb !== undefined && !isAnswerEmpty(node.value)) {
+          const constraintResult = this.evaluateCompiled(constraintCb.expr, node);
+          if (!toBoolean(constraintResult)) {
+            return { failedNodeset: concreteNodeset, status: AnswerResult.CONSTRAINT_VIOLATED };
+          }
         }
       }
     }

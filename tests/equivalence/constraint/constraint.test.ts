@@ -29,6 +29,7 @@ import {
   mainInstance,
   bind,
   input,
+  repeat,
   t,
   title,
 } from "../../harness/XFormsElement.ts";
@@ -69,6 +70,41 @@ describe("Equivalence — constraint: empty fields", () => {
       expect(scenario.getFormDef()).validForm();
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// Region: Constraint inside a repeat, non-first instance
+// ---------------------------------------------------------------------------
+
+describe("Equivalence — constraint: repeat instances beyond the first", () => {
+  it("validate() checks the constraint on every repeat instance, not just instance 0", () => {
+    const scenario = Scenario.init(
+      html(
+        head(
+          title("Some form"),
+          model(
+            mainInstance(
+              t(
+                'data id="some-form"',
+                t("repeat", t("a")),
+              ),
+            ),
+            bind("/data/repeat/a").type("int").constraint(". > 0"),
+          ),
+        ),
+        body(repeat("/data/repeat", input("/data/repeat/a"))),
+      ),
+    );
+
+    scenario.createNewRepeat("/data/repeat");
+    scenario.createNewRepeat("/data/repeat");
+
+    // Instance 0 satisfies the constraint; instance 1 violates it.
+    scenario.answer("/data/repeat[0]/a", 1);
+    scenario.answer("/data/repeat[1]/a", -1);
+
+    expect(scenario.getFormDef()).invalidForm();
+  });
 });
 
 // ---------------------------------------------------------------------------
