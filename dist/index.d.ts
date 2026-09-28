@@ -1323,6 +1323,19 @@ declare class FormEvaluator {
     getChoices(ref: TreeReference): readonly SelectChoice[];
     private static readonly EQUALITY_FILTER_SHAPE_RE;
     private static isBareName;
+    private static readonly APPEARANCE_SEARCH_RE;
+    /**
+     * pyxform/Kobo/Enketo "search and select": `search(...)` is compiled onto
+     * the control's `appearance` attribute as literal text (e.g.
+     * `appearance="search search('id','matches',col,ref)"`), NOT into the
+     * itemset's nodeset — the compiled nodeset stays bare
+     * (`instance('id')/root/item`, no predicate). Splice the call into the
+     * nodeset as a synthetic predicate so it is evaluated as a per-item
+     * filter; a choice_filter-authored `search(...)` (already inside the
+     * nodeset as `item[search(...)]`) is left untouched — appearance is
+     * ignored whenever the nodeset already carries a predicate.
+     */
+    private static spliceAppearanceSearchFilter;
     /**
      * Fast path for the classic choice_filter shape
      * `instance('id')/path/item[column = ref]` (JavaRosa's
