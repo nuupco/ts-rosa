@@ -80,6 +80,26 @@ describe('search() choice_filter extension', () => {
     expect(choices.map((c) => c.value)).toEqual(['s1', 's3']);
   });
 
+  it('reuses the index across distinct filter values (cascading re-selection)', () => {
+    const def = parseForm(
+      sectoresForm(
+        "instance('sectores')/root/item[search('sectores','matches','id_huerta',/data/id_huerta)]",
+      ).asXml(),
+    );
+    const session = createFormSession(def);
+    const idHuertaRef = parseAbsoluteRef('/data/id_huerta');
+    const sectorRef = parseAbsoluteRef('/data/sector');
+
+    session.evaluator.answerQuestion(idHuertaRef, stringValue('H1'));
+    expect(session.evaluator.getChoices(sectorRef).map((c) => c.value)).toEqual(['s1', 's3']);
+
+    session.evaluator.answerQuestion(idHuertaRef, stringValue('H2'));
+    expect(session.evaluator.getChoices(sectorRef).map((c) => c.value)).toEqual(['s2']);
+
+    session.evaluator.answerQuestion(idHuertaRef, stringValue('H1'));
+    expect(session.evaluator.getChoices(sectorRef).map((c) => c.value)).toEqual(['s1', 's3']);
+  });
+
   it('returns no choices when nothing matches', () => {
     const def = parseForm(
       sectoresForm(
@@ -144,6 +164,18 @@ describe('search() choice_filter extension', () => {
     const def = parseForm(
       sectoresForm(
         "instance('sectores')/root/item[search('sectores','startswith','id_huerta','H','name','s3')]",
+      ).asXml(),
+    );
+    const session = createFormSession(def);
+
+    const choices = session.evaluator.getChoices(parseAbsoluteRef('/data/sector'));
+    expect(choices.map((c) => c.value)).toEqual(['s3']);
+  });
+
+  it('the 6-arg columnToFilter/filterText form with "matches" is not misparsed by the fast path', () => {
+    const def = parseForm(
+      sectoresForm(
+        "instance('sectores')/root/item[search('sectores','matches','id_huerta','H1','name','s3')]",
       ).asXml(),
     );
     const session = createFormSession(def);

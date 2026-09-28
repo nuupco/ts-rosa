@@ -364,7 +364,8 @@ export class FormEvaluator {
     const contextNode = resolveReference(this.tree, ref);
     const ctx = this.makeContext(contextNode);
 
-    const fastPathNodes = this.tryEqualityFilterFastPath(itemset, ctx.contextNode);
+    const fastPathNodes = this.tryEqualityFilterFastPath(itemset, ctx.contextNode)
+      ?? this.trySearchFilterFastPath(itemset, ctx.contextNode);
 
     // Collect result nodes
     const choices: SelectChoice[] = [];
@@ -492,6 +493,95 @@ export class FormEvaluator {
 
       for (const item of items) {
         const col = childrenNamed(item, columnName)[0];
+        if (col === undefined) continue;
+
+        const key = answerValueToXPathString(col.value);
+        let bucket = built.get(key);
+
+        if (bucket === undefined) {
+          bucket = [];
+          built.set(key, bucket);
+        }
+
+        bucket.push(item);
+      }
+
+      index = built;
+      this.itemsetIndexCache.set(cacheKey, index);
+    }
+
+    const matchedItems = index.get(targetValue) ?? [];
+    return matchedItems.map((item) => wrapInstanceNode(item, doc));
+  }
+
+  // Matches: instance('id')/seg1/seg2.../item[search('id','matches','column',ref)]
+  // — the single-column, 'matches'-operator shape pyxform emits for the
+  // common `search(list, 'matches', col, ${ref})` choice_filter case (the
+  // reported bug shape). Deliberately conservative, same philosophy as
+  // EQUALITY_FILTER_SHAPE_RE: comma-separated columns, 'contains'/
+  // 'startswith'/'endswith', the 1-arg form, and the optional
+  // columnToFilter/filterText pair all fall through to null (generic
+  // evaluator, still correct — just not index-accelerated).
+  // The final group excludes ',' so a 6-arg call (with a trailing
+  // columnToFilter/filterText pair) can never be swallowed into searchText —
+  // it fails to match at all (falls back to the generic evaluator) instead
+  // of silently ignoring the extra filter.
+  private static readonly SEARCH_FILTER_SHAPE_RE =
+    /^instance\((['"])([^'"]*)\1\)((?:\/[A-Za-z_][\w\-.]*)+)\[\s*search\(\s*(['"])([^'"]*)\4\s*,\s*(['"])matches\6\s*,\s*(['"])([^'"]*)\7\s*,\s*([^,)]+?)\s*\)\s*\]$/;
+
+  /**
+   * Fast path for the `search(instanceId, 'matches', column, ref)`
+   * choice_filter shape — same index-once-lookup-many strategy as
+   * {@link tryEqualityFilterFastPath}, since search() as a predicate must
+   * decide per-item membership (see xforms-search.ts), which is exactly the
+   * equality-filter shape's job once the column name is pulled out of the
+   * function call instead of a `column = ref` comparison.
+   */
+  private trySearchFilterFastPath(
+    itemset: ItemsetDef,
+    questionContextNode: InstanceXPathNode,
+  ): readonly InstanceXPathNode[] | null {
+    const match = FormEvaluator.SEARCH_FILTER_SHAPE_RE.exec(itemset.nodesetExpr.trim());
+    if (match === null) return null;
+
+    const [, , instanceId, pathExpr, , searchInstanceId, , , columnName, searchTextRaw] = match;
+    if (searchInstanceId !== instanceId) return null;
+    // A comma-separated columnsToSearch list ("any column matches") isn't a
+    // single-column index lookup — fall back to the generic evaluator.
+    if (columnName!.includes(',')) return null;
+
+    const segments = pathExpr!.split('/').filter((s) => s.length > 0);
+    if (segments.length < 2) return null;
+
+    const doc = this.secondaryDocs.get(instanceId!);
+    if (doc === undefined || doc.kind !== 'document') return null;
+
+    const root = doc.tree.root;
+    if (root.name !== segments[0]) return null;
+
+    let parent = root;
+    for (let i = 1; i < segments.length - 1; i++) {
+      const matches = childrenNamed(parent, segments[i]!);
+      if (matches.length !== 1) return null;
+      parent = matches[0]!;
+    }
+
+    const itemName = segments[segments.length - 1]!;
+    const items = childrenNamed(parent, itemName);
+
+    const literalMatch = /^(['"])([^'"]*)\1$/.exec(searchTextRaw!.trim());
+    const targetValue = literalMatch !== null
+      ? literalMatch[2]!
+      : evaluateInstanceExpr(searchTextRaw!.trim(), questionContextNode, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
+
+    const cacheKey = JSON.stringify(['search', instanceId, pathExpr, columnName]);
+    let index = this.itemsetIndexCache.get(cacheKey);
+
+    if (index === undefined) {
+      const built = new Map<string, InstanceNode[]>();
+
+      for (const item of items) {
+        const col = childrenNamed(item, columnName!)[0];
         if (col === undefined) continue;
 
         const key = answerValueToXPathString(col.value);
