@@ -34,6 +34,7 @@ import {
   select1,
   t,
   title,
+  item,
 } from '../harness/XFormsElement.ts';
 
 function sectoresForm(itemsetNodeset: string) {
@@ -179,6 +180,75 @@ describe('search() compiled onto appearance (real Kobo "search and select" shape
 
     const choices = session.evaluator.getChoices(parseAbsoluteRef('/data/sector'));
     expect(choices.map((c) => c.value)).toEqual(['s2']);
+  });
+});
+
+describe('search() column-mapping shape (single <item>, no <itemset>)', () => {
+  // Real device-confirmed production shape (running on ODK Collect + Kobo):
+  // no <itemset> at all — a single inline <item> whose value/label TEXT name
+  // the CSV columns to project (xlsform.org: "a row should indicate which
+  // .csv columns to use for the label and selected value"), not a literal
+  // static choice. Also exercises the 6-arg search() form with a trailing
+  // columnToFilter/filterText pair.
+  function productoresForm() {
+    return html(
+      head(
+        title('Productores'),
+        model(
+          mainInstance(t('data id="test"', t('id_persona_tecnico'), t('id_persona'))),
+          instance(
+            'productores',
+            t(
+              'item',
+              t('id_persona', 'P1'),
+              t('productor', 'Juan Perez'),
+              t('active', 'true'),
+              t('id_persona_tecnico', 'T1'),
+            ),
+            t(
+              'item',
+              t('id_persona', 'P2'),
+              t('productor', 'Maria Lopez'),
+              t('active', 'false'),
+              t('id_persona_tecnico', 'T1'),
+            ),
+            t(
+              'item',
+              t('id_persona', 'P3'),
+              t('productor', 'Luis Ramos'),
+              t('active', 'true'),
+              t('id_persona_tecnico', 'T2'),
+            ),
+          ),
+          bind('/data/id_persona_tecnico').type('string'),
+          bind('/data/id_persona').type('string'),
+        ),
+      ),
+      body(
+        input('/data/id_persona_tecnico'),
+        t(
+          'select1 ref="/data/id_persona" ' +
+            'appearance="search search(\'productores\',\'matches\',\'id_persona_tecnico\', /data/id_persona_tecnico ,\'active\',\'true\')"',
+          item('id_persona', 'productor'),
+        ),
+      ),
+    );
+  }
+
+  it('projects the CSV columns named by the single <item>, filtered by the 6-arg search()', () => {
+    const def = parseForm(productoresForm().asXml());
+    const session = createFormSession(def);
+    session.evaluator.answerQuestion(parseAbsoluteRef('/data/id_persona_tecnico'), stringValue('T1'));
+
+    const choices = session.evaluator.getChoices(parseAbsoluteRef('/data/id_persona'));
+    expect(choices).toEqual([{ value: 'P1', label: 'Juan Perez', geometry: null }]);
+  });
+
+  it('returns no choices before id_persona_tecnico is answered', () => {
+    const def = parseForm(productoresForm().asXml());
+    const session = createFormSession(def);
+
+    expect(session.evaluator.getChoices(parseAbsoluteRef('/data/id_persona'))).toEqual([]);
   });
 });
 
