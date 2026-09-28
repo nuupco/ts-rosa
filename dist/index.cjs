@@ -7997,7 +7997,30 @@ function parseDocument(doc) {
     ...collectModelActions(modelEl),
     ...collectBodyActions(bodyEl)
   ];
+  for (const id2 of collectSearchAppearanceInstanceIds(body)) {
+    if (!secondaryInstances.has(id2) && !externalInstances.has(id2)) {
+      externalInstances.set(id2, { src: `jr://file-csv/${id2}.csv` });
+    }
+  }
   return { title, mainInstance, bindings, body, dag, constraintBindings, itext: itext2, secondaryInstances, externalInstances, actions };
+}
+var SEARCH_APPEARANCE_INSTANCE_ID_RE = /search\(\s*(['"])([^'"]*)\1/;
+function collectSearchAppearanceInstanceIds(elements) {
+  const ids = /* @__PURE__ */ new Set();
+  function walk(els) {
+    for (const el of els) {
+      if (el.kind === "question") {
+        if (el.appearance != null) {
+          const match = SEARCH_APPEARANCE_INSTANCE_ID_RE.exec(el.appearance);
+          if (match !== null) ids.add(match[2]);
+        }
+      } else {
+        walk(el.children);
+      }
+    }
+  }
+  walk(elements);
+  return ids;
 }
 function parseForm(xml) {
   const doc = getXmlParser().parse(xml);
