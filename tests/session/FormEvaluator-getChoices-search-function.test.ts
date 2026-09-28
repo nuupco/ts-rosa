@@ -66,6 +66,122 @@ function sectoresForm(itemsetNodeset: string) {
   );
 }
 
+function sectoresFormWithAppearance(appearance: string) {
+  return html(
+    head(
+      title('Sectores'),
+      model(
+        mainInstance(t('data id="test"', t('id_huerta'), t('sector'))),
+        instance(
+          'sectores',
+          t('item', t('name', 's1'), t('label', 'Sector 1'), t('id_huerta', 'H1')),
+          t('item', t('name', 's2'), t('label', 'Sector 2'), t('id_huerta', 'H2')),
+          t('item', t('name', 's3'), t('label', 'Sector 3'), t('id_huerta', 'H1')),
+        ),
+        bind('/data/id_huerta').type('string'),
+        bind('/data/sector').type('string'),
+      ),
+    ),
+    body(
+      input('/data/id_huerta'),
+      t(
+        `select1 ref="/data/sector" appearance="${appearance}"`,
+        t(
+          `itemset nodeset="instance('sectores')/root/item"`,
+          t('value ref="name"'),
+          t('label ref="label"'),
+        ),
+      ),
+    ),
+  );
+}
+
+describe('search() compiled onto appearance (real Kobo "search and select" shape)', () => {
+  // Real device-extracted shape (reported bug): the itemset nodeset has NO
+  // predicate at all — search(...) lives as literal text on `appearance`,
+  // e.g. appearance="search search('sectores','matches','id_huerta', /data/id_huerta )".
+  // Before this fix, getChoices() evaluated the bare nodeset and returned
+  // every row unfiltered, since search() was never invoked by anything.
+  it('filters using search() spliced from appearance, not the (predicate-less) itemset', () => {
+    const def = parseForm(
+      sectoresFormWithAppearance(
+        "search search('sectores','matches','id_huerta', /data/id_huerta )",
+      ).asXml(),
+    );
+    const session = createFormSession(def);
+    session.evaluator.answerQuestion(parseAbsoluteRef('/data/id_huerta'), stringValue('H1'));
+
+    const choices = session.evaluator.getChoices(parseAbsoluteRef('/data/sector'));
+    expect(choices.map((c) => c.value)).toEqual(['s1', 's3']);
+  });
+
+  it('re-filters when the referenced value changes (cache invalidation via appearance-derived triggers)', () => {
+    const def = parseForm(
+      sectoresFormWithAppearance(
+        "search search('sectores','matches','id_huerta', /data/id_huerta )",
+      ).asXml(),
+    );
+    const session = createFormSession(def);
+    const idHuertaRef = parseAbsoluteRef('/data/id_huerta');
+    const sectorRef = parseAbsoluteRef('/data/sector');
+
+    session.evaluator.answerQuestion(idHuertaRef, stringValue('H1'));
+    expect(session.evaluator.getChoices(sectorRef).map((c) => c.value)).toEqual(['s1', 's3']);
+
+    session.evaluator.answerQuestion(idHuertaRef, stringValue('H2'));
+    expect(session.evaluator.getChoices(sectorRef).map((c) => c.value)).toEqual(['s2']);
+  });
+
+  it('returns no choices before id_huerta is answered', () => {
+    const def = parseForm(
+      sectoresFormWithAppearance(
+        "search search('sectores','matches','id_huerta', /data/id_huerta )",
+      ).asXml(),
+    );
+    const session = createFormSession(def);
+
+    expect(session.evaluator.getChoices(parseAbsoluteRef('/data/sector'))).toEqual([]);
+  });
+
+  it('leaves a choice_filter-authored search() (already inside the nodeset) untouched by appearance', () => {
+    // appearance carries only the plain "search" keyword here (no search()
+    // call) — the nodeset's own predicate must still be the one that filters.
+    const def = parseForm(
+      html(
+        head(
+          title('Sectores'),
+          model(
+            mainInstance(t('data id="test"', t('id_huerta'), t('sector'))),
+            instance(
+              'sectores',
+              t('item', t('name', 's1'), t('label', 'Sector 1'), t('id_huerta', 'H1')),
+              t('item', t('name', 's2'), t('label', 'Sector 2'), t('id_huerta', 'H2')),
+            ),
+            bind('/data/id_huerta').type('string'),
+            bind('/data/sector').type('string'),
+          ),
+        ),
+        body(
+          input('/data/id_huerta'),
+          t(
+            'select1 ref="/data/sector" appearance="search"',
+            t(
+              "itemset nodeset=\"instance('sectores')/root/item[search('sectores','matches','id_huerta',/data/id_huerta)]\"",
+              t('value ref="name"'),
+              t('label ref="label"'),
+            ),
+          ),
+        ),
+      ).asXml(),
+    );
+    const session = createFormSession(def);
+    session.evaluator.answerQuestion(parseAbsoluteRef('/data/id_huerta'), stringValue('H2'));
+
+    const choices = session.evaluator.getChoices(parseAbsoluteRef('/data/sector'));
+    expect(choices.map((c) => c.value)).toEqual(['s2']);
+  });
+});
+
 describe('search() choice_filter extension', () => {
   it('matches the reported bug: search(instance, "matches", column, ref)', () => {
     const def = parseForm(

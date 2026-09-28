@@ -348,10 +348,23 @@ export class FormEvaluator {
 
     const itemset = questionEl.itemset;
 
+    // pyxform/Kobo/Enketo "search and select": search(...) is compiled as
+    // literal text on the CONTROL's appearance attribute, not into the
+    // itemset's nodeset — the compiled nodeset stays bare
+    // (instance('id')/root/item, no predicate at all). Splice the search()
+    // call from appearance into the nodeset as a synthetic predicate so it
+    // gets evaluated as a per-item filter, same as a choice_filter-authored
+    // search() would. See xforms-search.ts for why search() must be
+    // evaluated as a predicate (per-item), not as an independent node-set.
+    const effectiveNodesetExpr = FormEvaluator.spliceAppearanceSearchFilter(
+      itemset.nodesetExpr,
+      questionEl.appearance,
+    );
+
     // Compute trigger signature.
     // When labels are itext-driven, append the active language so a language
     // switch correctly invalidates the cache.
-    const triggerSig = this.computeTriggerSig(itemset.nodesetExpr, ref, itemset.labelIsItext);
+    const triggerSig = this.computeTriggerSig(effectiveNodesetExpr, ref, itemset.labelIsItext);
 
     // Cache check
     const cached = this.choiceCache.get(refKey);
@@ -364,8 +377,8 @@ export class FormEvaluator {
     const contextNode = resolveReference(this.tree, ref);
     const ctx = this.makeContext(contextNode);
 
-    const fastPathNodes = this.tryEqualityFilterFastPath(itemset, ctx.contextNode)
-      ?? this.trySearchFilterFastPath(itemset, ctx.contextNode);
+    const fastPathNodes = this.tryEqualityFilterFastPath(effectiveNodesetExpr, ctx.contextNode)
+      ?? this.trySearchFilterFastPath(effectiveNodesetExpr, ctx.contextNode);
 
     // Collect result nodes
     const choices: SelectChoice[] = [];
@@ -382,7 +395,7 @@ export class FormEvaluator {
     } else {
       // Evaluate nodesetExpr as ANY_TYPE (nodeset)
       const result = evaluateInstanceExpr(
-        itemset.nodesetExpr,
+        effectiveNodesetExpr,
         ctx.contextNode,
         XPATH_EVALUATION_RESULT.ANY_TYPE,
       );
@@ -418,6 +431,35 @@ export class FormEvaluator {
     return /^[A-Za-z_][\w\-.]*$/.test(s);
   }
 
+  // Mirrors pyxform's own SEARCH_FUNCTION_REGEX (survey.py): a non-greedy
+  // "first search(...) call" match — appearance text is form-author-controlled
+  // and, per the documented signature, arguments never contain literal
+  // parentheses, so this cannot mismatch a nested call.
+  private static readonly APPEARANCE_SEARCH_RE = /search\(.*?\)/;
+
+  /**
+   * pyxform/Kobo/Enketo "search and select": `search(...)` is compiled onto
+   * the control's `appearance` attribute as literal text (e.g.
+   * `appearance="search search('id','matches',col,ref)"`), NOT into the
+   * itemset's nodeset — the compiled nodeset stays bare
+   * (`instance('id')/root/item`, no predicate). Splice the call into the
+   * nodeset as a synthetic predicate so it is evaluated as a per-item
+   * filter; a choice_filter-authored `search(...)` (already inside the
+   * nodeset as `item[search(...)]`) is left untouched — appearance is
+   * ignored whenever the nodeset already carries a predicate.
+   */
+  private static spliceAppearanceSearchFilter(
+    nodesetExpr: string,
+    appearance: string | null | undefined,
+  ): string {
+    if (appearance == null) return nodesetExpr;
+    const trimmed = nodesetExpr.trim();
+    if (trimmed.endsWith(']')) return nodesetExpr;
+    const match = FormEvaluator.APPEARANCE_SEARCH_RE.exec(appearance);
+    if (match === null) return nodesetExpr;
+    return `${trimmed}[${match[0]}]`;
+  }
+
   /**
    * Fast path for the classic choice_filter shape
    * `instance('id')/path/item[column = ref]` (JavaRosa's
@@ -429,10 +471,10 @@ export class FormEvaluator {
    * isn't recognized with full confidence — this must never guess.
    */
   private tryEqualityFilterFastPath(
-    itemset: ItemsetDef,
+    nodesetExpr: string,
     questionContextNode: InstanceXPathNode,
   ): readonly InstanceXPathNode[] | null {
-    const match = FormEvaluator.EQUALITY_FILTER_SHAPE_RE.exec(itemset.nodesetExpr.trim());
+    const match = FormEvaluator.EQUALITY_FILTER_SHAPE_RE.exec(nodesetExpr.trim());
     if (match === null) return null;
 
     const [, , instanceId, pathExpr, lhsRaw, rhsRaw] = match;
@@ -538,10 +580,10 @@ export class FormEvaluator {
    * function call instead of a `column = ref` comparison.
    */
   private trySearchFilterFastPath(
-    itemset: ItemsetDef,
+    nodesetExpr: string,
     questionContextNode: InstanceXPathNode,
   ): readonly InstanceXPathNode[] | null {
-    const match = FormEvaluator.SEARCH_FILTER_SHAPE_RE.exec(itemset.nodesetExpr.trim());
+    const match = FormEvaluator.SEARCH_FILTER_SHAPE_RE.exec(nodesetExpr.trim());
     if (match === null) return null;
 
     const [, , instanceId, pathExpr, , searchInstanceId, , , columnName, searchTextRaw] = match;
