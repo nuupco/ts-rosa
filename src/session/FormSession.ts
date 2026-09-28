@@ -8,6 +8,7 @@
  */
 
 import type { InstanceTree } from '../model/instance/InstanceTree.ts';
+import { resolveReference } from '../model/instance/InstanceTree.ts';
 import type { FormDefinition } from '../model/def/FormDefinition.ts';
 import { FormEvaluator } from './FormEvaluator.ts';
 import { FormNavigator } from './FormNavigator.ts';
@@ -17,6 +18,8 @@ import { defaultPreloadProvider } from './PreloadProvider.ts';
 import { applyPreloads, applyEndPreloads } from './preload/applyPreloads.ts';
 import { hydrateInstance } from '../model/instance/InstanceHydrator.ts';
 import { buildActionRegistry } from '../eval/ActionRegistry.ts';
+import { parseAbsoluteRef } from '../model/instance/TreeReference.ts';
+import { uncast } from '../model/data/codecs.ts';
 
 export interface FormSession {
   /** The full form definition (immutable defs + compiled bindings + DAG). */
@@ -55,6 +58,17 @@ export interface FormSession {
    * Slice: finalize-end-preloads / xforms-revalidate.
    */
   readonly finalize: () => void;
+  /**
+   * Read the current value of `/<root>/meta/instanceName` — the XLSForm
+   * `instance_name` calculate, when the form declares one.
+   *
+   * Reads the node as-is: call after `finalize()` when the value should
+   * reflect the final, post-revalidation cascade (mirrors JavaRosa's
+   * FormEntryModel#getInstanceName, evaluated at submission time). Returns
+   * `null` when the form has no `meta/instanceName` node or its value is
+   * empty.
+   */
+  readonly getInstanceName: () => string | null;
 }
 
 /** Options for createFormSession (Phase 7, Slice 7-INFRA-A). */
@@ -168,6 +182,13 @@ export function createFormSession(
       if (definition.dag !== null) {
         evaluator.initializeInstance(definition.dag, definition.constraintBindings);
       }
+    },
+    getInstanceName: () => {
+      const ref = parseAbsoluteRef(`/${tree.root.name}/meta/instanceName`);
+      const node = resolveReference(tree, ref);
+      if (node === null || node.value === null) return null;
+      const value = uncast(node.value);
+      return value === '' ? null : value;
     },
   };
 }
