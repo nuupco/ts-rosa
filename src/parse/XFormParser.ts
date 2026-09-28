@@ -373,7 +373,55 @@ export function parseDocument(doc: Document): FormDefinition {
     ...collectBodyActions(bodyEl),
   ];
 
+  // Step 7: pyxform's "search and select" — when a select's appearance
+  // carries a search(instanceId, ...) call, the real ODK Collect/Enketo
+  // clients resolve that CSV by filename convention (jr://file-csv/<id>.csv)
+  // directly off the appearance string, WITHOUT requiring a matching
+  // <instance id="..." src="..."> declaration in the model. Confirmed
+  // against a production XForm: pyxform stops emitting that <instance>
+  // declaration once a select is compiled to the single-<item>
+  // column-mapping shape (search() still needs the CSV at runtime, but the
+  // model no longer links it). Without this, resolveExternalInstances()
+  // never fetches that CSV at all (definition.externalInstances has no
+  // entry for it), so getChoices() finds no secondary instance and returns
+  // zero choices even though the file is present on the host. Synthesize an
+  // implicit externalInstances entry using the same convention — a no-op
+  // whenever the instance is already declared (the common case).
+  for (const id of collectSearchAppearanceInstanceIds(body)) {
+    if (!secondaryInstances.has(id) && !externalInstances.has(id)) {
+      externalInstances.set(id, { src: `jr://file-csv/${id}.csv` });
+    }
+  }
+
   return { title, mainInstance, bindings, body, dag, constraintBindings, itext, secondaryInstances, externalInstances, actions };
+}
+
+/** Matches the first `search('instanceId', ...)` call in an appearance string. */
+const SEARCH_APPEARANCE_INSTANCE_ID_RE = /search\(\s*(['"])([^'"]*)\1/;
+
+/**
+ * Recursively collects every distinct secondary-instance id referenced by a
+ * `search(...)` call in a question's `appearance` attribute, anywhere in the
+ * body tree (including inside groups/repeats).
+ */
+function collectSearchAppearanceInstanceIds(elements: readonly FormElement[]): Set<string> {
+  const ids = new Set<string>();
+
+  function walk(els: readonly FormElement[]): void {
+    for (const el of els) {
+      if (el.kind === 'question') {
+        if (el.appearance != null) {
+          const match = SEARCH_APPEARANCE_INSTANCE_ID_RE.exec(el.appearance);
+          if (match !== null) ids.add(match[2]!);
+        }
+      } else {
+        walk(el.children);
+      }
+    }
+  }
+
+  walk(elements);
+  return ids;
 }
 
 /**
