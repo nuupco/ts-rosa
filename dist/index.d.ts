@@ -1334,6 +1334,16 @@ declare class FormEvaluator {
      * isn't recognized with full confidence — this must never guess.
      */
     private tryEqualityFilterFastPath;
+    private static readonly SEARCH_FILTER_SHAPE_RE;
+    /**
+     * Fast path for the `search(instanceId, 'matches', column, ref)`
+     * choice_filter shape — same index-once-lookup-many strategy as
+     * {@link tryEqualityFilterFastPath}, since search() as a predicate must
+     * decide per-item membership (see xforms-search.ts), which is exactly the
+     * equality-filter shape's job once the column name is pulled out of the
+     * function call instead of a `column = ref` comparison.
+     */
+    private trySearchFilterFastPath;
     /**
      * @experimental
      * Fully clears the choice cache.

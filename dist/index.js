@@ -5895,13 +5895,15 @@ var position2 = new NumberFunction(
   }
 );
 
-// src/xpath/functions/xforms-pulldata.ts
-var escapeXPathStringLiteral = (value) => value.replace(/'/g, "&apos;");
+// src/xpath/functions/instanceNodeValue.ts
 function nodeValueAsString(node) {
   const value = node.value;
   if (value == null) return null;
   return value.kind === "string" || value.kind === "uncast" ? value.value : value.displayText;
 }
+
+// src/xpath/functions/xforms-pulldata.ts
+var escapeXPathStringLiteral = (value) => value.replace(/'/g, "&apos;");
 var secondaryInstanceIndexCache = /* @__PURE__ */ new WeakMap();
 function isFlatItemColumnTree(root) {
   for (const item of root.children) {
@@ -6099,6 +6101,64 @@ var regex2 = new BooleanFunction(
   }
 );
 
+// src/xpath/functions/xforms-search.ts
+function matchesSearchType(type, value, searchText) {
+  switch (type) {
+    case "matches":
+      return value === searchText;
+    case "contains":
+      return value.includes(searchText);
+    case "startswith":
+      return value.startsWith(searchText);
+    case "endswith":
+      return value.endsWith(searchText);
+  }
+}
+function isSearchType(value) {
+  return value === "matches" || value === "contains" || value === "startswith" || value === "endswith";
+}
+var search = new BooleanFunction(
+  "search",
+  [
+    { arityType: "required", typeHint: "string" },
+    { arityType: "optional", typeHint: "string" },
+    { arityType: "optional", typeHint: "string" },
+    { arityType: "optional", typeHint: "string" },
+    { arityType: "optional", typeHint: "string" },
+    { arityType: "optional", typeHint: "string" }
+  ],
+  (context, [instanceExpr, searchTypeExpr, columnsExpr, searchTextExpr, filterColExpr, filterTextExpr]) => {
+    const instanceId = instanceExpr.evaluate(context).toString();
+    const doc = context.contextDocument;
+    const secondaryDoc = doc.secondaryInstances?.get(instanceId) ?? null;
+    if (secondaryDoc === null || secondaryDoc.kind !== "document") return false;
+    if (searchTypeExpr === void 0) return true;
+    const searchTypeRaw = searchTypeExpr.evaluate(context).toString();
+    if (!isSearchType(searchTypeRaw) || columnsExpr === void 0 || searchTextExpr === void 0) {
+      return false;
+    }
+    const contextNode = context.contextNodes.values().next().value;
+    if (contextNode === void 0) return false;
+    const contextItem = contextNode;
+    if (contextItem.kind !== "element") return false;
+    const itemNode = contextItem.node;
+    const columns = columnsExpr.evaluate(context).toString().split(",").map((c) => c.trim()).filter((c) => c.length > 0);
+    const searchText = searchTextExpr.evaluate(context).toString();
+    const columnMatches = columns.some((col) => {
+      const child = itemNode.children.find((c) => c.name === col);
+      const value = child === void 0 ? null : nodeValueAsString(child);
+      return value !== null && matchesSearchType(searchTypeRaw, value, searchText);
+    });
+    if (!columnMatches) return false;
+    if (filterColExpr === void 0 || filterTextExpr === void 0) return true;
+    const filterCol = filterColExpr.evaluate(context).toString();
+    const filterText = filterTextExpr.evaluate(context).toString();
+    const filterChild = itemNode.children.find((c) => c.name === filterCol);
+    const filterValue = filterChild === void 0 ? null : nodeValueAsString(filterChild);
+    return filterValue === filterText;
+  }
+);
+
 // src/xpath/functions/xforms-uuid.ts
 function defaultUuidV4() {
   const nibbles = [];
@@ -6167,6 +6227,8 @@ var xf = new FunctionLibrary(XFORMS_NAMESPACE_URI, [
   // native shim — vendor node-set.ts excluded (circular dep, 6b)
   regex2,
   // native full-match shim — vendor partial-match replaced (6d)
+  search,
+  // native shim — pyxform/Kobo/Enketo choice_filter extension, absent from JavaRosa/XForms spec
   uuid2
   // native Hermes-safe pure-JS v4 replacement for xfString.uuid (6c)
 ]);
@@ -8288,7 +8350,7 @@ var FormEvaluator = class _FormEvaluator {
     }
     const contextNode = resolveReference(this.tree, ref);
     const ctx = this.makeContext(contextNode);
-    const fastPathNodes = this.tryEqualityFilterFastPath(itemset, ctx.contextNode);
+    const fastPathNodes = this.tryEqualityFilterFastPath(itemset, ctx.contextNode) ?? this.trySearchFilterFastPath(itemset, ctx.contextNode);
     const choices = [];
     if (fastPathNodes !== null) {
       for (const node of fastPathNodes) {
@@ -8370,6 +8432,70 @@ var FormEvaluator = class _FormEvaluator {
     const literalMatch = /^(['"])([^'"]*)\1$/.exec(refExpr);
     const targetValue = literalMatch !== null ? literalMatch[2] : evaluateInstanceExpr(refExpr, questionContextNode, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
     const cacheKey = JSON.stringify([instanceId, pathExpr, columnName]);
+    let index = this.itemsetIndexCache.get(cacheKey);
+    if (index === void 0) {
+      const built = /* @__PURE__ */ new Map();
+      for (const item of items) {
+        const col = childrenNamed(item, columnName)[0];
+        if (col === void 0) continue;
+        const key = answerValueToXPathString(col.value);
+        let bucket = built.get(key);
+        if (bucket === void 0) {
+          bucket = [];
+          built.set(key, bucket);
+        }
+        bucket.push(item);
+      }
+      index = built;
+      this.itemsetIndexCache.set(cacheKey, index);
+    }
+    const matchedItems = index.get(targetValue) ?? [];
+    return matchedItems.map((item) => wrapInstanceNode(item, doc));
+  }
+  // Matches: instance('id')/seg1/seg2.../item[search('id','matches','column',ref)]
+  // — the single-column, 'matches'-operator shape pyxform emits for the
+  // common `search(list, 'matches', col, ${ref})` choice_filter case (the
+  // reported bug shape). Deliberately conservative, same philosophy as
+  // EQUALITY_FILTER_SHAPE_RE: comma-separated columns, 'contains'/
+  // 'startswith'/'endswith', the 1-arg form, and the optional
+  // columnToFilter/filterText pair all fall through to null (generic
+  // evaluator, still correct — just not index-accelerated).
+  // The final group excludes ',' so a 6-arg call (with a trailing
+  // columnToFilter/filterText pair) can never be swallowed into searchText —
+  // it fails to match at all (falls back to the generic evaluator) instead
+  // of silently ignoring the extra filter.
+  static SEARCH_FILTER_SHAPE_RE = /^instance\((['"])([^'"]*)\1\)((?:\/[A-Za-z_][\w\-.]*)+)\[\s*search\(\s*(['"])([^'"]*)\4\s*,\s*(['"])matches\6\s*,\s*(['"])([^'"]*)\7\s*,\s*([^,)]+?)\s*\)\s*\]$/;
+  /**
+   * Fast path for the `search(instanceId, 'matches', column, ref)`
+   * choice_filter shape — same index-once-lookup-many strategy as
+   * {@link tryEqualityFilterFastPath}, since search() as a predicate must
+   * decide per-item membership (see xforms-search.ts), which is exactly the
+   * equality-filter shape's job once the column name is pulled out of the
+   * function call instead of a `column = ref` comparison.
+   */
+  trySearchFilterFastPath(itemset, questionContextNode) {
+    const match = _FormEvaluator.SEARCH_FILTER_SHAPE_RE.exec(itemset.nodesetExpr.trim());
+    if (match === null) return null;
+    const [, , instanceId, pathExpr, , searchInstanceId, , , columnName, searchTextRaw] = match;
+    if (searchInstanceId !== instanceId) return null;
+    if (columnName.includes(",")) return null;
+    const segments = pathExpr.split("/").filter((s) => s.length > 0);
+    if (segments.length < 2) return null;
+    const doc = this.secondaryDocs.get(instanceId);
+    if (doc === void 0 || doc.kind !== "document") return null;
+    const root = doc.tree.root;
+    if (root.name !== segments[0]) return null;
+    let parent = root;
+    for (let i = 1; i < segments.length - 1; i++) {
+      const matches = childrenNamed(parent, segments[i]);
+      if (matches.length !== 1) return null;
+      parent = matches[0];
+    }
+    const itemName = segments[segments.length - 1];
+    const items = childrenNamed(parent, itemName);
+    const literalMatch = /^(['"])([^'"]*)\1$/.exec(searchTextRaw.trim());
+    const targetValue = literalMatch !== null ? literalMatch[2] : evaluateInstanceExpr(searchTextRaw.trim(), questionContextNode, XPATH_EVALUATION_RESULT.STRING_TYPE).stringValue;
+    const cacheKey = JSON.stringify(["search", instanceId, pathExpr, columnName]);
     let index = this.itemsetIndexCache.get(cacheKey);
     if (index === void 0) {
       const built = /* @__PURE__ */ new Map();
