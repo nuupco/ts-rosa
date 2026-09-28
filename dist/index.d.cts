@@ -2276,6 +2276,17 @@ interface FormSession {
      * Slice: finalize-end-preloads / xforms-revalidate.
      */
     readonly finalize: () => void;
+    /**
+     * Read the current value of `/<root>/meta/instanceName` — the XLSForm
+     * `instance_name` calculate, when the form declares one.
+     *
+     * Reads the node as-is: call after `finalize()` when the value should
+     * reflect the final, post-revalidation cascade (mirrors JavaRosa's
+     * FormEntryModel#getInstanceName, evaluated at submission time). Returns
+     * `null` when the form has no `meta/instanceName` node or its value is
+     * empty.
+     */
+    readonly getInstanceName: () => string | null;
 }
 /** Options for createFormSession (Phase 7, Slice 7-INFRA-A). */
 interface CreateFormSessionOpts {

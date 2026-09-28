@@ -10863,6 +10863,13 @@ function createFormSession(definition, opts) {
       if (definition.dag !== null) {
         evaluator.initializeInstance(definition.dag, definition.constraintBindings);
       }
+    },
+    getInstanceName: () => {
+      const ref = parseAbsoluteRef(`/${tree.root.name}/meta/instanceName`);
+      const node = resolveReference(tree, ref);
+      if (node === null || node.value === null) return null;
+      const value = uncast(node.value);
+      return value === "" ? null : value;
     }
   };
 }
