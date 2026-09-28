@@ -1337,6 +1337,21 @@ declare class FormEvaluator {
      */
     private static spliceAppearanceSearchFilter;
     /**
+     * pyxform's "search and select" column-mapping shape (confirmed against a
+     * production XForm running on real ODK Collect/Kobo devices): a select
+     * with NO `<itemset>` at all (unlike the appearance-only shape handled by
+     * spliceAppearanceSearchFilter, which still has a real `<itemset>`), whose
+     * `appearance` carries a `search(...)` call and whose body has exactly one
+     * inline `<item>`. That item's `<value>`/`<label>` text do NOT name a
+     * literal static choice — per xlsform.org ("a row should indicate which
+     * .csv columns to use for the label and selected value"), they NAME the
+     * CSV columns to project as the actual value/label of every row search()
+     * matches. Synthesizes an ItemsetDef so the rest of getChoices() (fast
+     * paths, caching, generic evaluation) handles it exactly like a real
+     * itemset, instead of returning the marker's literal column-name text.
+     */
+    private synthesizeSearchColumnItemset;
+    /**
      * Fast path for the classic choice_filter shape
      * `instance('id')/path/item[column = ref]` (JavaRosa's
      * EqualityExpressionIndexFilterStrategy equivalent): index all candidate

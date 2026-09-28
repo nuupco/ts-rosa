@@ -8336,13 +8336,14 @@ var FormEvaluator = class _FormEvaluator {
   getChoices(ref) {
     const refKey = refToString(ref);
     const questionEl = this.findQuestionByRef(ref);
-    if (questionEl === null || questionEl.itemset === null) {
-      return (questionEl?.choices ?? []).map((c) => ({
+    if (questionEl === null) return [];
+    const itemset = questionEl.itemset ?? this.synthesizeSearchColumnItemset(questionEl);
+    if (itemset === null) {
+      return questionEl.choices.map((c) => ({
         value: c.value,
         label: c.labelIsItext === true && c.labelItextId != null ? this.itextResolver?.resolve(c.labelItextId) ?? c.labelText : c.labelText
       }));
     }
-    const itemset = questionEl.itemset;
     const effectiveNodesetExpr = _FormEvaluator.spliceAppearanceSearchFilter(
       itemset.nodesetExpr,
       questionEl.appearance
@@ -8415,6 +8416,40 @@ var FormEvaluator = class _FormEvaluator {
     const match = _FormEvaluator.APPEARANCE_SEARCH_RE.exec(appearance);
     if (match === null) return nodesetExpr;
     return `${trimmed}[${match[0]}]`;
+  }
+  /**
+   * pyxform's "search and select" column-mapping shape (confirmed against a
+   * production XForm running on real ODK Collect/Kobo devices): a select
+   * with NO `<itemset>` at all (unlike the appearance-only shape handled by
+   * spliceAppearanceSearchFilter, which still has a real `<itemset>`), whose
+   * `appearance` carries a `search(...)` call and whose body has exactly one
+   * inline `<item>`. That item's `<value>`/`<label>` text do NOT name a
+   * literal static choice — per xlsform.org ("a row should indicate which
+   * .csv columns to use for the label and selected value"), they NAME the
+   * CSV columns to project as the actual value/label of every row search()
+   * matches. Synthesizes an ItemsetDef so the rest of getChoices() (fast
+   * paths, caching, generic evaluation) handles it exactly like a real
+   * itemset, instead of returning the marker's literal column-name text.
+   */
+  synthesizeSearchColumnItemset(questionEl) {
+    if (questionEl.appearance == null || questionEl.choices.length !== 1) return null;
+    const searchMatch = _FormEvaluator.APPEARANCE_SEARCH_RE.exec(questionEl.appearance);
+    if (searchMatch === null) return null;
+    const instanceIdMatch = /^search\(\s*(['"])([^'"]*)\1/.exec(searchMatch[0]);
+    if (instanceIdMatch === null) return null;
+    const marker = questionEl.choices[0];
+    const valueColumn = marker.value.trim();
+    const labelColumn = (marker.labelIsItext === true && marker.labelItextId != null ? this.itextResolver?.resolve(marker.labelItextId) : marker.labelText)?.trim() ?? "";
+    if (valueColumn === "" || labelColumn === "") return null;
+    const instanceId = instanceIdMatch[2];
+    return {
+      nodesetExpr: `instance('${instanceId}')/root/item[${searchMatch[0]}]`,
+      valueExpr: valueColumn,
+      labelExpr: labelColumn,
+      labelIsItext: false,
+      labelItextId: null,
+      geometryExpr: null
+    };
   }
   /**
    * Fast path for the classic choice_filter shape
