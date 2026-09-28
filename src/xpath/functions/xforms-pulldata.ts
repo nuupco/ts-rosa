@@ -44,16 +44,10 @@ import { StringFunction } from '../vendor/xpath/evaluator/functions/StringFuncti
 import type { InstanceDocumentNode, InstanceXPathNode } from '../adapter/instance/InstanceXPathNode.ts';
 import { XPATH_EVALUATION_RESULT } from '../vendor/xpath/evaluator/result/XPathEvaluationResult.ts';
 import type { InstanceNode } from '../../model/instance/InstanceNode.ts';
+import { nodeValueAsString } from './instanceNodeValue.ts';
 
 /** Escapes a value for safe interpolation inside a single-quoted XPath string literal. */
 const escapeXPathStringLiteral = (value: string): string => value.replace(/'/g, "&apos;");
-
-/** Reads an InstanceNode's value as a plain string, or null if it has none. */
-function nodeValueAsString(node: InstanceNode): string | null {
-  const value = node.value;
-  if (value == null) return null;
-  return value.kind === 'string' || value.kind === 'uncast' ? value.value : value.displayText;
-}
 
 type SecondaryInstanceIndex = {
   readonly isFlat: boolean;

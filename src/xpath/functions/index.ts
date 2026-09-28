@@ -54,6 +54,7 @@ import { position } from './xforms-position.ts';
 import { pulldata } from './xforms-pulldata.ts';
 import { randomize } from './xforms-randomize.ts';
 import { regex } from './xforms-regex.ts';
+import { search } from './xforms-search.ts';
 import { uuid } from './xforms-uuid.ts';
 
 /**
@@ -116,6 +117,7 @@ const xf = new FunctionLibrary(XFORMS_NAMESPACE_URI, [
 	pulldata, // native shim — vendor throws (no rootNode on InstanceEvaluator singleton, 6e)
 	randomize, // native shim — vendor node-set.ts excluded (circular dep, 6b)
 	regex,    // native full-match shim — vendor partial-match replaced (6d)
+	search,   // native shim — pyxform/Kobo/Enketo choice_filter extension, absent from JavaRosa/XForms spec
 	uuid, // native Hermes-safe pure-JS v4 replacement for xfString.uuid (6c)
 ]);
 
