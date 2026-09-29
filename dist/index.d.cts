@@ -72,9 +72,17 @@ type AnswerValue = {
     readonly kind: "date";
     readonly value: Date;
     readonly displayText: string;
-} | {
+}
+/**
+ * time: `offset` carries the device's own UTC offset exactly as given in the
+ * input string (e.g. "-06:00", "+02:00", or "Z"), so uncast can reproduce it
+ * instead of collapsing everything to UTC. `undefined` means the input had
+ * no offset at all (legacy offset-less behavior, unchanged).
+ */
+ | {
     readonly kind: "time";
     readonly value: Date;
+    readonly offset?: string;
     readonly displayText: string;
 } | {
     readonly kind: "dateTime";

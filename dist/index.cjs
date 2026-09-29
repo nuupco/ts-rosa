@@ -84,6 +84,7 @@ function dataTypeFromXsdName(xsd) {
       return "unsupported";
   }
 }
+var Temporal = globalThis.Temporal ?? temporalPolyfill.Temporal;
 
 // src/model/data/codecs.ts
 function formatDecimal(n) {
@@ -106,6 +107,24 @@ function formatUtcTime(d) {
   const ms = String(d.getUTCMilliseconds()).padStart(3, "0");
   return `${h}:${min2}:${sec}.${ms}Z`;
 }
+function parseTrailingOffset(raw) {
+  const m = /(Z|[+-]\d{2}:\d{2})$/.exec(raw);
+  return m ? m[1] : void 0;
+}
+function formatOffsetTime(d, offset) {
+  const zoneId = offset === "Z" ? "+00:00" : offset;
+  const instant = Temporal.Instant.fromEpochMilliseconds(d.getTime());
+  const zdt = instant.toZonedDateTimeISO(zoneId);
+  const h = String(zdt.hour).padStart(2, "0");
+  const min2 = String(zdt.minute).padStart(2, "0");
+  const sec = String(zdt.second).padStart(2, "0");
+  const ms = String(zdt.millisecond).padStart(3, "0");
+  return `${h}:${min2}:${sec}.${ms}${offset}`;
+}
+function formatTime(d, offset) {
+  if (offset === void 0) return formatUtcTime(d);
+  return formatOffsetTime(d, offset);
+}
 function parseGeoPoints(raw) {
   const pointStrs = raw.split(";").map((s) => s.trim()).filter(Boolean);
   if (pointStrs.length === 0) return null;
@@ -127,11 +146,12 @@ function formatGeoPoints(pts) {
     (p) => `${formatDecimal(p.lat)} ${formatDecimal(p.lon)} ${formatDecimal(p.alt)} ${formatDecimal(p.acc)}`
   ).join(";");
 }
-function makeDateRecord(kind, internal, displayText) {
+function makeDateRecord(kind, internal, displayText, offset) {
   const stored = new Date(internal.getTime());
   const record = /* @__PURE__ */ Object.create(null);
   record.kind = kind;
   record.displayText = displayText;
+  if (offset !== void 0) record.offset = offset;
   Object.defineProperty(record, "value", {
     get() {
       return new Date(stored.getTime());
@@ -173,7 +193,8 @@ function cast(type, raw) {
       if (raw === "") return null;
       const d = /* @__PURE__ */ new Date(`1970-01-01T${raw}`);
       if (isNaN(d.getTime())) return null;
-      return makeDateRecord("time", d, formatUtcTime(d));
+      const offset = parseTrailingOffset(raw);
+      return makeDateRecord("time", d, formatTime(d, offset), offset);
     }
     case "dateTime": {
       if (raw === "") return null;
@@ -242,7 +263,7 @@ function uncast(v) {
     case "date":
       return formatUtcDate(v.value);
     case "time":
-      return formatUtcTime(v.value);
+      return formatTime(v.value, v.offset);
     case "dateTime":
       return v.value.toISOString();
     case "selectOne":
@@ -703,7 +724,6 @@ function getXmlParser() {
   }
   return _provider;
 }
-var Temporal = globalThis.Temporal ?? temporalPolyfill.Temporal;
 
 // src/xpath/vendor/xpath/adapter/xpathDOMProvider.ts
 var extendNodeKindGuards = (base) => {
@@ -2026,7 +2046,16 @@ var NumberEvaluation = class extends ValueEvaluation {
     this.value = value;
     this.booleanValue = value !== 0 && !Number.isNaN(value);
     this.numberValue = value;
-    this.stringValue = Number.isNaN(value) ? "NaN" : String(value);
+    const truncated = Math.trunc(value);
+    if (Number.isNaN(value)) {
+      this.stringValue = "NaN";
+    } else if (Math.abs(value) < 1e-12) {
+      this.stringValue = "0";
+    } else if (Math.abs(value - truncated) < 1e-12) {
+      this.stringValue = String(truncated);
+    } else {
+      this.stringValue = String(value);
+    }
   }
   context;
   value;
@@ -4806,8 +4835,20 @@ var DateTimeLikeEvaluation = class extends ValueEvaluation {
 // src/xpath/vendor/xpath/lib/datetime/predicates.ts
 var isISODateOrDateTimeLike = (value) => ISO_DATE_OR_DATE_TIME_LIKE_PATTERN.test(value);
 var isValidTimeString = (value) => {
+  let timePart = value;
+  if (value.endsWith("Z")) {
+    timePart = value.slice(0, -1);
+  } else {
+    const offsetMatch = TIMEZONE_OFFSET_PATTERN.exec(value);
+    if (offsetMatch != null) {
+      if (!VALID_OFFSET_VALUE.test(offsetMatch[0])) {
+        return false;
+      }
+      timePart = value.slice(0, -offsetMatch[0].length);
+    }
+  }
   try {
-    return Temporal.PlainTime.from(value) != null;
+    return Temporal.PlainTime.from(timePart) != null;
   } catch {
     return false;
   }
