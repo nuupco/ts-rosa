@@ -4,11 +4,19 @@
  * sdd/instance-editing-hydration, PR3, tasks 22-27.
  *
  * Per design ADR-F, hydrate->serialize equivalence is SEMANTIC, not lexical,
- * for decimal, date/time/dateTime, geo types, and selectMulti — these are
+ * for decimal, date/dateTime, geo types, and selectMulti — these are
  * asserted via normalized (parse-and-compare) comparison, never raw string
  * identity. All other DataType variants (string, int, boolean, binary,
  * selectOne, long) round-trip lexically identical and are asserted with
  * exact string equality.
+ *
+ * Exception: the `time` type no longer follows the ADR-F UTC-normalized-instant
+ * rule. As of the offset-aware time codec change (see
+ * odd/tasks/time-codec-offset-aware.md), a device-provided UTC offset (e.g.
+ * "+02:00") is preserved through hydrate->serialize instead of being
+ * collapsed to "Z" — this is a deliberate, confirmed product decision, so
+ * `time` round-trips lexically identical and is asserted with exact string
+ * equality, like the lossless types.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -172,7 +180,7 @@ describe('round-trip — decimal (ADR-F: numeric-normalized, not lexical)', () =
 // Task 24: date/time/dateTime — normalized instant comparison
 // ---------------------------------------------------------------------------
 
-describe('round-trip — date/time/dateTime (ADR-F: UTC-normalized instant, not lexical)', () => {
+describe('round-trip — date/time/dateTime (ADR-F: UTC-normalized instant for dateTime; time preserves device offset)', () => {
   function dateTimeForm() {
     return html(
       head(
@@ -196,16 +204,21 @@ describe('round-trip — date/time/dateTime (ADR-F: UTC-normalized instant, not 
     expect(extractLeaf(out, 'd')).toBe('2024-03-15');
   });
 
-  it('round-trips a non-UTC-offset time as the semantically equal UTC-normalized instant', () => {
+  it('round-trips a non-UTC-offset time preserving the device-provided offset (contract changed, see odd/tasks/time-codec-offset-aware.md)', () => {
     const definition = parseForm(dateTimeForm().asXml());
     const xml = '<data id="dt"><d></d><tm>23:14:00.000+02:00</tm><dtv></dtv></data>';
 
     const out = roundTrip(definition, xml);
     const outVal = extractLeaf(out, 'tm')!;
 
-    // Lexically different: "+02:00" offset input normalizes to "Z" (UTC) output.
-    expect(outVal).not.toBe('23:14:00.000+02:00');
-    // Semantically equal: anchor both to the epoch date and compare instants.
+    // Contract change: the time codec now preserves the device-provided UTC
+    // offset instead of collapsing it to "Z". This is a deliberate, confirmed
+    // product decision — the offset comes from the device, not PlatformConfig
+    // — made as part of the offset-aware time codec work (see
+    // odd/tasks/time-codec-offset-aware.md). This supersedes the prior ADR-F
+    // "UTC-normalized instant" documentation for the time type specifically.
+    expect(outVal).toBe('23:14:00.000+02:00');
+    // Still semantically equal to itself, as expected.
     expectInstantEqual(outVal, '23:14:00.000+02:00', '1970-01-01T{}');
   });
 

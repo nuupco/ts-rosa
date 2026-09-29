@@ -6,6 +6,7 @@
 
 import type { DataType } from "./DataType.ts";
 import type { AnswerValue, GeoPoint } from "./AnswerValue.ts";
+import { Temporal } from "../../platform/temporal.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -41,6 +42,42 @@ function formatUtcTime(d: Date): string {
   const sec = String(d.getUTCSeconds()).padStart(2, "0");
   const ms = String(d.getUTCMilliseconds()).padStart(3, "0");
   return `${h}:${min}:${sec}.${ms}Z`;
+}
+
+/**
+ * Extract the trailing ISO 8601 offset ("Z" or "+HH:MM"/"-HH:MM") from a raw
+ * time string, if present. Returns undefined for offset-less input (e.g. "14:00").
+ */
+function parseTrailingOffset(raw: string): string | undefined {
+  const m = /(Z|[+-]\d{2}:\d{2})$/.exec(raw);
+  return m ? m[1] : undefined;
+}
+
+/**
+ * Format a Date (an internal UTC instant) as ISO 8601 time in the given
+ * device offset, e.g. "23:14:00.000-06:00". Reuses the Temporal
+ * fixed-offset pattern already established in
+ * `xpath/vendor/xpath/lib/datetime/functions.ts` (`localDateTimeString`).
+ */
+function formatOffsetTime(d: Date, offset: string): string {
+  const zoneId = offset === "Z" ? "+00:00" : offset;
+  const instant = Temporal.Instant.fromEpochMilliseconds(d.getTime());
+  const zdt = instant.toZonedDateTimeISO(zoneId);
+  const h = String(zdt.hour).padStart(2, "0");
+  const min = String(zdt.minute).padStart(2, "0");
+  const sec = String(zdt.second).padStart(2, "0");
+  const ms = String(zdt.millisecond).padStart(3, "0");
+  return `${h}:${min}:${sec}.${ms}${offset}`;
+}
+
+/**
+ * Format a "time" value for the wire, preserving the device's own offset when
+ * one was declared at parse time. Falls back to the legacy default UTC "Z"
+ * format when no offset was declared (offset-less legacy input).
+ */
+function formatTime(d: Date, offset?: string): string {
+  if (offset === undefined) return formatUtcTime(d);
+  return formatOffsetTime(d, offset);
 }
 
 // ---------------------------------------------------------------------------
@@ -101,13 +138,18 @@ function formatGeoPoints(pts: readonly GeoPoint[]): string {
 function makeDateRecord<K extends "date" | "time" | "dateTime">(
   kind: K,
   internal: Date,
-  displayText: string
+  displayText: string,
+  offset?: string
 ): Extract<AnswerValue, { kind: K }> {
   // Clone the incoming Date so external mutations after construction are isolated.
   const stored = new Date(internal.getTime());
   const record = Object.create(null) as Record<string, unknown>;
   record.kind = kind;
   record.displayText = displayText;
+  // Device offset as declared in the input (only meaningful for "time"); omitted
+  // entirely (not just undefined) when there was none, so kinds without an
+  // offset concept stay structurally identical to before.
+  if (offset !== undefined) record.offset = offset;
   // Getter returns a fresh copy on each access — isolates internal from callers.
   Object.defineProperty(record, "value", {
     get(): Date { return new Date(stored.getTime()); },
@@ -166,7 +208,8 @@ export function cast(type: DataType, raw: string): AnswerValue | null {
       // Appending to 1970-01-01T... makes the Date constructor handle offsets correctly.
       const d = new Date(`1970-01-01T${raw}`);
       if (isNaN(d.getTime())) return null;
-      return makeDateRecord("time", d, formatUtcTime(d));
+      const offset = parseTrailingOffset(raw);
+      return makeDateRecord("time", d, formatTime(d, offset), offset);
     }
 
     case "dateTime": {
@@ -249,7 +292,7 @@ export function uncast(v: AnswerValue): string {
     // JavaRosa BooleanData.uncast() → "1" (true) | "0" (false)
     case "boolean":     return v.value ? "1" : "0";
     case "date":        return formatUtcDate(v.value);
-    case "time":        return formatUtcTime(v.value);
+    case "time":        return formatTime(v.value, v.offset);
     case "dateTime":    return v.value.toISOString();
     case "selectOne":   return v.value;
     case "selectMulti": return [...v.value].join(" ");

@@ -1,0 +1,455 @@
+<?xml version="1.0"?>
+<h:html xmlns="http://www.w3.org/2002/xforms" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:h="http://www.w3.org/1999/xhtml" xmlns:jr="http://openrosa.org/javarosa" xmlns:odk="http://www.opendatakit.org/xforms" xmlns:orx="http://openrosa.org/xforms" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <h:head>
+    <h:title>Lecturas de Riego [development]</h:title>
+    <model odk:xforms-version="1.0.0">
+      <instance>
+        <axmY3Z7Ds7qeeLPPYK6rG6 id="axmY3Z7Ds7qeeLPPYK6rG6">
+          <start/>
+          <end/>
+          <seccion_a>
+            <seccion_a_pantalla1>
+              <seccion_a_nota_1/>
+              <datos_externos>
+                <id_persona_tecnico/>
+                <id_productor/>
+                <name_productor/>
+                <id_huerta/>
+                <name_huerta/>
+              </datos_externos>
+              <id_sector/>
+              <superficie/>
+              <cultivo/>
+              <sistema_riego/>
+              <info_precargada/>
+              <id_fuente_abastecimiento/>
+            </seccion_a_pantalla1>
+          </seccion_a>
+          <seccion_a2>
+            <seccion_a2_pantalla2>
+              <seccion_a_nota_2/>
+              <pruebas_riego/>
+              <linea_base/>
+              <tipo_riego/>
+              <dias_intervalo_riego/>
+              <num_riegos_auxilio/>
+              <gasto_extraccion/>
+              <gasto_aplicacion/>
+              <gasto_gotero/>
+              <dias_riego/>
+              <dia1>
+                <fecha_riego_inicio_1/>
+                <hora_riego_inicio_1/>
+                <hora_riego_fin_1/>
+                <duracion_riego_1/>
+              </dia1>
+              <dia2>
+                <fecha_riego_inicio_2/>
+                <hora_riego_inicio_2/>
+                <hora_riego_fin_2/>
+                <duracion_riego_2/>
+              </dia2>
+              <dia3>
+                <fecha_riego_inicio_3/>
+                <hora_riego_inicio_3/>
+                <hora_riego_fin_3/>
+                <duracion_riego_3/>
+              </dia3>
+              <dia4>
+                <fecha_riego_inicio_4/>
+                <hora_riego_inicio_4/>
+                <hora_riego_fin_4/>
+                <duracion_riego_4/>
+              </dia4>
+              <dia5>
+                <fecha_riego_inicio_5/>
+                <hora_riego_inicio_5/>
+                <hora_riego_fin_5/>
+                <duracion_riego_5/>
+              </dia5>
+              <dia6>
+                <fecha_riego_inicio_6/>
+                <hora_riego_inicio_6/>
+                <hora_riego_fin_6/>
+                <duracion_riego_6/>
+              </dia6>
+              <dia7>
+                <fecha_riego_inicio_7/>
+                <hora_riego_inicio_7/>
+                <hora_riego_fin_7/>
+                <duracion_riego_7/>
+              </dia7>
+              <dia8>
+                <fecha_riego_inicio_8/>
+                <hora_riego_inicio_8/>
+                <hora_riego_fin_8/>
+                <duracion_riego_8/>
+              </dia8>
+              <dia9>
+                <fecha_riego_inicio_9/>
+                <hora_riego_inicio_9/>
+                <hora_riego_fin_9/>
+                <duracion_riego_9/>
+              </dia9>
+              <duracion_riego/>
+              <volumen_aplicado/>
+              <lamina_aplicada/>
+              <info_duracion/>
+              <info_volumen/>
+              <info_lamina/>
+            </seccion_a2_pantalla2>
+          </seccion_a2>
+          <seccion_final>
+            <seccion_final_pantalla3>
+              <final_encuesta/>
+              <final_comentarios/>
+            </seccion_final_pantalla3>
+          </seccion_final>
+          <__version__/>
+          <_version_/>
+          <_version__001/>
+          <_version__002/>
+          <_version__003/>
+          <_version__004/>
+          <_version__005/>
+          <meta>
+            <instanceID/>
+            <instanceName/>
+          </meta>
+        </axmY3Z7Ds7qeeLPPYK6rG6>
+      </instance>
+      <instance id="sectores" src="jr://file-csv/sectores.csv"/>
+      <bind jr:preload="timestamp" jr:preloadParams="start" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/start" type="dateTime"/>
+      <bind jr:preload="timestamp" jr:preloadParams="end" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/end" type="dateTime"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a" required="false()"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1" required="false()"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/seccion_a_nota_1" readonly="true()" required="false()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/id_persona_tecnico" type="int"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/id_productor" type="int"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/name_productor" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/id_huerta" type="int"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/name_huerta" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/id_sector" required="true()" type="string"/>
+      <bind calculate="pulldata('sectores', 'superficie', 'id_sector',  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/id_sector )" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/superficie" required="false()" type="string"/>
+      <bind calculate="pulldata('sectores', 'cultivo', 'id_sector',  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/id_sector )" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/cultivo" required="false()" type="string"/>
+      <bind calculate="pulldata('sectores', 'sistema_riego', 'id_sector',  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/id_sector )" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/sistema_riego" required="false()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/info_precargada" readonly="true()" required="false()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/id_fuente_abastecimiento" required="true()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2" required="false()"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2" required="false()"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/seccion_a_nota_2" readonly="true()" required="false()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/pruebas_riego" required="true()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/linea_base" required="true()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/tipo_riego" required="true()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_intervalo_riego" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/linea_base ='1'" required="true()" type="int"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/num_riegos_auxilio" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/linea_base ='1'" required="true()" type="int"/>
+      <bind constraint=". &gt;= 0" jr:constraintMsg="El rango de la unidad es de 0 a 200." nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/gasto_extraccion" required="true()" type="decimal"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/gasto_aplicacion" required="true()" type="decimal"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/gasto_gotero" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/sistema_riego ='Goteo (cintilla)'" required="true()" type="decimal"/>
+      <bind constraint="regex(.,'^[1-9]$')" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_riego" required="true()" type="int"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_riego &gt;=1"/>
+      <bind constraint=".&lt;= today()" jr:constraintMsg="La fecha debe ser menor o igual a la de hoy." nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1/fecha_riego_inicio_1" type="date"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1/hora_riego_inicio_1" type="time"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1/hora_riego_fin_1" type="time"/>
+      <bind calculate="round((decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1/hora_riego_fin_1 ) - decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1/hora_riego_inicio_1 ))*24,2)" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1/duracion_riego_1" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_riego &gt;=2"/>
+      <bind constraint=".&lt;= today()" jr:constraintMsg="La fecha debe ser menor o igual a la de hoy." nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2/fecha_riego_inicio_2" type="date"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2/hora_riego_inicio_2" type="time"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2/hora_riego_fin_2" type="time"/>
+      <bind calculate="round((decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2/hora_riego_fin_2 ) - decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2/hora_riego_inicio_2 ))*24,2)" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2/duracion_riego_2" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_riego &gt;=3"/>
+      <bind constraint=".&lt;= today()" jr:constraintMsg="La fecha debe ser menor o igual a la de hoy." nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3/fecha_riego_inicio_3" type="date"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3/hora_riego_inicio_3" type="time"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3/hora_riego_fin_3" type="time"/>
+      <bind calculate="round((decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3/hora_riego_fin_3 ) - decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3/hora_riego_inicio_3 ))*24,2)" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3/duracion_riego_3" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_riego &gt;=4"/>
+      <bind constraint=".&lt;= today()" jr:constraintMsg="La fecha debe ser menor o igual a la de hoy." nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4/fecha_riego_inicio_4" type="date"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4/hora_riego_inicio_4" type="time"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4/hora_riego_fin_4" type="time"/>
+      <bind calculate="round((decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4/hora_riego_fin_4 ) - decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4/hora_riego_inicio_4 ))*24,2)" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4/duracion_riego_4" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_riego &gt;=5"/>
+      <bind constraint=".&lt;= today()" jr:constraintMsg="La fecha debe ser menor o igual a la de hoy." nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5/fecha_riego_inicio_5" type="date"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5/hora_riego_inicio_5" type="time"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5/hora_riego_fin_5" type="time"/>
+      <bind calculate="round((decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5/hora_riego_fin_5 ) - decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5/hora_riego_inicio_5 ))*24,2)" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5/duracion_riego_5" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_riego &gt;=6"/>
+      <bind constraint=".&lt;= today()" jr:constraintMsg="La fecha debe ser menor o igual a la de hoy." nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6/fecha_riego_inicio_6" type="date"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6/hora_riego_inicio_6" type="time"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6/hora_riego_fin_6" type="time"/>
+      <bind calculate="round((decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6/hora_riego_fin_6 ) - decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6/hora_riego_inicio_6 ))*24,2)" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6/duracion_riego_6" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_riego &gt;=7"/>
+      <bind constraint=".&lt;= today()" jr:constraintMsg="La fecha debe ser menor o igual a la de hoy." nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7/fecha_riego_inicio_7" type="date"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7/hora_riego_inicio_7" type="time"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7/hora_riego_fin_7" type="time"/>
+      <bind calculate="round((decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7/hora_riego_fin_7 ) - decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7/hora_riego_inicio_7 ))*24,2)" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7/duracion_riego_7" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_riego &gt;=8"/>
+      <bind constraint=".&lt;= today()" jr:constraintMsg="La fecha debe ser menor o igual a la de hoy." nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8/fecha_riego_inicio_8" type="date"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8/hora_riego_inicio_8" type="time"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8/hora_riego_fin_8" type="time"/>
+      <bind calculate="round((decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8/hora_riego_fin_8 ) - decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8/hora_riego_inicio_8 ))*24,2)" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8/duracion_riego_8" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9" relevant=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_riego &gt;=9"/>
+      <bind constraint=".&lt;= today()" jr:constraintMsg="La fecha debe ser menor o igual a la de hoy." nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9/fecha_riego_inicio_9" type="date"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9/hora_riego_inicio_9" type="time"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9/hora_riego_fin_9" type="time"/>
+      <bind calculate="round((decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9/hora_riego_fin_9 ) - decimal-time( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9/hora_riego_inicio_9 ))*24,2)" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9/duracion_riego_9" type="string"/>
+      <bind calculate="if(string-length( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1/duracion_riego_1 )&gt;0,  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1/duracion_riego_1 ,0) + if(string-length( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2/duracion_riego_2 )&gt;0,  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2/duracion_riego_2 ,0) + if(string-length( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3/duracion_riego_3 )&gt;0,  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3/duracion_riego_3 ,0) + if(string-length( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4/duracion_riego_4 )&gt;0,  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4/duracion_riego_4 ,0) + if(string-length( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5/duracion_riego_5 )&gt;0,  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5/duracion_riego_5 ,0) + if(string-length( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6/duracion_riego_6 )&gt;0,  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6/duracion_riego_6 ,0) + if(string-length( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7/duracion_riego_7 )&gt;0,  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7/duracion_riego_7 ,0) + if(string-length( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8/duracion_riego_8 )&gt;0,  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8/duracion_riego_8 ,0) + if(string-length( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9/duracion_riego_9 )&gt;0,  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9/duracion_riego_9 ,0)" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/duracion_riego" type="string"/>
+      <bind calculate=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/duracion_riego *3.6" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/volumen_aplicado" type="string"/>
+      <bind calculate="( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/volumen_aplicado  div  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/superficie )*0.01" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/lamina_aplicada" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/info_duracion" readonly="true()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/info_volumen" readonly="true()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/info_lamina" readonly="true()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_final" required="false()"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_final/seccion_final_pantalla3" required="false()"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_final/seccion_final_pantalla3/final_encuesta" readonly="true()" required="false()" type="string"/>
+      <bind nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_final/seccion_final_pantalla3/final_comentarios" required="false()" type="string"/>
+      <bind calculate="'vx3UBpQP6cKqzVkpfCMA3b'" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/__version__" type="string"/>
+      <bind calculate="'vuAaos2texJBsaMkwEzUjx'" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/_version_" type="string"/>
+      <bind calculate="'vonLrVrbUZq4BHSNTAJRhB'" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/_version__001" type="string"/>
+      <bind calculate="'vAqiUBJtgpnyfs63pP5xvS'" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/_version__002" type="string"/>
+      <bind calculate="'vuLSeNjBHJgL7yMm6nE8uZ'" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/_version__003" type="string"/>
+      <bind calculate="'vNT99tWhw6z3NEdsynQAut'" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/_version__004" type="string"/>
+      <bind calculate="'v2kNz67LJcKxxMLTqF4oz5'" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/_version__005" type="string"/>
+      <bind jr:preload="uid" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/meta/instanceID" readonly="true()" type="string"/>
+      <bind calculate="concat( /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/name_productor , ' - ',  /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/name_huerta )" nodeset="/axmY3Z7Ds7qeeLPPYK6rG6/meta/instanceName" type="string"/>
+    </model>
+  </h:head>
+  <h:body>
+    <group ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a">
+      <label>Sección A: Bitácora de Riego</label>
+      <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1">
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/seccion_a_nota_1">
+          <label>Identificación de la unidad y el productor</label>
+        </input>
+        <group appearance="inject-values" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos">
+          <label>Datos de la Parcela</label>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/id_persona_tecnico">
+            <label>tecnico</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/id_productor">
+            <label>productor</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/name_productor">
+            <label>nombre_productor</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/id_huerta">
+            <label>ID de la huerta</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/name_huerta">
+            <label>nombre_huerta</label>
+          </input>
+        </group>
+        <select1 appearance="search search('sectores','matches','id_huerta', /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/id_huerta )" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/id_sector">
+          <label>4. Seleccione el sector de riego</label>
+          <item>
+            <label>sector</label>
+            <value>id_sector</value>
+          </item>
+        </select1>
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/info_precargada">
+          <label> Valide con el productor que la información mostrada a continuación es correcta.
+Superficie del sector: <output value=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/superficie "/> ha
+Cultivo: <output value=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/cultivo "/>
+Sistema de riego: <output value=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/sistema_riego "/> </label></input>
+        <select1 appearance="search search('fuentes_abastecimientos','matches','id_huerta', /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/datos_externos/id_huerta )" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a/seccion_a_pantalla1/id_fuente_abastecimiento">
+          <label>5. Seleccione la fuente de abastecimiento utilizada para este riego</label>
+          <item>
+            <label>fuente_abastecimiento</label>
+            <value>id_fuente_abastecimiento</value>
+          </item>
+        </select1>
+      </group>
+    </group>
+    <group ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2">
+      <label>Sección B: Lecturas</label>
+      <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2">
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/seccion_a_nota_2">
+          <label>Datos de riego</label>
+        </input>
+        <select1 ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/pruebas_riego">
+          <label>1. ¿El registro corresponde a una prueba de riego?</label>
+          <item>
+            <label>Si</label>
+            <value>1</value>
+          </item>
+          <item>
+            <label>No</label>
+            <value>2</value>
+          </item>
+        </select1>
+        <select1 ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/linea_base">
+          <label>2. ¿El registro es una línea base?</label>
+          <item>
+            <label>Si</label>
+            <value>1</value>
+          </item>
+          <item>
+            <label>No</label>
+            <value>2</value>
+          </item>
+        </select1>
+        <select1 ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/tipo_riego">
+          <label>3. Seleccione el tipo de riego</label>
+          <item>
+            <label>Nacencia</label>
+            <value>86</value>
+          </item>
+          <item>
+            <label>Auxilio</label>
+            <value>87</value>
+          </item>
+        </select1>
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_intervalo_riego">
+          <label>2.1 Ingrese el intervalo de días entre riegos que maneja el productor</label>
+          <hint>Dato necesario para completar la línea base del sector</hint>
+        </input>
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/num_riegos_auxilio">
+          <label>2.2 ¿Cuántos riegos de auxilio da el productor a este cultivo?</label>
+          <hint>Dato necesario para completar la línea base del sector</hint>
+        </input>
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/gasto_extraccion">
+          <label>4. Gasto aforado en extracción</label>
+          <hint>La unidad de medida que se considera es Litros por segundo (lps)</hint>
+        </input>
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/gasto_aplicacion">
+          <label>5. Gasto aforado en parcela</label>
+          <hint>La unidad de medida que se considera es Litros por segundo (lps)</hint>
+        </input>
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/gasto_gotero">
+          <label>6. Gasto del gotero</label>
+          <hint>La unidad de medida que se considera es litros por hora (lph)</hint>
+        </input>
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dias_riego">
+          <label>7. ¿Cuántos días fueron de riego?</label>
+        </input>
+        <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1">
+          <label>Día 1</label>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1/fecha_riego_inicio_1">
+            <label>1. Fecha de inicio riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1/hora_riego_inicio_1">
+            <label>2. Hora de inicio de riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia1/hora_riego_fin_1">
+            <label>3. Hora de fin de riego</label>
+          </input>
+        </group>
+        <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2">
+          <label>Día 2</label>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2/fecha_riego_inicio_2">
+            <label>1. Fecha de inicio riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2/hora_riego_inicio_2">
+            <label>2. Hora de inicio de riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia2/hora_riego_fin_2">
+            <label>3. Hora de fin de riego</label>
+          </input>
+        </group>
+        <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3">
+          <label>Día 3</label>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3/fecha_riego_inicio_3">
+            <label>1. Fecha de inicio riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3/hora_riego_inicio_3">
+            <label>2. Hora de inicio de riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia3/hora_riego_fin_3">
+            <label>3. Hora de fin de riego</label>
+          </input>
+        </group>
+        <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4">
+          <label>Día 4</label>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4/fecha_riego_inicio_4">
+            <label>1. Fecha de inicio riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4/hora_riego_inicio_4">
+            <label>2. Hora de inicio de riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia4/hora_riego_fin_4">
+            <label>3. Hora de fin de riego</label>
+          </input>
+        </group>
+        <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5">
+          <label>Día 5</label>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5/fecha_riego_inicio_5">
+            <label>1. Fecha de inicio riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5/hora_riego_inicio_5">
+            <label>2. Hora de inicio de riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia5/hora_riego_fin_5">
+            <label>3. Hora de fin de riego</label>
+          </input>
+        </group>
+        <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6">
+          <label>Día 6</label>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6/fecha_riego_inicio_6">
+            <label>1. Fecha de inicio riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6/hora_riego_inicio_6">
+            <label>2. Hora de inicio de riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia6/hora_riego_fin_6">
+            <label>3. Hora de fin de riego</label>
+          </input>
+        </group>
+        <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7">
+          <label>Día 7</label>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7/fecha_riego_inicio_7">
+            <label>1. Fecha de inicio riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7/hora_riego_inicio_7">
+            <label>2. Hora de inicio de riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia7/hora_riego_fin_7">
+            <label>3. Hora de fin de riego</label>
+          </input>
+        </group>
+        <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8">
+          <label>Día 8</label>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8/fecha_riego_inicio_8">
+            <label>1. Fecha de inicio riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8/hora_riego_inicio_8">
+            <label>2. Hora de inicio de riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia8/hora_riego_fin_8">
+            <label>3. Hora de fin de riego</label>
+          </input>
+        </group>
+        <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9">
+          <label>Día 9</label>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9/fecha_riego_inicio_9">
+            <label>1. Fecha de inicio riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9/hora_riego_inicio_9">
+            <label>2. Hora de inicio de riego</label>
+          </input>
+          <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/dia9/hora_riego_fin_9">
+            <label>3. Hora de fin de riego</label>
+          </input>
+        </group>
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/info_duracion">
+          <label> La duración del riego fue de <output value=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/duracion_riego "/> horas. </label>
+        </input>
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/info_volumen">
+          <label> El volumen aplicado fue de <output value=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/volumen_aplicado "/> metros cúbicos. </label>
+        </input>
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/info_lamina">
+          <label> La lámina aplicada fue de <output value=" /axmY3Z7Ds7qeeLPPYK6rG6/seccion_a2/seccion_a2_pantalla2/lamina_aplicada "/> centímetros. </label>
+        </input>
+      </group>
+    </group>
+    <group appearance="field-list" ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_final">
+      <label>Sección C: Comentarios Finales</label>
+      <group ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_final/seccion_final_pantalla3">
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_final/seccion_final_pantalla3/final_encuesta">
+          <label>Este es el final de la encuesta. ¡Gracias!</label>
+        </input>
+        <input ref="/axmY3Z7Ds7qeeLPPYK6rG6/seccion_final/seccion_final_pantalla3/final_comentarios">
+          <label>Comentarios</label>
+        </input>
+      </group>
+    </group>
+  </h:body>
+</h:html>
