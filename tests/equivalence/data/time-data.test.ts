@@ -161,8 +161,10 @@ describe("JR equivalence: TimeData", () => {
     const d = data!.value as Date;
     expect(d.getUTCHours()).toBe(8);
     expect(d.getUTCMinutes()).toBe(0);
-    // uncast always produces UTC wire format
-    expect(uncast(data!)).toBe("08:00:00.000Z");
+    // UPDATED (feature: timezone-offset-aware "time" codec): uncast now
+    // reproduces the device's own declared offset instead of collapsing it
+    // to UTC "Z" — this is exactly the bug this feature fixes.
+    expect(uncast(data!)).toBe("10:00:00.000+02:00");
   });
 
   it("time with -02:30 offset is stored as UTC +2h30m (offset parsing)", () => {
@@ -172,5 +174,53 @@ describe("JR equivalence: TimeData", () => {
     const d = data!.value as Date;
     expect(d.getUTCHours()).toBe(16);
     expect(d.getUTCMinutes()).toBe(30);
+  });
+
+  // -------------------------------------------------------------------------
+  // Device-offset-aware round-trip (feature: timezone-offset-aware "time" codec)
+  //
+  // Product decision: uncast must reproduce the DEVICE'S OWN offset as given
+  // in the input string, not convert everything to UTC "Z". Legacy Z-suffixed
+  // and offset-less inputs keep their existing behavior (see tests above).
+  // -------------------------------------------------------------------------
+
+  it("cast → uncast round-trip preserves the device's own negative offset (e.g. Mexico -06:00)", () => {
+    const raw = "23:14:00.000-06:00";
+    const data = cast("time", raw);
+    expect(data).not.toBeNull();
+    expect(uncast(data!)).toBe(raw);
+  });
+
+  it("cast → uncast round-trip preserves the device's own positive offset", () => {
+    const raw = "10:00:00.000+02:00";
+    const data = cast("time", raw);
+    expect(data).not.toBeNull();
+    expect(uncast(data!)).toBe(raw);
+  });
+
+  it("cast → uncast round-trip preserves a non-half-hour negative offset (-02:30)", () => {
+    const raw = "14:00:00.000-02:30";
+    const data = cast("time", raw);
+    expect(data).not.toBeNull();
+    expect(uncast(data!)).toBe(raw);
+  });
+
+  it("legacy Z-suffixed input still round-trips as Z (backward compatibility)", () => {
+    const raw = "14:30:00.000Z";
+    const data = cast("time", raw);
+    expect(data).not.toBeNull();
+    expect(uncast(data!)).toBe(raw);
+  });
+
+  it("legacy offset-less input still uses the default Z wire format (backward compatibility)", () => {
+    // No offset declared in the input ("14:00" is parsed as local time by the
+    // native Date constructor, so its UTC hour is machine-timezone-dependent).
+    // We only assert that, with no offset declared, uncast still falls back
+    // to the pre-existing default UTC "Z" wire format rather than inventing one.
+    const data = cast("time", "14:00");
+    expect(data).not.toBeNull();
+    const d = data!.value as Date;
+    const expected = `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:00.000Z`;
+    expect(uncast(data!)).toBe(expected);
   });
 });
