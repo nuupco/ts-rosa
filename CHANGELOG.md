@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.5] - 2026-10-19
+
+### Fixed
+- `addRepeatInstance` cloned a repeat template without stripping its `jr:template=""` attribute. The resulting real instance kept that orphaned `jr:`-prefixed attribute, and since `serializeInstance` emits no namespace declarations (out of scope by design), the serialized XML carried a `jr:`-prefixed attribute with no `xmlns:jr` anywhere in the document. Re-parsing that XML with `@xmldom/xmldom` (the production parser) threw `NamespaceError: prefix is non-null and namespace is null`, making any saved instance with 2+ repeat instances unrecoverable.
+
 ## [0.5.3] - 2026-09-15
 
 ### Fixed

@@ -597,6 +597,7 @@ function addRepeatInstance(tree, ref) {
   const clone = cloneNode(source);
   clone.multiplicity = instances.length;
   clone.parent = parent;
+  deleteAttribute(clone, "jr:template");
   clearValues(clone);
   parent.children.push(clone);
   return clone;
