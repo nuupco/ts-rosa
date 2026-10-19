@@ -1,4 +1,4 @@
-import { type InstanceNode, realChildrenNamed, nthRealChildNamed, cloneNode } from './InstanceNode';
+import { type InstanceNode, realChildrenNamed, nthRealChildNamed, cloneNode, deleteAttribute } from './InstanceNode';
 import { INDEX_TEMPLATE, INDEX_UNBOUND, DEFAULT_MULTIPLICITY } from './multiplicity';
 import type { TreeReference } from './TreeReference';
 
@@ -296,6 +296,13 @@ export function addRepeatInstance(tree: InstanceTree, ref: TreeReference): Insta
   const clone = cloneNode(source);
   clone.multiplicity = instances.length;
   clone.parent = parent;
+  // The template's own jr:template="" marker must not survive onto a real
+  // instance: cloneNode copies attributes verbatim, so a clone taken from
+  // the template node would otherwise serialize an orphaned jr:-prefixed
+  // attribute with no namespace declaration, which xmldom rejects on
+  // re-parse (NamespaceError). Nested template children keep theirs — only
+  // the top-level clone is a real instance now.
+  deleteAttribute(clone, 'jr:template');
 
   // Clear all child values to null (new instance starts empty)
   clearValues(clone);
