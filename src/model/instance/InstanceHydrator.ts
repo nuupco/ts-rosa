@@ -21,7 +21,7 @@ import type { FormDefinition } from '../def/FormDefinition.ts';
 import { cast } from '../data/codecs.ts';
 import { getXmlParser } from '../../platform/XmlParser.ts';
 import { childElementsByLocalName, directTextContent } from '../../parse/domHelpers.ts';
-import { cloneNode, setAttribute, type InstanceNode } from './InstanceNode.ts';
+import { cloneNode, deleteAttribute, setAttribute, type InstanceNode } from './InstanceNode.ts';
 import { INDEX_TEMPLATE } from './multiplicity.ts';
 import type { InstanceTree } from './InstanceTree.ts';
 
@@ -108,14 +108,18 @@ function copyAttributes(node: InstanceNode, el: Element): void {
  */
 function hydrateNode(templateNode: InstanceNode, xmlEl: Element, path: string): void {
   const repeatTemplateNames = new Set<string>();
-  const nonRepeatChildren: InstanceNode[] = [];
   for (const child of templateNode.children) {
     if (child.multiplicity === INDEX_TEMPLATE) {
       repeatTemplateNames.add(child.name);
-    } else {
-      nonRepeatChildren.push(child);
     }
   }
+
+  // A definition may carry a live default sibling next to a repeat's
+  // jr:template element (e.g. KoboToolbox output). That sibling belongs to
+  // the repeat, not to the non-repeat children.
+  const nonRepeatChildren: InstanceNode[] = templateNode.children.filter(
+    (c) => c.multiplicity !== INDEX_TEMPLATE && !repeatTemplateNames.has(c.name),
+  );
 
   const definedNames = new Set<string>([
     ...repeatTemplateNames,
@@ -166,6 +170,19 @@ function hydrateNode(templateNode: InstanceNode, xmlEl: Element, path: string): 
     const instances = childElementsByLocalName(xmlEl, name);
     const childPath = `${path}/${name}`;
 
+    // The XML is authoritative for repeat count: drop the definition's live
+    // default sibling(s) and put the hydrated instances in their place. With
+    // no XML instances the default is kept (missing-node policy, ADR-E).
+    if (instances.length === 0) continue;
+    let insertAt = templateNode.children.length;
+    for (let j = templateNode.children.length - 1; j >= 0; j--) {
+      const c = templateNode.children[j]!;
+      if (c.name === name && c.multiplicity !== INDEX_TEMPLATE) {
+        templateNode.children.splice(j, 1);
+        insertAt = j;
+      }
+    }
+
     for (let i = 0; i < instances.length; i++) {
       const xmlInstance = instances[i]!;
       // Mirrors addRepeatInstance (InstanceTree.ts): manual multiplicity
@@ -175,8 +192,10 @@ function hydrateNode(templateNode: InstanceNode, xmlEl: Element, path: string): 
       const clone = cloneNode(tt);
       clone.multiplicity = i;
       clone.parent = templateNode;
-      templateNode.children.push(clone);
+      templateNode.children.splice(insertAt + i, 0, clone);
 
+      // The template's marker must not survive onto a real instance.
+      deleteAttribute(clone, 'jr:template');
       copyAttributes(clone, xmlInstance);
       hydrateNode(clone, xmlInstance, `${childPath}[${i + 1}]`);
     }
