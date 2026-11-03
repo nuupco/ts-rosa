@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.6] - 2026-11-03
+
+### Fixed
+- `hydrateInstance` threw `HydrationError: multiple <x> elements at ... but definition declares it non-repeating` for any repeat submitted with 2+ instances when the form definition carried both a `jr:template=""` element and a live sibling of the same name (the shape KoboToolbox emits), including nested repeats. The live sibling was treated as a non-repeating child. The submitted XML now replaces it in place (before `<meta>`), keeping the definition default only when the submission has no instances.
+- Hydrated repeat instances no longer inherit `jr:template=""` from the template node.
+
 ## [0.7.5] - 2026-10-19
 
 ### Fixed

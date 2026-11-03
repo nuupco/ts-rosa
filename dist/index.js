@@ -10937,14 +10937,14 @@ function copyAttributes(node, el) {
 }
 function hydrateNode(templateNode, xmlEl, path) {
   const repeatTemplateNames = /* @__PURE__ */ new Set();
-  const nonRepeatChildren = [];
   for (const child of templateNode.children) {
     if (child.multiplicity === INDEX_TEMPLATE) {
       repeatTemplateNames.add(child.name);
-    } else {
-      nonRepeatChildren.push(child);
     }
   }
+  const nonRepeatChildren = templateNode.children.filter(
+    (c) => c.multiplicity !== INDEX_TEMPLATE && !repeatTemplateNames.has(c.name)
+  );
   const definedNames = /* @__PURE__ */ new Set([
     ...repeatTemplateNames,
     ...nonRepeatChildren.map((c) => c.name)
@@ -10984,12 +10984,22 @@ function hydrateNode(templateNode, xmlEl, path) {
     if (tt === void 0) continue;
     const instances = childElementsByLocalName(xmlEl, name2);
     const childPath = `${path}/${name2}`;
+    if (instances.length === 0) continue;
+    let insertAt = templateNode.children.length;
+    for (let j = templateNode.children.length - 1; j >= 0; j--) {
+      const c = templateNode.children[j];
+      if (c.name === name2 && c.multiplicity !== INDEX_TEMPLATE) {
+        templateNode.children.splice(j, 1);
+        insertAt = j;
+      }
+    }
     for (let i = 0; i < instances.length; i++) {
       const xmlInstance = instances[i];
       const clone = cloneNode(tt);
       clone.multiplicity = i;
       clone.parent = templateNode;
-      templateNode.children.push(clone);
+      templateNode.children.splice(insertAt + i, 0, clone);
+      deleteAttribute(clone, "jr:template");
       copyAttributes(clone, xmlInstance);
       hydrateNode(clone, xmlInstance, `${childPath}[${i + 1}]`);
     }
