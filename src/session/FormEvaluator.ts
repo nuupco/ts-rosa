@@ -1144,8 +1144,15 @@ export class FormEvaluator {
    *
    * Slice 3.5: also initializes NodeState for all bound nodes, and evaluates
    * all Conditions (relevant/required/readonly) to set initial NodeState.
+   *
+   * `opts.skipRecalculate` evaluates only conditions (NodeState) and leaves
+   * every value untouched; conditions then read the stored values.
    */
-  initializeInstance(dag: TriggerableDag, constraintBindings?: ReadonlyMap<string, CompiledBinding>): void {
+  initializeInstance(
+    dag: TriggerableDag,
+    constraintBindings?: ReadonlyMap<string, CompiledBinding>,
+    opts?: { readonly skipRecalculate?: boolean },
+  ): void {
     this.dag = dag;
     if (constraintBindings !== undefined) {
       this.constraintBindings = constraintBindings;
@@ -1162,7 +1169,8 @@ export class FormEvaluator {
     // Evaluate all triggerables in topological order
     for (const triggerable of dag.triggerablesDAG) {
       if (triggerable.kind === 'recalculate') {
-        this.applyRecalculate(triggerable, null);
+        // skipRecalculate: literal load — keep values exactly as loaded.
+        if (opts?.skipRecalculate !== true) this.applyRecalculate(triggerable, null);
       } else if (triggerable.kind === 'condition') {
         this.applyCondition(triggerable, null);
       }

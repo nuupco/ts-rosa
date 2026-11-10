@@ -88,6 +88,17 @@ export interface CreateFormSessionOpts {
    * over loaded values, per design decision 1).
    */
   instanceXml?: string;
+
+  /**
+   * Literal load for read-only views. Only meaningful together with
+   * `instanceXml`; ignored otherwise. When true, the initial calculate
+   * cascade and the load-time setvalue actions (`odk-instance-first-load`)
+   * are skipped so every value stays exactly as stored in the XML, while
+   * relevant/required/readonly are still evaluated (against the stored
+   * values, including stored values of calculated fields). Default false:
+   * behavior is unchanged.
+   */
+  skipInitialCascade?: boolean;
 }
 
 /**
@@ -122,6 +133,7 @@ export function createFormSession(
   }
 
   const provider = opts?.preloadProvider ?? defaultPreloadProvider;
+  const literalLoad = opts?.instanceXml !== undefined && opts.skipInitialCascade === true;
 
   const tree =
     opts?.instanceXml !== undefined
@@ -146,7 +158,9 @@ export function createFormSession(
   // Runs unconditionally on both paths: calculate always wins over loaded
   // values when relevant (design decision 1) — no special-casing here.
   if (definition.dag !== null) {
-    evaluator.initializeInstance(definition.dag, definition.constraintBindings);
+    evaluator.initializeInstance(definition.dag, definition.constraintBindings, {
+      skipRecalculate: literalLoad,
+    });
   }
 
   // sdd/setvalue-actions PR2: build the ActionRegistry and fire load-time
@@ -157,7 +171,7 @@ export function createFormSession(
   // (which is skipped above on hydration, ADR-C).
   const actionRegistry = buildActionRegistry(definition.actions);
   evaluator.setActionRegistry(actionRegistry);
-  evaluator.fireLoadActions();
+  if (!literalLoad) evaluator.fireLoadActions();
 
   const navigator = new FormNavigator(definition, tree, evaluator);
 
