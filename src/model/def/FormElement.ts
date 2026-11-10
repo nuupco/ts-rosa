@@ -119,6 +119,15 @@ export type FormElement =
       readonly ref: TreeReference;
       readonly children: readonly FormElement[];
       readonly labelText: string | null;
+      /**
+       * Label inner text with <output> elements replaced by ${index} placeholders.
+       * Same shape as the question field. Null when no label is present.
+       */
+      readonly labelInnerText?: string | null;
+      /** Raw XPath `value` of each `<output>` in the label, aligned with labelInnerText. */
+      readonly labelOutputs?: readonly string[];
+      /** Static itext id when the label is `<label ref="jr:itext('id')"/>`. */
+      readonly labelItextId?: string | null;
       readonly appearance?: string | null;
       readonly hintText?: string | null;
     }
@@ -127,6 +136,15 @@ export type FormElement =
       readonly ref: TreeReference;
       readonly children: readonly FormElement[];
       readonly labelText: string | null;
+      /**
+       * Label inner text with <output> elements replaced by ${index} placeholders.
+       * Same shape as the question field. Null when no label is present.
+       */
+      readonly labelInnerText?: string | null;
+      /** Raw XPath `value` of each `<output>` in the label, aligned with labelInnerText. */
+      readonly labelOutputs?: readonly string[];
+      /** Static itext id when the label is `<label ref="jr:itext('id')"/>`. */
+      readonly labelItextId?: string | null;
       readonly countExpr: string | null;
       readonly hintText?: string | null;
     };

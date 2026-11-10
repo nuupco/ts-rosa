@@ -23,9 +23,20 @@ export type BodyHandler = (el: Element, ctx: BuildCtx) => FormElement;
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getLabelText(el: Element): string | null {
+function getContainerLabelFields(el: Element): {
+  labelText: string | null;
+  labelInnerText: string | null;
+  labelOutputs: readonly string[];
+  labelItextId: string | null;
+} {
   const labelEl = firstByLocalName(el, 'label');
-  return labelEl ? textContent(labelEl) : null;
+  const parts = labelEl ? parseTextParts(labelEl) : null;
+  return {
+    labelText: labelEl ? textContent(labelEl) : null,
+    labelInnerText: parts?.text ?? null,
+    labelOutputs: parts?.outputs ?? [],
+    labelItextId: getItextRefId(labelEl),
+  };
 }
 
 function getHintText(el: Element): string | null {
@@ -239,11 +250,11 @@ function questionHandler(el: Element, ctx: BuildCtx): FormElement {
 function groupHandler(el: Element, ctx: BuildCtx): FormElement {
   const refAttr = el.getAttribute('ref') ?? el.getAttribute('nodeset') ?? '';
   const ref = parseAbsoluteRef(refAttr);
-  const labelText = getLabelText(el);
+  const label = getContainerLabelFields(el);
   const children = buildChildren(el, ctx);
   const appearance = el.getAttribute('appearance') ?? null;
   const hintText = getHintText(el);
-  return { kind: 'group', ref, labelText, children, appearance, hintText };
+  return { kind: 'group', ref, ...label, children, appearance, hintText };
 }
 
 // ---------------------------------------------------------------------------
@@ -253,14 +264,14 @@ function groupHandler(el: Element, ctx: BuildCtx): FormElement {
 function repeatHandler(el: Element, ctx: BuildCtx): FormElement {
   const refAttr = el.getAttribute('nodeset') ?? el.getAttribute('ref') ?? '';
   const ref = parseAbsoluteRef(refAttr);
-  const labelText = getLabelText(el);
+  const label = getContainerLabelFields(el);
   const children = buildChildren(el, ctx);
   // jr:count — XPath expression controlling how many instances to auto-create.
   // Attribute is in the jr: namespace; xmldom preserves the prefix when xmlns:jr is declared.
   // Fall back to localName 'count' (without prefix) for robustness.
   const countExpr = el.getAttribute('jr:count') ?? el.getAttribute('count') ?? null;
   const hintText = getHintText(el);
-  return { kind: 'repeat', ref, labelText, children, countExpr, hintText };
+  return { kind: 'repeat', ref, ...label, children, countExpr, hintText };
 }
 
 // ---------------------------------------------------------------------------

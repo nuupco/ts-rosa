@@ -519,6 +519,34 @@ export class FormNavigator {
   // ---------------------------------------------------------------------------
 
   /**
+   * Resolved label for the element at `idx` (default: current index), for any
+   * kind: question, group or repeat. Resolves itext in the active language
+   * and substitutes `<output>` against the element's context node. Questions
+   * delegate to getQuestionText(). Returns null at BOF/EOF, for an
+   * unresolvable index, or when the element has no label.
+   * Read-only: no instance-tree or cursor mutation; evaluated fresh per call.
+   */
+  getLabelAt(idx?: FormIndex): string | null {
+    const target = idx ?? this.currentIndex;
+    if (!isAt(target)) return null;
+    const resolved = this.resolvePath(target.path);
+    if (resolved === null) return null;
+    const element = resolved.element;
+    if (element.kind === 'question') {
+      return this.getQuestionAtIndex(target)?.getQuestionText() ?? null;
+    }
+    if (element.labelItextId != null) {
+      const r = this.evaluator.resolveItextWithOutputs(element.labelItextId);
+      if (r !== null) return this.evaluator.substituteText(r.text, r.outputs, resolved.ref);
+    }
+    return this.evaluator.substituteText(
+      element.labelInnerText ?? element.labelText,
+      element.labelInnerText != null ? (element.labelOutputs ?? []) : [],
+      resolved.ref,
+    );
+  }
+
+  /**
    * @experimental
    * Returns a question wrapper for the element at the given index (defaults to
    * current cursor). Returns null when not at a question position.
