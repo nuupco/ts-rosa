@@ -1539,8 +1539,13 @@ declare class FormEvaluator {
      *
      * Slice 3.5: also initializes NodeState for all bound nodes, and evaluates
      * all Conditions (relevant/required/readonly) to set initial NodeState.
+     *
+     * `opts.skipRecalculate` evaluates only conditions (NodeState) and leaves
+     * every value untouched; conditions then read the stored values.
      */
-    initializeInstance(dag: TriggerableDag, constraintBindings?: ReadonlyMap<string, CompiledBinding>): void;
+    initializeInstance(dag: TriggerableDag, constraintBindings?: ReadonlyMap<string, CompiledBinding>, opts?: {
+        readonly skipRecalculate?: boolean;
+    }): void;
     /**
      * Write a value to the InstanceNode at ref, then trigger the reactive cascade.
      *
@@ -2378,6 +2383,16 @@ interface CreateFormSessionOpts {
      * over loaded values, per design decision 1).
      */
     instanceXml?: string;
+    /**
+     * Literal load for read-only views. Only meaningful together with
+     * `instanceXml`; ignored otherwise. When true, the initial calculate
+     * cascade and the load-time setvalue actions (`odk-instance-first-load`)
+     * are skipped so every value stays exactly as stored in the XML, while
+     * relevant/required/readonly are still evaluated (against the stored
+     * values, including stored values of calculated fields). Default false:
+     * behavior is unchanged.
+     */
+    skipInitialCascade?: boolean;
 }
 /**
  * Create a FormSession from a FormDefinition.

@@ -9033,8 +9033,11 @@ var FormEvaluator = class _FormEvaluator {
    *
    * Slice 3.5: also initializes NodeState for all bound nodes, and evaluates
    * all Conditions (relevant/required/readonly) to set initial NodeState.
+   *
+   * `opts.skipRecalculate` evaluates only conditions (NodeState) and leaves
+   * every value untouched; conditions then read the stored values.
    */
-  initializeInstance(dag, constraintBindings) {
+  initializeInstance(dag, constraintBindings, opts) {
     this.dag = dag;
     if (constraintBindings !== void 0) {
       this.constraintBindings = constraintBindings;
@@ -9047,7 +9050,7 @@ var FormEvaluator = class _FormEvaluator {
     }
     for (const triggerable of dag.triggerablesDAG) {
       if (triggerable.kind === "recalculate") {
-        this.applyRecalculate(triggerable, null);
+        if (opts?.skipRecalculate !== true) this.applyRecalculate(triggerable, null);
       } else if (triggerable.kind === "condition") {
         this.applyCondition(triggerable, null);
       }
@@ -11130,6 +11133,7 @@ function createFormSession(definition, opts) {
     }
   }
   const provider = opts?.preloadProvider ?? defaultPreloadProvider;
+  const literalLoad = opts?.instanceXml !== void 0 && opts.skipInitialCascade === true;
   const tree = opts?.instanceXml !== void 0 ? hydrateInstance(definition, opts.instanceXml) : definition.mainInstance;
   const evaluator = new FormEvaluator(tree, {
     itext: definition.itext ?? null,
@@ -11140,11 +11144,13 @@ function createFormSession(definition, opts) {
     applyPreloads(tree, provider);
   }
   if (definition.dag !== null) {
-    evaluator.initializeInstance(definition.dag, definition.constraintBindings);
+    evaluator.initializeInstance(definition.dag, definition.constraintBindings, {
+      skipRecalculate: literalLoad
+    });
   }
   const actionRegistry = buildActionRegistry(definition.actions);
   evaluator.setActionRegistry(actionRegistry);
-  evaluator.fireLoadActions();
+  if (!literalLoad) evaluator.fireLoadActions();
   const navigator = new FormNavigator(definition, tree, evaluator);
   return {
     definition,
