@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-11-10
+
+### Added
+- `FormNavigator.getLabelAt(idx?)`: resolved label for any element kind (question, group, repeat). Resolves itext in the active language and substitutes `<output>` against the element's context node; questions delegate to `getQuestionText()`. Returns `null` at BOF/EOF or when there is no label. Read-only.
+- `group` and `repeat` `FormElement`s now carry optional `labelInnerText`, `labelOutputs` and `labelItextId`, with the same shape as `question`. `labelText` is unchanged.
+
 ## [0.7.6] - 2026-11-03
 
 ### Fixed

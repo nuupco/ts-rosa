@@ -7450,9 +7450,15 @@ function parseTextParts(el) {
 }
 
 // src/parse/handlers.ts
-function getLabelText(el) {
+function getContainerLabelFields(el) {
   const labelEl = firstByLocalName(el, "label");
-  return labelEl ? textContent(labelEl) : null;
+  const parts = labelEl ? parseTextParts(labelEl) : null;
+  return {
+    labelText: labelEl ? textContent(labelEl) : null,
+    labelInnerText: parts?.text ?? null,
+    labelOutputs: parts?.outputs ?? [],
+    labelItextId: getItextRefId(labelEl)
+  };
 }
 function getHintText(el) {
   const hintEl = firstByLocalName(el, "hint");
@@ -7602,20 +7608,20 @@ function questionHandler(el, ctx) {
 function groupHandler(el, ctx) {
   const refAttr = el.getAttribute("ref") ?? el.getAttribute("nodeset") ?? "";
   const ref = parseAbsoluteRef(refAttr);
-  const labelText = getLabelText(el);
+  const label = getContainerLabelFields(el);
   const children = buildChildren(el, ctx);
   const appearance = el.getAttribute("appearance") ?? null;
   const hintText = getHintText(el);
-  return { kind: "group", ref, labelText, children, appearance, hintText };
+  return { kind: "group", ref, ...label, children, appearance, hintText };
 }
 function repeatHandler(el, ctx) {
   const refAttr = el.getAttribute("nodeset") ?? el.getAttribute("ref") ?? "";
   const ref = parseAbsoluteRef(refAttr);
-  const labelText = getLabelText(el);
+  const label = getContainerLabelFields(el);
   const children = buildChildren(el, ctx);
   const countExpr = el.getAttribute("jr:count") ?? el.getAttribute("count") ?? null;
   const hintText = getHintText(el);
-  return { kind: "repeat", ref, labelText, children, countExpr, hintText };
+  return { kind: "repeat", ref, ...label, children, countExpr, hintText };
 }
 var handlers = /* @__PURE__ */ new Map([
   ["input", questionHandler],
@@ -10176,6 +10182,33 @@ var FormNavigator = class {
   // ---------------------------------------------------------------------------
   // Prompt API (Slice 4.5)
   // ---------------------------------------------------------------------------
+  /**
+   * Resolved label for the element at `idx` (default: current index), for any
+   * kind: question, group or repeat. Resolves itext in the active language
+   * and substitutes `<output>` against the element's context node. Questions
+   * delegate to getQuestionText(). Returns null at BOF/EOF, for an
+   * unresolvable index, or when the element has no label.
+   * Read-only: no instance-tree or cursor mutation; evaluated fresh per call.
+   */
+  getLabelAt(idx) {
+    const target = idx ?? this.currentIndex;
+    if (!isAt(target)) return null;
+    const resolved = this.resolvePath(target.path);
+    if (resolved === null) return null;
+    const element = resolved.element;
+    if (element.kind === "question") {
+      return this.getQuestionAtIndex(target)?.getQuestionText() ?? null;
+    }
+    if (element.labelItextId != null) {
+      const r = this.evaluator.resolveItextWithOutputs(element.labelItextId);
+      if (r !== null) return this.evaluator.substituteText(r.text, r.outputs, resolved.ref);
+    }
+    return this.evaluator.substituteText(
+      element.labelInnerText ?? element.labelText,
+      element.labelInnerText != null ? element.labelOutputs ?? [] : [],
+      resolved.ref
+    );
+  }
   /**
    * @experimental
    * Returns a question wrapper for the element at the given index (defaults to

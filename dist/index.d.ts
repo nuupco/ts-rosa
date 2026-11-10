@@ -478,6 +478,15 @@ type FormElement = {
     readonly ref: TreeReference;
     readonly children: readonly FormElement[];
     readonly labelText: string | null;
+    /**
+     * Label inner text with <output> elements replaced by ${index} placeholders.
+     * Same shape as the question field. Null when no label is present.
+     */
+    readonly labelInnerText?: string | null;
+    /** Raw XPath `value` of each `<output>` in the label, aligned with labelInnerText. */
+    readonly labelOutputs?: readonly string[];
+    /** Static itext id when the label is `<label ref="jr:itext('id')"/>`. */
+    readonly labelItextId?: string | null;
     readonly appearance?: string | null;
     readonly hintText?: string | null;
 } | {
@@ -485,6 +494,15 @@ type FormElement = {
     readonly ref: TreeReference;
     readonly children: readonly FormElement[];
     readonly labelText: string | null;
+    /**
+     * Label inner text with <output> elements replaced by ${index} placeholders.
+     * Same shape as the question field. Null when no label is present.
+     */
+    readonly labelInnerText?: string | null;
+    /** Raw XPath `value` of each `<output>` in the label, aligned with labelInnerText. */
+    readonly labelOutputs?: readonly string[];
+    /** Static itext id when the label is `<label ref="jr:itext('id')"/>`. */
+    readonly labelItextId?: string | null;
     readonly countExpr: string | null;
     readonly hintText?: string | null;
 };
@@ -2067,6 +2085,15 @@ declare class FormNavigator {
      * positional but inner1 has no predicate.
      */
     private refMatchesTarget;
+    /**
+     * Resolved label for the element at `idx` (default: current index), for any
+     * kind: question, group or repeat. Resolves itext in the active language
+     * and substitutes `<output>` against the element's context node. Questions
+     * delegate to getQuestionText(). Returns null at BOF/EOF, for an
+     * unresolvable index, or when the element has no label.
+     * Read-only: no instance-tree or cursor mutation; evaluated fresh per call.
+     */
+    getLabelAt(idx?: FormIndex): string | null;
     /**
      * @experimental
      * Returns a question wrapper for the element at the given index (defaults to
